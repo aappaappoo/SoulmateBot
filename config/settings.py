@@ -1,0 +1,59 @@
+"""
+Configuration settings for SoulmateBot
+"""
+from pydantic_settings import BaseSettings
+from typing import List, Optional
+from enum import Enum
+
+
+class Environment(str, Enum):
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+
+class Settings(BaseSettings):
+    # Telegram Configuration
+    telegram_bot_token: str
+    telegram_webhook_url: Optional[str] = None
+    
+    # AI Provider Configuration
+    openai_api_key: Optional[str] = None
+    openai_model: str = "gpt-4"
+    anthropic_api_key: Optional[str] = None
+    anthropic_model: str = "claude-3-sonnet-20240229"
+    
+    # Database Configuration
+    database_url: str = "sqlite:///./soulmatebot.db"
+    redis_url: Optional[str] = None
+    
+    # Application Configuration
+    app_env: Environment = Environment.DEVELOPMENT
+    debug: bool = True
+    log_level: str = "INFO"
+    
+    # Subscription Configuration
+    stripe_api_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    
+    # Subscription Limits
+    free_plan_daily_limit: int = 10
+    basic_plan_daily_limit: int = 100
+    premium_plan_daily_limit: int = 1000
+    
+    # Security
+    secret_key: str = "change-me-in-production"
+    admin_user_ids: List[int] = []
+    
+    # Rate Limiting
+    rate_limit_messages_per_minute: int = 10
+    rate_limit_images_per_hour: int = 5
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
+
+
+# Global settings instance
+settings = Settings()
