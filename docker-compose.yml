@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: soulmatebot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      - db
+      - redis
+    networks:
+      - soulmatebot-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: soulmatebot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soulmatebot
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: soulmatebot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - soulmatebot-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: soulmatebot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - soulmatebot-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  soulmatebot-network:
+    driver: bridge
