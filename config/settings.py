@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4"
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-3-sonnet-20240229"
+    vllm_api_url: Optional[str] = None
+    vllm_api_token: Optional[str] = None
+    vllm_model: str = "default"
     
     # Database Configuration
     database_url: str = "sqlite:///./soulmatebot.db"
@@ -35,6 +38,15 @@ class Settings(BaseSettings):
     # Subscription Configuration
     stripe_api_key: Optional[str] = None
     stripe_webhook_secret: Optional[str] = None
+    
+    # WeChat Pay Configuration
+    wechat_pay_app_id: Optional[str] = None
+    wechat_pay_mch_id: Optional[str] = None
+    wechat_pay_api_key: Optional[str] = None
+    wechat_pay_api_v3_key: Optional[str] = None
+    wechat_pay_cert_serial_no: Optional[str] = None
+    wechat_pay_private_key_path: Optional[str] = None
+    wechat_pay_notify_url: Optional[str] = None
     
     # Subscription Limits
     free_plan_daily_limit: int = 10
