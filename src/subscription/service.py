@@ -42,7 +42,7 @@ class SubscriptionService:
             return user
 
         except Exception as e:
-            logger.error(f"❌ Error in get_user_by_telegram_id: {e}", exc_info=True)
+            logger.error(f"Error in get_user_by_telegram_id: {str(e)}", exc_info=True)
             self.db.rollback()
             raise
 
@@ -75,7 +75,7 @@ class SubscriptionService:
             return user
 
         except Exception as e:
-            logger.error(f"❌ Error updating user info: {e}", exc_info=True)
+            logger.error(f"Error updating user info: {str(e)}", exc_info=True)
             self.db.rollback()
             raise
 
@@ -126,7 +126,7 @@ class SubscriptionService:
             return usage_count < daily_limit
 
         except Exception as e:
-            logger. error(f"❌ Error checking usage limit: {e}", exc_info=True)
+            logger.error(f"Error checking usage limit: {str(e)}", exc_info=True)
             return True
 
     def record_usage(self, user: User, action_type: str = "message", count: int = 1):
@@ -143,7 +143,7 @@ class SubscriptionService:
             logger.info(f"✅ Recorded usage for user {user. id}: {action_type} x{count}")
 
         except Exception as e:
-            logger. error(f"❌ Error recording usage: {e}", exc_info=True)
+            logger.error(f"Error recording usage: {str(e)}", exc_info=True)
             self.db.rollback()
 
     def get_usage_stats(self, user: User) -> dict:
@@ -192,6 +192,6 @@ class SubscriptionService:
             return user
 
         except Exception as e:
-            logger.error(f"❌ Error upgrading subscription: {e}", exc_info=True)
+            logger.error(f"Error upgrading subscription: {str(e)}", exc_info=True)
             self.db.rollback()
             raise
