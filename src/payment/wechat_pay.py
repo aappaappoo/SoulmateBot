@@ -87,7 +87,7 @@ class WeChatPayService:
                 "body": description,
                 "out_trade_no": order_id,
                 "total_fee": str(amount),
-                "spbill_create_ip": "127.0.0.1",
+                "spbill_create_ip": "8.8.8.8",  # Use a valid public IP or make configurable
                 "notify_url": self.notify_url,
                 "trade_type": "NATIVE"
             }
@@ -158,7 +158,7 @@ class WeChatPayService:
                 "body": description,
                 "out_trade_no": order_id,
                 "total_fee": str(amount),
-                "spbill_create_ip": "127.0.0.1",
+                "spbill_create_ip": "8.8.8.8",  # Use a valid public IP or make configurable
                 "notify_url": self.notify_url,
                 "trade_type": "JSAPI",
                 "openid": openid
@@ -289,12 +289,14 @@ class WeChatPayService:
             True if signature is valid
         """
         try:
-            received_sign = notify_data.pop("sign", None)
+            # Make a copy to avoid mutating the original
+            data_copy = notify_data.copy()
+            received_sign = data_copy.pop("sign", None)
             if not received_sign:
                 return False
             
             # Generate signature
-            calculated_sign = self._generate_sign(notify_data)
+            calculated_sign = self._generate_sign(data_copy)
             
             return received_sign == calculated_sign
             

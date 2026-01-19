@@ -83,6 +83,8 @@ class VLLMProvider(AIProvider):
     """vLLM provider for self-hosted LLM inference"""
     
     def __init__(self, api_url: str, api_token: Optional[str] = None, model: str = "default"):
+        if not api_url or not isinstance(api_url, str):
+            raise ValueError("api_url must be a non-empty string")
         self.api_url = api_url.rstrip('/')
         self.api_token = api_token
         self.model = model

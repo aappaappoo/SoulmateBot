@@ -1,6 +1,8 @@
 """
 Telegram bot command handlers
 """
+import time
+import uuid
 from telegram import Update
 from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
