@@ -29,8 +29,8 @@ class User(Base):
     last_name = Column(String(255), nullable=True)
     language_code = Column(String(10), default="zh")
 
-    # ✅ 修复：使用 String 而不是 SQLEnum，避免 PostgreSQL 的 Enum 类型问题
-    subscription_tier = Column(String(20), default=SubscriptionTier.FREE.value)
+    # Subscription information - 使用 String 而不是 Enum
+    subscription_tier = Column(String(20), default=SubscriptionTier.FREE. value)
     subscription_start_date = Column(DateTime, nullable=True)
     subscription_end_date = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -42,6 +42,7 @@ class User(Base):
     # Relationships
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, telegram_id={self.telegram_id}, tier={self.subscription_tier})>"
@@ -95,7 +96,8 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users. id"), nullable=False)
+    # ✅ 修复：移除空格 'users. id' -> 'users.id'
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     amount = Column(Integer, nullable=False)
     currency = Column(String(3), default="USD")
 
@@ -109,6 +111,9 @@ class Payment(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="payments")
 
     def __repr__(self):
         return f"<Payment(id={self.id}, user_id={self.user_id}, amount={self.amount}, status={self.status})>"
