@@ -111,6 +111,22 @@
 
 ## 🚀 快速开始
 
+## Database Migration
+
+⚠️ **Important:** If you're upgrading from an earlier version, you may need to migrate your database.
+
+If you see this error:
+```
+invalid input value for enum subscriptiontier: "free"
+```
+
+Please follow the [Migration Guide](MIGRATION_GUIDE.md) to update your database schema.
+
+Quick fix:
+```bash
+psql -U your_username -d your_database -f migrations/fix_subscription_tier_enum.sql
+```
+
 ### 前置要求
 
 - Python 3.11 或更高版本
