@@ -29,9 +29,10 @@
 
 ### 核心功能
 
-- 💬 **智能对话** - 基于 GPT/Claude 的情感陪伴对话
+- 💬 **智能对话** - 基于 GPT/Claude/vLLM 的情感陪伴对话
 - 🖼️ **图片分享** - 温馨图片生成与发送
 - 📊 **订阅管理** - 完整的订阅系统和使用限额
+- 💳 **支付集成** - 支持微信支付和 Stripe
 - 👤 **用户管理** - 用户信息存储和会话管理
 - 📈 **使用统计** - 实时使用情况追踪
 
@@ -39,9 +40,9 @@
 
 | 计划 | 价格 | 日消息限额 | 特性 |
 |-----|------|----------|------|
-| 🆓 免费版 | $0/月 | 10条 | 基础对话 |
-| 💎 基础版 | $9.99/月 | 100条 | 图片功能、优先响应 |
-| 👑 高级版 | $19.99/月 | 1000条 | 无限图片、个性化体验 |
+| 🆓 免费版 | ¥0/月 | 10条 | 基础对话 |
+| 💎 基础版 | ¥9.99/月 | 100条 | 图片功能、优先响应 |
+| 👑 高级版 | ¥19.99/月 | 1000条 | 无限图片、个性化体验 |
 
 ---
 
@@ -51,7 +52,8 @@
 
 - **后端框架**: Python 3.11+
 - **Bot 框架**: python-telegram-bot 20.7
-- **AI 集成**: OpenAI GPT-4 / Anthropic Claude
+- **AI 集成**: OpenAI GPT-4 / Anthropic Claude / vLLM
+- **支付集成**: 微信支付 / Stripe
 - **数据库**: PostgreSQL + SQLAlchemy ORM
 - **缓存**: Redis
 - **任务队列**: Celery (可选)
@@ -224,6 +226,11 @@ OPENAI_MODEL=gpt-4
 # 或使用 Anthropic Claude
 ANTHROPIC_API_KEY=your_anthropic_api_key
 ANTHROPIC_MODEL=claude-3-sonnet-20240229
+
+# 或使用 vLLM (自托管 LLM 推理服务器)
+VLLM_API_URL=http://localhost:8000
+VLLM_API_TOKEN=your_vllm_api_token
+VLLM_MODEL=your_model_name
 ```
 
 #### 数据库配置
@@ -242,6 +249,27 @@ DATABASE_URL=sqlite:///./soulmatebot.db
 FREE_PLAN_DAILY_LIMIT=10
 BASIC_PLAN_DAILY_LIMIT=100
 PREMIUM_PLAN_DAILY_LIMIT=1000
+```
+
+#### 支付配置
+
+**微信支付**
+
+```env
+WECHAT_PAY_APP_ID=your_wechat_app_id
+WECHAT_PAY_MCH_ID=your_merchant_id
+WECHAT_PAY_API_KEY=your_api_key
+WECHAT_PAY_API_V3_KEY=your_api_v3_key
+WECHAT_PAY_CERT_SERIAL_NO=your_cert_serial_no
+WECHAT_PAY_PRIVATE_KEY_PATH=/path/to/apiclient_key.pem
+WECHAT_PAY_NOTIFY_URL=https://your-domain.com/wechat/notify
+```
+
+**Stripe (可选)**
+
+```env
+STRIPE_API_KEY=your_stripe_api_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
 ```
 
 ---
@@ -306,19 +334,27 @@ SoulmateBot/
 - [x] 数据库模型
 - [x] Docker 部署配置
 
-### v0.2.0 - 图片功能
+### v0.2.0 - 支付与 AI 扩展 (当前) ✅
+
+- [x] 微信支付集成
+- [x] vLLM 提供商支持
+- [x] 支付命令和处理
+- [x] 测试覆盖
+
+### v0.3.0 - 图片功能
 
 - [ ] 图片生成 (DALL-E)
 - [ ] 情感图片库
 - [ ] 图片缓存系统
 
-### v0.3.0 - 支付集成
+### v0.4.0 - 支付增强
 
 - [ ] Stripe 支付集成
 - [ ] 订阅自动续费
 - [ ] 发票生成
+- [ ] 微信支付回调处理
 
-### v0.4.0 - 高级功能
+### v0.5.0 - 高级功能
 
 - [ ] 情感分析
 - [ ] 个性化对话
@@ -355,8 +391,76 @@ Bot: 听起来你今天很辛苦呢。工作或者生活上遇到什么压力了
 /help   - 查看帮助信息
 /status - 查看订阅状态和使用情况
 /subscribe - 查看订阅计划
+/pay_basic - 订阅基础版（¥9.99/月）
+/pay_premium - 订阅高级版（¥19.99/月）
+/check_payment - 查询支付状态
 /image  - 获取温馨图片
 ```
+
+### 订阅流程
+
+**使用微信支付订阅：**
+
+1. 发送 `/pay_basic` 或 `/pay_premium` 命令
+2. 收到支付二维码链接
+3. 使用微信扫码支付
+4. 发送 `/check_payment` 确认支付
+5. 立即享受高级功能
+
+---
+
+## 🔧 高级配置
+
+### vLLM 集成
+
+如果您有自己的 LLM 推理服务器（基于 vLLM），可以这样配置：
+
+1. **启动 vLLM 服务器**
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model your-model-name \
+    --host 0.0.0.0 \
+    --port 8000
+```
+
+2. **配置环境变量**
+
+```env
+VLLM_API_URL=http://your-vllm-server:8000
+VLLM_API_TOKEN=your_optional_token  # 可选
+VLLM_MODEL=your-model-name
+```
+
+3. **优先级**
+
+系统会按以下顺序选择 AI 提供商：
+- vLLM（如果配置了 VLLM_API_URL）
+- OpenAI（如果配置了 OPENAI_API_KEY）
+- Anthropic（如果配置了 ANTHROPIC_API_KEY）
+
+### 微信支付配置
+
+1. **申请微信支付商户号**
+   - 访问 [微信支付商户平台](https://pay.weixin.qq.com/)
+   - 注册并申请商户号
+
+2. **获取配置信息**
+   - APP ID
+   - 商户号 (MCH ID)
+   - API 密钥 (API Key)
+   - API v3 密钥
+   - 证书序列号
+   - API 私钥文件路径
+
+3. **配置回调 URL**
+   
+   在微信支付商户平台设置支付回调 URL：
+   ```
+   https://your-domain.com/wechat/notify
+   ```
+
+4. **设置环境变量**（参见上面的支付配置部分）
 
 ---
 

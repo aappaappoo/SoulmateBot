@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 from abc import ABC, abstractmethod
 import openai
 import anthropic
+import aiohttp
 
 from config import settings
 
@@ -78,12 +79,67 @@ class AnthropicProvider(AIProvider):
             raise Exception(f"Anthropic API error: {str(e)}")
 
 
+class VLLMProvider(AIProvider):
+    """vLLM provider for self-hosted LLM inference"""
+    
+    def __init__(self, api_url: str, api_token: Optional[str] = None, model: str = "default"):
+        if not api_url or not isinstance(api_url, str):
+            raise ValueError("api_url must be a non-empty string")
+        self.api_url = api_url.rstrip('/')
+        self.api_token = api_token
+        self.model = model
+    
+    async def generate_response(self, messages: List[Dict[str, str]], context: Optional[str] = None) -> str:
+        """Generate response using vLLM API"""
+        system_message = {
+            "role": "system",
+            "content": context or "你是一个温柔、善解人意的情感陪伴助手。你的任务是倾听用户的心声，提供情感支持和陪伴。请用温暖、关怀的语气回复用户。"
+        }
+        
+        full_messages = [system_message] + messages
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+        
+        payload = {
+            "model": self.model,
+            "messages": full_messages,
+            "temperature": 0.8,
+            "max_tokens": 1000
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.api_url}/v1/chat/completions",
+                    json=payload,
+                    headers=headers
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"vLLM API error: {response.status} - {error_text}")
+                    
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise Exception(f"vLLM API error: {str(e)}")
+
+
 class ConversationService:
     """Service for managing conversations with AI"""
     
     def __init__(self):
-        # Initialize AI provider based on configuration
-        if settings.openai_api_key:
+        # Initialize AI provider based on configuration (priority order: vLLM, OpenAI, Anthropic)
+        if settings.vllm_api_url:
+            self.provider = VLLMProvider(
+                api_url=settings.vllm_api_url,
+                api_token=settings.vllm_api_token,
+                model=settings.vllm_model
+            )
+        elif settings.openai_api_key:
             self.provider = OpenAIProvider(
                 api_key=settings.openai_api_key,
                 model=settings.openai_model
@@ -94,7 +150,7 @@ class ConversationService:
                 model=settings.anthropic_model
             )
         else:
-            raise ValueError("No AI provider configured. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
+            raise ValueError("No AI provider configured. Please set VLLM_API_URL, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")
     
     async def get_response(
         self,

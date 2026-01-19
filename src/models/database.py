@@ -95,13 +95,18 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users. id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)
-    currency = Column(String(3), default="USD")
+    currency = Column(String(3), default="CNY")
 
     # Payment provider info
-    provider = Column(String(50), default="stripe")
+    provider = Column(String(50), default="wechat")
     provider_payment_id = Column(String(255), unique=True)
+    provider_order_id = Column(String(255), unique=True, index=True)
+    
+    # Subscription info
+    subscription_tier = Column(String(20), nullable=True)
+    subscription_duration_days = Column(Integer, default=30)
 
     # Status
     status = Column(String(50), default="pending")
