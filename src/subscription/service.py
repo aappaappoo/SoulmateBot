@@ -42,7 +42,8 @@ class SubscriptionService:
             return user
 
         except Exception as e:
-            logger.error(f"Error in get_user_by_telegram_id: {str(e)}", exc_info=True)
+            # logger.error(f"Error in get_user_by_telegram_id: {str(e)}", exc_info=True)
+            logger.error("Error in get_user_by_telegram_id: {}", str(e), exc_info=True)
             self.db.rollback()
             raise
 

@@ -140,13 +140,12 @@ async def handle_message(update:  Update, context: ContextTypes. DEFAULT_TYPE):
             logger.info(f"✅ Successfully replied to user {user.id}")
 
         except Exception as e:
-            logger.error(f"❌ Error getting AI response: {e}", exc_info=True)
+            logger.error(f"❌ Error getting AI response: {str(e)}", exc_info=True)
             db.rollback()
             await message.reply_text(
                 f"抱歉，我遇到了一些问题：{str(e)}\n\n"
                 "请稍后再试，或联系管理员。"
             )
-
     except Exception as e:
         logger.error(f"❌ Error in handle_message: {e}", exc_info=True)
     finally:
