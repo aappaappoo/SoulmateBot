@@ -3,7 +3,7 @@ Data models for the multi-agent group chat system.
 """
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -33,7 +33,7 @@ class Message:
     user_id: str
     chat_id: str
     message_type: MessageType = MessageType.TEXT
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def has_mention(self, agent_name: str) -> bool:

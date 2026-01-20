@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path to import src
 sys.path.insert(0, str(Path(__file__).parent))
 
-from datetime import datetime
+from datetime import datetime, timezone
 from loguru import logger
 
 from src.agents import (
@@ -173,7 +173,7 @@ def main():
                 user_id=user_id,
                 chat_id=chat_id,
                 message_type=MessageType.TEXT,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
             
             # Add message to context
@@ -194,7 +194,7 @@ def main():
                     user_id=f"agent_{response.agent_name}",
                     chat_id=chat_id,
                     message_type=MessageType.TEXT,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     metadata={"agent_name": response.agent_name}
                 )
                 context.add_message(response_message)

@@ -8,9 +8,9 @@ The Router is responsible for:
 - Managing parallel execution
 - Merging and returning responses
 """
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 from loguru import logger
 
@@ -152,7 +152,7 @@ class Router:
             return True
         
         last_time = self._last_response_times[agent_name][user_id]
-        elapsed = (datetime.utcnow() - last_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - last_time).total_seconds()
         
         return elapsed >= self.config.cooldown_seconds
     
@@ -161,13 +161,13 @@ class Router:
         if agent_name not in self._last_response_times:
             self._last_response_times[agent_name] = {}
         
-        self._last_response_times[agent_name][user_id] = datetime.utcnow()
+        self._last_response_times[agent_name][user_id] = datetime.now(timezone.utc)
     
     def select_agents(
         self,
         message: Message,
         context: ChatContext
-    ) -> List[tuple[BaseAgent, float]]:
+    ) -> List[Tuple[BaseAgent, float]]:
         """
         Select which agents should respond to a message.
         
