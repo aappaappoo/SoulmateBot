@@ -64,7 +64,8 @@ async def handle_message(update:  Update, context: ContextTypes. DEFAULT_TYPE):
     logger.info(f"Processing message from user {user.id}: {message_text[:50]}...")
 
     db = get_db_session()
-    try:
+    #try:
+    if 1:
         subscription_service = SubscriptionService(db)
 
         # Get or create user
@@ -146,10 +147,11 @@ async def handle_message(update:  Update, context: ContextTypes. DEFAULT_TYPE):
                 f"抱歉，我遇到了一些问题：{str(e)}\n\n"
                 "请稍后再试，或联系管理员。"
             )
-    except Exception as e:
-        logger.error(f"❌ Error in handle_message: {e}", exc_info=True)
-    finally:
-        db.close()
+    # except Exception as e:
+    #     logger.error(f"❌ Error in handle_message: {e}", exc_info=True)
+    # finally:
+    #     db.close()
+    db.close()
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
