@@ -1,21 +1,20 @@
-MIT License
+专有软件许可协议 (Proprietary Software License)
 
-Copyright (c) 2026 SoulmateBot
+版权所有 © 2026 SoulmateBot 团队
+保留所有权利
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+本软件及其相关文档（以下简称"软件"）为专有软件产品。未经版权所有者明确书面许可，
+禁止以任何形式使用、复制、修改、合并、发布、分发、再许可或出售本软件的副本。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+使用限制：
+1. 本软件仅供授权用户在授权范围内使用
+2. 禁止对本软件进行逆向工程、反编译或反汇编
+3. 禁止将本软件用于任何商业目的（除非获得明确授权）
+4. 所有衍生作品的版权归原版权所有者所有
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+免责声明：
+本软件按"现状"提供，不提供任何明示或暗示的保证，包括但不限于适销性、特定用途的
+适用性和非侵权性的保证。在任何情况下，作者或版权持有人均不对任何索赔、损害或其他
+责任负责。
+
+如需商业授权或其他许可，请联系版权所有者。
