@@ -107,8 +107,6 @@ class Router:
         注意:
             如果Agent名称已存在，会替换原有Agent
         """
-            agent: Agent to add
-        """
         if agent.name in self.agents:
             logger.warning(f"Agent '{agent.name}' already exists, replacing")
         
@@ -117,17 +115,17 @@ class Router:
     
     def remove_agent(self, agent_name: str) -> bool:
         """
-        Remove an agent from the router.
+        从路由器移除一个Agent
         
-        Args:
-            agent_name: Name of agent to remove
+        参数:
+            agent_name: 要移除的Agent名称
             
-        Returns:
-            True if agent was removed, False if not found
+        返回值:
+            bool: 成功移除返回True，未找到返回False
         """
         if agent_name in self.agents:
             del self.agents[agent_name]
-            logger.info(f"Removed agent: {agent_name}")
+            logger.info(f"移除Agent: {agent_name}")
             return True
         return False
     
