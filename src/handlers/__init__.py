@@ -17,6 +17,13 @@ from .messages import (
     handle_sticker,
     error_handler
 )
+from .bot_commands import (
+    list_bots_command,
+    add_bot_command,
+    remove_bot_command,
+    my_bots_command,
+    config_bot_command
+)
 
 __all__ = [
     "start_command",
@@ -30,5 +37,10 @@ __all__ = [
     "handle_message",
     "handle_photo",
     "handle_sticker",
-    "error_handler"
+    "error_handler",
+    "list_bots_command",
+    "add_bot_command",
+    "remove_bot_command",
+    "my_bots_command",
+    "config_bot_command"
 ]

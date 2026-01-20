@@ -22,6 +22,11 @@ from src.handlers import (
     pay_basic_command,
     pay_premium_command,
     check_payment_command,
+    list_bots_command,
+    add_bot_command,
+    remove_bot_command,
+    my_bots_command,
+    config_bot_command,
     handle_message,
     handle_photo,
     handle_sticker,
@@ -46,6 +51,13 @@ class SoulmateBot:
         self.app.add_handler(CommandHandler("pay_basic", pay_basic_command))
         self.app.add_handler(CommandHandler("pay_premium", pay_premium_command))
         self.app.add_handler(CommandHandler("check_payment", check_payment_command))
+        
+        # Bot management handlers
+        self.app.add_handler(CommandHandler("list_bots", list_bots_command))
+        self.app.add_handler(CommandHandler("add_bot", add_bot_command))
+        self.app.add_handler(CommandHandler("remove_bot", remove_bot_command))
+        self.app.add_handler(CommandHandler("my_bots", my_bots_command))
+        self.app.add_handler(CommandHandler("config_bot", config_bot_command))
         
         # Message handlers
         self.app.add_handler(MessageHandler(

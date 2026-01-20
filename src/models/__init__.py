@@ -1,6 +1,28 @@
 """
 Models package
 """
-from .database import Base, User, Conversation, UsageRecord, Payment, SubscriptionTier
+from .database import (
+    Base,
+    User,
+    Bot,
+    Channel,
+    ChannelBotMapping,
+    Conversation,
+    UsageRecord,
+    Payment,
+    SubscriptionTier,
+    BotStatus
+)
 
-__all__ = ["Base", "User", "Conversation", "UsageRecord", "Payment", "SubscriptionTier"]
+__all__ = [
+    "Base",
+    "User",
+    "Bot",
+    "Channel",
+    "ChannelBotMapping",
+    "Conversation",
+    "UsageRecord",
+    "Payment",
+    "SubscriptionTier",
+    "BotStatus"
+]
