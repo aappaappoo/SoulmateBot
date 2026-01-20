@@ -65,3 +65,7 @@ cache/
 
 # Docker
 docker-compose.override.yml
+
+# Agent memory storage
+data/agent_memory/
+data/agent_memory.db
