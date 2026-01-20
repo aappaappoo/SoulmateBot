@@ -1,5 +1,10 @@
 """
-Main Telegram Bot application
+主 Telegram Bot 应用程序
+
+本模块是SoulmateBot的核心入口，负责：
+1. 初始化Bot应用
+2. 注册命令和消息处理器
+3. 启动轮询监听用户消息
 """
 import asyncio
 from telegram import Update
@@ -35,85 +40,125 @@ from src.handlers import (
 
 
 class SoulmateBot:
-    """Main bot application class"""
+    """
+    主Bot应用类
+    
+    这是SoulmateBot的核心类，负责整个Bot的生命周期管理：
+    - 初始化配置
+    - 注册处理器
+    - 启动和停止Bot
+    """
     
     def __init__(self):
+        """初始化Bot实例"""
         self.app = None
         
     def setup_handlers(self):
-        """Setup command and message handlers"""
-        # Command handlers
+        """
+        配置命令和消息处理器
+        
+        注册所有的命令处理器和消息处理器，包括：
+        - 基础命令（/start, /help等）
+        - 订阅和支付命令
+        - Bot管理命令
+        - 消息、图片、贴纸处理器
+        """
+        # 基础命令处理器
         self.app.add_handler(CommandHandler("start", start_command))
         self.app.add_handler(CommandHandler("help", help_command))
         self.app.add_handler(CommandHandler("status", status_command))
         self.app.add_handler(CommandHandler("subscribe", subscribe_command))
         self.app.add_handler(CommandHandler("image", image_command))
+        
+        # 支付相关命令
         self.app.add_handler(CommandHandler("pay_basic", pay_basic_command))
         self.app.add_handler(CommandHandler("pay_premium", pay_premium_command))
         self.app.add_handler(CommandHandler("check_payment", check_payment_command))
         
-        # Bot management handlers
+        # Bot管理命令（多Bot架构）
         self.app.add_handler(CommandHandler("list_bots", list_bots_command))
         self.app.add_handler(CommandHandler("add_bot", add_bot_command))
         self.app.add_handler(CommandHandler("remove_bot", remove_bot_command))
         self.app.add_handler(CommandHandler("my_bots", my_bots_command))
         self.app.add_handler(CommandHandler("config_bot", config_bot_command))
         
-        # Message handlers
+        # 消息处理器（处理普通文本消息）
         self.app.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
+            filters.TEXT & ~filters.COMMAND,  # 非命令的文本消息
             handle_message
         ))
+        
+        # 图片处理器
         self.app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        
+        # 贴纸处理器
         self.app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
         
-        # Error handler
+        # 错误处理器（捕获并处理所有错误）
         self.app.add_error_handler(error_handler)
         
-        logger.info("Handlers registered successfully")
+        logger.info("所有处理器注册成功")
     
     async def post_init(self, application: Application):
-        """Post initialization hook"""
-        logger.info("Bot initialized successfully")
-        logger.info(f"Bot username: @{application.bot.username}")
+        """
+        初始化后钩子
+        
+        在Bot完全初始化后调用，用于执行启动后的任务
+        """
+        logger.info("Bot初始化成功")
+        logger.info(f"Bot用户名: @{application.bot.username}")
     
     async def post_shutdown(self, application: Application):
-        """Post shutdown hook"""
-        logger.info("Bot shutdown complete")
+        """
+        关闭后钩子
+        
+        在Bot关闭后调用，用于清理资源
+        """
+        logger.info("Bot已关闭")
     
     def run(self):
-        """Run the bot"""
-        logger.info("Starting SoulmateBot...")
+        """
+        运行Bot
         
-        # Initialize database
-        logger.info("Initializing database...")
+        执行以下步骤：
+        1. 初始化数据库
+        2. 创建Application实例
+        3. 注册所有处理器
+        4. 启动轮询监听
+        """
+        logger.info("正在启动 SoulmateBot...")
+        
+        # 初始化数据库（创建表结构）
+        logger.info("正在初始化数据库...")
         init_db()
-        logger.info("Database initialized")
+        logger.info("数据库初始化完成")
         
-        # Create application
+        # 创建Telegram Bot Application
         self.app = Application.builder().token(settings.telegram_bot_token).build()
         
-        # Setup handlers
+        # 注册所有处理器
         self.setup_handlers()
         
-        # Add initialization hooks
+        # 添加生命周期钩子
         self.app.post_init = self.post_init
         self.app.post_shutdown = self.post_shutdown
         
-        # Run bot
-        logger.info("Starting polling...")
+        # 启动轮询（长轮询方式监听消息）
+        logger.info("开始轮询监听...")
         self.app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
-    # Configure logger
+    # 配置日志记录器
+    # - 按天轮转日志文件
+    # - 保留最近7天的日志
     logger.add(
         "logs/bot_{time}.log",
-        rotation="1 day",
-        retention="7 days",
+        rotation="1 day",      # 每天创建新日志文件
+        retention="7 days",    # 保留7天历史日志
         level=settings.log_level
     )
     
-    # Create and run bot
+    # 创建并运行Bot实例
     bot = SoulmateBot()
     bot.run()

@@ -1,12 +1,13 @@
-# SoulmateBot - 情感陪伴机器人
+# SoulmateBot - 智能情感陪伴机器人
 
 <div align="center">
 
-一个基于 Telegram 的智能情感陪伴机器人系统，支持**多机器人架构**，提供温暖的对话、图片分享和订阅管理功能。
+基于 Telegram 的专业智能情感陪伴机器人系统，支持**多Agent架构**，提供情感价值和工具调用能力。
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://telegram.org/)
+
+**商业软件 - 版权所有 © 2026**
 
 </div>
 
@@ -14,31 +15,39 @@
 
 ## 📖 目录
 
-- [功能特性](#功能特性)
-- [多机器人架构](#多机器人架构)
+- [核心特性](#核心特性)
+- [Agent系统架构](#agent系统架构)
 - [技术架构](#技术架构)
 - [快速开始](#快速开始)
 - [配置说明](#配置说明)
-- [部署指南](#部署指南)
-- [API文档](#api文档)
+- [二次开发指南](#二次开发指南)
 - [项目结构](#项目结构)
-- [开发计划](#开发计划)
 
 ---
 
-## ✨ 功能特性
+## ✨ 核心特性
 
-### 核心功能
+### 双核心能力
 
-- 💬 **智能对话** - 基于 GPT/Claude/vLLM 的情感陪伴对话
-- 🤖 **多机器人支持** - 一个频道可配置多个机器人（新功能）
-- 🎭 **个性化机器人** - 每个机器人可有独特个性和AI模型
-- 🔀 **智能路由** - 支持 mention、auto、keyword 三种路由模式
-- 🖼️ **图片分享** - 温馨图片生成与发送
+**1. 情感价值提供**
+- 💬 **智能情感对话** - 基于先进AI模型的情感陪伴
+- 🎭 **情感识别与响应** - 识别用户情绪并提供针对性支持
+- 💭 **记忆系统** - 记住用户偏好和历史对话
+- 🤗 **共情能力** - 提供温暖、理解和支持
+
+**2. 工具调用能力**
+- 🔧 **技术支持** - 编程、技术问题解答
+- 🛠️ **工具集成** - 可扩展的工具调用系统
+- 📊 **多Agent协作** - 不同Agent处理不同类型任务
+- 🔀 **智能路由** - 自动选择最合适的Agent响应
+
+### 系统功能
+
+- 🤖 **多Agent架构** - 情感Agent、技术Agent、工具Agent等
 - 📊 **订阅管理** - 完整的订阅系统和使用限额
-- 💳 **支付集成** - 支持微信支付和 Stripe
-- 👤 **用户管理** - 用户信息存储和会话管理
-- 📈 **使用统计** - 实时使用情况追踪
+- 💳 **支付集成** - 支持多种支付方式
+- 👤 **用户管理** - 用户数据和会话持久化
+- 📈 **使用统计** - 实时追踪和分析
 
 ### 订阅计划
 
@@ -50,51 +59,65 @@
 
 ---
 
-## 🤖 多机器人架构
+## 🏗️ Agent系统架构
 
-### 新特性亮点
+### 核心设计理念
 
-**v0.3.0 引入多机器人架构**，支持：
+本系统采用**多Agent协作**架构，每个Agent专注于特定领域，通过智能路由系统协同工作：
 
-#### ✅ 一个频道多个机器人
 ```
-您的频道
-├─ 客服机器人（处理咨询）
-├─ 新闻机器人（播报资讯）
-└─ 助手机器人（日常对话）
+用户消息 → 路由器 → [情感Agent | 技术Agent | 工具Agent] → 响应合并 → 返回用户
 ```
 
-#### ✅ 灵活的路由模式
+### 内置Agent
 
-- **Mention 模式**：需要 @机器人 才响应
-- **Auto 模式**：自动响应所有消息
-- **Keyword 模式**：根据关键词触发
+#### 1. 情感支持Agent (EmotionalAgent)
+**专长**：提供情感价值和心理支持
+- 识别情绪：悲伤、焦虑、快乐、愤怒等
+- 共情响应：理解并回应用户感受
+- 记忆系统：记住用户的情感历史
+- 支持场景：情感倾诉、心理疏导、日常陪伴
 
-#### ✅ 可共享的机器人
+#### 2. 技术支持Agent (TechAgent)  
+**专长**：解决技术问题和提供编程帮助
+- 编程语言：Python、JavaScript、Java等
+- 问题类型：调试、优化、教程、解释
+- 代码支持：提供示例和最佳实践
+- 支持场景：技术咨询、代码审查、学习指导
 
-创建公开机器人，允许其他用户添加到他们的频道。
+#### 3. 工具调用Agent (ToolAgent) 🆕
+**专长**：调用外部工具完成实际任务
+- 信息查询：天气、新闻、搜索等
+- 任务执行：提醒、计算、转换等
+- API集成：第三方服务调用
+- 支持场景：实用工具、生产力提升
 
-#### 📚 详细文档
+### Agent路由机制
 
-查看 [多机器人使用指南](MULTI_BOT_GUIDE.md) 了解详细配置和使用方法。
+```python
+# 智能选择最合适的Agent
+1. 解析@提及 → 直接调用指定Agent
+2. 关键词匹配 → 计算每个Agent的置信度
+3. 上下文分析 → 考虑历史对话内容
+4. 置信度排序 → 选择最合适的Agent(s)
+5. 并行执行 → 可配置多Agent同时响应
+```
 
-### 快速使用
+### 扩展性设计
 
-```bash
-# 列出可用机器人
-/list_bots
+系统支持轻松添加新的Agent：
 
-# 添加机器人到频道
-/add_bot 1 mention
+```python
+from src.agents import BaseAgent
 
-# 查看频道机器人
-/my_bots
-
-# 配置机器人
-/config_bot 1 routing_mode auto
-
-# 移除机器人
-/remove_bot 1
+class CustomAgent(BaseAgent):
+    def can_handle(self, message, context) -> float:
+        # 返回0.0-1.0的置信度分数
+        pass
+    
+    def respond(self, message, context) -> AgentResponse:
+        # 生成响应
+        pass
 ```
 
 ---
@@ -174,48 +197,16 @@
 
 ## 🚀 快速开始
 
-## Database Migration
-
-⚠️ **重要提示：多机器人架构升级**
-
-如果您从旧版本升级，需要运行数据库迁移脚本：
-
-```bash
-# 运行多机器人架构迁移
-python migrations/migrate_to_multibot.py
-```
-
-此脚本将：
-- 创建新的 Bot、Channel、ChannelBotMapping 表
-- 为现有用户创建默认机器人配置
-- 迁移现有数据到新架构
-
-如遇到旧的枚举错误：
-```
-invalid input value for enum subscriptiontier: "free"
-```
-
-请先执行：
-```bash
-psql -U your_username -d your_database -f migrations/fix_subscription_tier_enum.sql
-```
-
 ### 前置要求
 
 - Python 3.11 或更高版本
 - PostgreSQL 15+ (可选，默认使用 SQLite)
-- Redis (可选)
 - Telegram Bot Token
-- OpenAI API Key 或 Anthropic API Key
+- OpenAI/Anthropic API Key
 
 ### 本地开发
 
-1. **克隆仓库**
-
-```bash
-git clone https://github.com/aappaappoo/SoulmateBot.git
-cd SoulmateBot
-```
+1. **克隆仓库**（需要授权）
 
 2. **创建虚拟环境**
 
@@ -236,7 +227,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，填入你的配置
+# 编辑 .env 文件，填入配置信息
 ```
 
 5. **初始化数据库**
@@ -249,27 +240,6 @@ python -c "from src.database import init_db; init_db()"
 
 ```bash
 python main.py
-```
-
-### Docker 部署
-
-1. **配置环境变量**
-
-```bash
-cp .env.example .env
-# 编辑 .env 文件
-```
-
-2. **启动服务**
-
-```bash
-docker-compose up -d
-```
-
-3. **查看日志**
-
-```bash
-docker-compose logs -f bot
 ```
 
 ---
@@ -390,6 +360,266 @@ SoulmateBot/
 ├── Dockerfile                    # Docker 配置
 ├── docker-compose.yml            # Docker Compose 配置
 └── README.md                     # 项目文档
+```
+
+---
+
+## 🎯 二次开发指南
+
+### Agent开发指南
+
+#### 1. 创建自定义Agent
+
+在 `agents/` 目录创建新的Agent文件，例如 `agents/my_agent.py`：
+
+```python
+"""
+自定义Agent示例 - 根据业务需求定制
+"""
+from typing import Dict, Any
+from src.agents import BaseAgent, Message, ChatContext, AgentResponse, SQLiteMemoryStore
+
+
+class MyCustomAgent(BaseAgent):
+    """
+    自定义Agent类
+    
+    实现特定领域的功能，如：
+    - 客服支持
+    - 专业咨询
+    - 工具集成
+    """
+    
+    def __init__(self, memory_store=None):
+        """初始化Agent"""
+        self._name = "MyCustomAgent"
+        self._description = "提供XXX服务的专业Agent"
+        self._memory = memory_store or SQLiteMemoryStore()
+        
+        # 定义触发关键词
+        self._keywords = ["关键词1", "关键词2", "关键词3"]
+    
+    @property
+    def name(self) -> str:
+        """Agent名称"""
+        return self._name
+    
+    @property  
+    def description(self) -> str:
+        """Agent描述"""
+        return self._description
+    
+    def can_handle(self, message: Message, context: ChatContext) -> float:
+        """
+        判断能否处理消息
+        
+        返回置信度分数：
+        - 0.0: 不能处理
+        - 0.5-0.7: 中等置信度
+        - 0.8-1.0: 高置信度
+        """
+        # 检查@提及
+        if message.has_mention(self.name):
+            return 1.0
+        
+        content = message.content.lower()
+        
+        # 关键词匹配
+        matches = sum(1 for kw in self._keywords if kw in content)
+        
+        if matches >= 2:
+            return 0.9
+        elif matches == 1:
+            return 0.6
+        
+        return 0.0
+    
+    def respond(self, message: Message, context: ChatContext) -> AgentResponse:
+        """生成响应"""
+        # 读取用户历史
+        user_memory = self.memory_read(message.user_id)
+        interaction_count = user_memory.get("count", 0)
+        
+        # 生成响应
+        response_text = f"收到消息：{message.content}"
+        
+        # 更新记忆
+        user_memory["count"] = interaction_count + 1
+        user_memory["last_message"] = message.content
+        self.memory_write(message.user_id, user_memory)
+        
+        return AgentResponse(
+            content=response_text,
+            agent_name=self.name,
+            confidence=0.85,
+            should_continue=False
+        )
+    
+    def memory_read(self, user_id: str) -> Dict[str, Any]:
+        """读取用户记忆"""
+        return self._memory.read(self.name, user_id)
+    
+    def memory_write(self, user_id: str, data: Dict[str, Any]) -> None:
+        """保存用户记忆"""
+        self._memory.write(self.name, user_id, data)
+```
+
+#### 2. 工具集成Agent示例
+
+创建能调用外部API的工具Agent：
+
+```python
+"""
+工具调用Agent - 集成外部服务
+"""
+import requests
+from src.agents import BaseAgent, Message, ChatContext, AgentResponse
+
+
+class ToolAgent(BaseAgent):
+    """工具调用Agent - 提供实用功能"""
+    
+    def __init__(self):
+        self._name = "ToolAgent"
+        self._description = "调用工具完成实际任务"
+    
+    @property
+    def name(self) -> str:
+        return self._name
+    
+    @property
+    def description(self) -> str:
+        return self._description
+    
+    def can_handle(self, message: Message, context: ChatContext) -> float:
+        """判断是否需要工具"""
+        content = message.content.lower()
+        
+        # 工具相关关键词
+        tools = ["天气", "搜索", "计算", "翻译"]
+        if any(tool in content for tool in tools):
+            return 0.9
+        
+        return 0.0
+    
+    def respond(self, message: Message, context: ChatContext) -> AgentResponse:
+        """调用工具并返回结果"""
+        content = message.content.lower()
+        
+        if "天气" in content:
+            result = self._get_weather()
+        elif "搜索" in content:
+            result = self._web_search(message.content)
+        elif "计算" in content:
+            result = self._calculate(message.content)
+        else:
+            result = "我可以帮你：查天气、搜索、计算等"
+        
+        return AgentResponse(
+            content=result,
+            agent_name=self.name,
+            confidence=0.85
+        )
+    
+    def _get_weather(self):
+        """查询天气 - 对接天气API"""
+        # TODO: 调用真实天气API
+        return "今天天气：晴，温度22°C"
+    
+    def _web_search(self, query):
+        """网络搜索 - 对接搜索API"""
+        # TODO: 调用搜索API
+        return f"搜索结果：{query}"
+    
+    def _calculate(self, expression):
+        """计算 - 使用eval或专业计算库"""
+        # TODO: 实现安全的计算功能
+        return "计算结果：42"
+    
+    def memory_read(self, user_id: str) -> Dict[str, Any]:
+        return {}
+    
+    def memory_write(self, user_id: str, data: Dict[str, Any]) -> None:
+        pass
+```
+
+#### 3. 配置Router
+
+在代码中配置Router行为（`src/bot/main.py`）：
+
+```python
+from src.agents import Router, RouterConfig, AgentLoader
+
+# 加载所有Agent
+loader = AgentLoader(agents_dir="agents")
+agents = loader.load_agents()
+
+# 配置Router
+config = RouterConfig(
+    min_confidence=0.5,      # 最低置信度阈值
+    max_agents=1,            # 同时响应的Agent数量
+    exclusive_mention=True,  # @提及时独占响应
+    enable_parallel=False,   # 是否并行执行
+)
+
+router = Router(agents, config)
+```
+
+### 数据库扩展
+
+添加自定义数据表：
+
+```python
+from sqlalchemy import Column, Integer, String, DateTime, Text
+from src.database import Base
+from datetime import datetime
+
+
+class CustomData(Base):
+    """自定义数据模型"""
+    __tablename__ = "custom_data"
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, index=True, nullable=False)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+```
+
+### 环境配置扩展
+
+在 `.env` 添加自定义配置：
+
+```env
+# 自定义Agent配置
+CUSTOM_AGENT_ENABLED=true
+CUSTOM_API_KEY=your_api_key
+CUSTOM_API_URL=https://api.example.com
+```
+
+在代码中读取配置：
+
+```python
+import os
+from config import settings
+
+# 读取环境变量
+api_key = os.getenv("CUSTOM_API_KEY")
+api_url = os.getenv("CUSTOM_API_URL")
+enabled = os.getenv("CUSTOM_AGENT_ENABLED", "false").lower() == "true"
+```
+
+### 添加新命令
+
+在 `src/handlers/commands.py` 添加新命令：
+
+```python
+async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """自定义命令处理器"""
+    await update.message.reply_text("这是自定义命令的响应")
+
+# 在 main.py 中注册
+app.add_handler(CommandHandler("custom", custom_command))
 ```
 
 ---
@@ -545,41 +775,18 @@ VLLM_MODEL=your-model-name
 
 ---
 
-## 🤝 贡献指南
-
-欢迎贡献！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
----
-
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+本项目为专有软件，版权所有 © 2026 SoulmateBot 团队。详见 [LICENSE](LICENSE) 文件。
 
----
-
-## 👥 联系方式
-
-- 项目主页: https://github.com/aappaappoo/SoulmateBot
-- Issue 反馈: https://github.com/aappaappoo/SoulmateBot/issues
-
----
-
-## 🙏 致谢
-
-- [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)
-- [OpenAI](https://openai.com/)
-- [Anthropic](https://www.anthropic.com/)
+未经授权，禁止复制、修改或分发本软件。
 
 ---
 
 <div align="center">
 
-**用 ❤️ 打造的情感陪伴机器人**
+**SoulmateBot - 专业智能陪伴机器人系统**
+
+版权所有 © 2026
 
 </div>

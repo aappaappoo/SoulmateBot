@@ -1,12 +1,12 @@
 """
-Message routing system for the multi-agent chat.
+多Agent消息路由系统
 
-The Router is responsible for:
-- Parsing explicit @mentions
-- Querying agents via can_handle()
-- Selecting agents based on configurable policies
-- Managing parallel execution
-- Merging and returning responses
+Router负责智能地将用户消息路由到最合适的Agent：
+- 解析@提及
+- 查询所有Agent的can_handle()获取置信度
+- 根据配置策略选择Agent
+- 管理并行执行
+- 合并并返回响应
 """
 from typing import List, Optional, Dict, Any, Callable, Tuple
 from dataclasses import dataclass, field
@@ -21,15 +21,22 @@ from .base_agent import BaseAgent
 @dataclass
 class RouterConfig:
     """
-    Configuration for message routing.
+    路由器配置类
     
-    Attributes:
-        min_confidence: Minimum confidence threshold for agent selection (0.0-1.0)
-        max_agents: Maximum number of agents that can respond to a single message
-        exclusive_mention: If True, only mentioned agent responds when @mention exists
-        enable_parallel: Enable parallel execution of multiple agents
-        cooldown_seconds: Minimum seconds between responses from same agent to same user
-        fallback_agent_name: Optional fallback agent if no agents meet threshold
+    属性说明:
+        min_confidence: 最低置信度阈值 (0.0-1.0)，低于此值的Agent不会被选中
+        max_agents: 单条消息最多允许几个Agent响应
+        exclusive_mention: 当消息@提及某Agent时，是否只让该Agent响应
+        enable_parallel: 是否启用并行执行（允许多个Agent同时处理）
+        cooldown_seconds: 同一Agent对同一用户的最小响应间隔（秒）
+        fallback_agent_name: 当没有Agent满足阈值时的备用Agent名称
+        
+    使用示例:
+        config = RouterConfig(
+            min_confidence=0.6,     # 只选择置信度>=0.6的Agent
+            max_agents=2,           # 最多2个Agent响应
+            exclusive_mention=True, # @提及时独占
+        )
     """
     min_confidence: float = 0.5
     max_agents: int = 1
@@ -39,19 +46,34 @@ class RouterConfig:
     fallback_agent_name: Optional[str] = None
     
     def __post_init__(self):
-        """Validate configuration."""
+        """验证配置参数的有效性"""
         if not 0.0 <= self.min_confidence <= 1.0:
-            raise ValueError(f"min_confidence must be between 0.0 and 1.0, got {self.min_confidence}")
+            raise ValueError(f"min_confidence必须在0.0-1.0之间，当前值: {self.min_confidence}")
         if self.max_agents < 1:
-            raise ValueError(f"max_agents must be at least 1, got {self.max_agents}")
+            raise ValueError(f"max_agents必须至少为1，当前值: {self.max_agents}")
 
 
 class Router:
     """
-    Message router for multi-agent system.
+    消息路由器 - 多Agent系统的核心
     
-    Routes incoming messages to the most appropriate agent(s) based on
-    confidence scores, @mentions, and configurable policies.
+    根据置信度分数、@提及和配置策略，将消息路由到最合适的Agent。
+    
+    主要职责:
+    1. 解析消息中的@提及
+    2. 查询所有Agent的处理能力（置信度）
+    3. 按配置选择合适的Agent
+    4. 执行Agent并收集响应
+    5. 应用冷却时间限制
+    
+    使用示例:
+        agents = [EmotionalAgent(), TechAgent(), ToolAgent()]
+        config = RouterConfig(min_confidence=0.5, max_agents=1)
+        router = Router(agents, config)
+        
+        message = Message(content="我今天很难过", user_id="123", chat_id="456")
+        context = ChatContext(chat_id="456")
+        responses = router.route(message, context)
     """
     
     def __init__(
@@ -60,25 +82,30 @@ class Router:
         config: Optional[RouterConfig] = None
     ):
         """
-        Initialize the router.
+        初始化路由器
         
-        Args:
-            agents: List of available agents
-            config: Router configuration (uses defaults if None)
+        参数:
+            agents: 可用的Agent列表
+            config: 路由配置（如果为None则使用默认配置）
         """
+        # 使用Agent名称作为key构建字典，便于快速查找
         self.agents = {agent.name: agent for agent in agents}
         self.config = config or RouterConfig()
+        # 记录每个Agent对每个用户的最后响应时间（用于冷却）
         self._last_response_times: Dict[str, Dict[str, datetime]] = {}
         
-        logger.info(f"Router initialized with {len(self.agents)} agents")
-        logger.info(f"Router config: {self.config}")
+        logger.info(f"Router初始化完成，加载了 {len(self.agents)} 个Agent")
+        logger.info(f"Router配置: {self.config}")
     
     def add_agent(self, agent: BaseAgent) -> None:
         """
-        Add an agent to the router.
+        添加一个Agent到路由器
         
-        Args:
-            agent: Agent to add
+        参数:
+            agent: 要添加的Agent实例
+            
+        注意:
+            如果Agent名称已存在，会替换原有Agent
         """
         if agent.name in self.agents:
             logger.warning(f"Agent '{agent.name}' already exists, replacing")
@@ -88,17 +115,17 @@ class Router:
     
     def remove_agent(self, agent_name: str) -> bool:
         """
-        Remove an agent from the router.
+        从路由器移除一个Agent
         
-        Args:
-            agent_name: Name of agent to remove
+        参数:
+            agent_name: 要移除的Agent名称
             
-        Returns:
-            True if agent was removed, False if not found
+        返回值:
+            bool: 成功移除返回True，未找到返回False
         """
         if agent_name in self.agents:
             del self.agents[agent_name]
-            logger.info(f"Removed agent: {agent_name}")
+            logger.info(f"移除Agent: {agent_name}")
             return True
         return False
     
