@@ -1,14 +1,14 @@
 """
 数据库迁移脚本 - 多机器人架构
-
 此脚本用于将现有数据库升级到多机器人架构
 """
+import sys
+sys.path.append("/Users/apapoo/Desktop/Github_Hub/SolumateBot/")
 from sqlalchemy import text
 from src.database import engine, get_db_session
 from src.models.database import Base, Bot, Channel, ChannelBotMapping, BotStatus
 from config import settings
 from loguru import logger
-import sys
 
 
 def create_new_tables():

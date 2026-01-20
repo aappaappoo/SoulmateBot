@@ -173,7 +173,7 @@ class Channel(Base):
     username = Column(String(255), nullable=True)
     
     # Owner information
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    owner_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     
     # Channel settings
     settings = Column(JSON, default={})  # 频道配置，如路由模式、订阅信息等
