@@ -334,3 +334,274 @@ class ChannelBotMapping(Base):
     
     def __repr__(self):
         return f"<ChannelBotMapping(id={self.id}, channel_id={self.channel_id}, bot_id={self.bot_id})>"
+
+
+class ReactionType(str, enum.Enum):
+    """
+    Telegram Reactions 类型枚举
+    Telegram reaction type enumeration
+    
+    包含Telegram支持的主要表情反应类型
+    """
+    # 正面反应
+    THUMBS_UP = "👍"           # 赞
+    HEART = "❤️"               # 爱心
+    FIRE = "🔥"                # 火
+    CLAP = "👏"                # 鼓掌
+    PARTY = "🎉"               # 庆祝
+    STAR_STRUCK = "🤩"         # 惊艳
+    EYES = "👀"                # 关注
+    OK = "👌"                  # OK
+    HUNDRED = "💯"             # 100分
+    
+    # 负面反应
+    THUMBS_DOWN = "👎"         # 踩
+    POOP = "💩"                # 差评
+    VOMIT = "🤮"               # 恶心
+    
+    # 情感反应
+    CRYING = "😢"              # 哭泣
+    THINKING = "🤔"            # 思考
+    SHOCK = "😱"               # 震惊
+    ANGRY = "😡"               # 生气
+    SAD = "😔"                 # 悲伤
+    LAUGH = "😂"               # 大笑
+    
+    # 自定义/其他
+    CUSTOM = "custom"          # 自定义表情
+
+
+class InteractionType(str, enum.Enum):
+    """
+    用户交互行为类型枚举
+    User interaction type enumeration
+    
+    记录用户对机器人消息的各类操作
+    """
+    # 消息操作
+    COPY = "copy"              # 复制消息内容
+    COPY_LINK = "copy_link"    # 复制消息链接
+    REPLY = "reply"            # 回复消息
+    FORWARD = "forward"        # 转发消息
+    
+    # 管理操作
+    PIN = "pin"                # 置顶消息
+    UNPIN = "unpin"            # 取消置顶
+    REPORT = "report"          # 举报消息
+    DELETE = "delete"          # 删除消息
+    
+    # 互动操作
+    QUOTE = "quote"            # 引用消息
+    EDIT = "edit"              # 编辑（仅用于用户消息）
+    SELECT = "select"          # 选择消息（多选）
+    TRANSLATE = "translate"    # 翻译消息
+    
+    # 分析类型
+    SHARE = "share"            # 分享
+    SAVE = "save"              # 保存/收藏
+
+
+class MessageReaction(Base):
+    """
+    消息反应模型 - 存储用户对消息的Reaction记录
+    Message reaction model for storing user reactions to messages
+    
+    设计说明：
+    - 支持Telegram的emoji反应功能
+    - 记录用户对机器人回复的表情评价
+    - 支持商业分析和用户满意度统计
+    
+    并发控制说明：
+    - 使用复合唯一约束防止重复反应
+    - 支持反应更新和取消
+    """
+    __tablename__ = "message_reactions"
+
+    # 主键和标识符
+    id = Column(Integer, primary_key=True, index=True, comment="内部自增主键")
+    uuid = Column(String(36), unique=True, index=True, default=generate_uuid, nullable=False, comment="外部引用UUID")
+    
+    # 关联关系
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="反应用户ID")
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True, comment="关联的对话记录ID")
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="SET NULL"), nullable=True, index=True, comment="被反应的机器人ID")
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="SET NULL"), nullable=True, index=True, comment="发生反应的频道ID")
+    
+    # Telegram消息标识
+    message_id = Column(BigInteger, nullable=False, index=True, comment="Telegram消息ID")
+    chat_id = Column(BigInteger, nullable=False, index=True, comment="Telegram聊天ID")
+    
+    # 反应信息
+    reaction_type = Column(String(50), nullable=False, comment="反应类型：emoji字符或custom")
+    reaction_emoji = Column(String(50), nullable=False, comment="反应的emoji表情")
+    custom_emoji_id = Column(String(255), nullable=True, comment="自定义emoji的ID（如果是自定义表情）")
+    is_big = Column(Boolean, default=False, comment="是否为大型动画表情")
+    
+    # 反应状态
+    is_active = Column(Boolean, default=True, comment="反应是否有效（取消后为False）")
+    
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="反应时间")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间（如更改反应）")
+    removed_at = Column(DateTime, nullable=True, comment="取消反应的时间")
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    conversation = relationship("Conversation", foreign_keys=[conversation_id])
+    bot = relationship("Bot", foreign_keys=[bot_id])
+    channel = relationship("Channel", foreign_keys=[channel_id])
+    
+    # 索引和约束
+    __table_args__ = (
+        # 复合索引：优化按消息查询反应
+        Index('idx_message_reaction_lookup', 'chat_id', 'message_id'),
+        # 复合索引：优化用户反应历史查询
+        Index('idx_user_reactions', 'user_id', 'created_at'),
+        # 复合索引：优化机器人反应统计
+        Index('idx_bot_reactions', 'bot_id', 'reaction_type', 'is_active'),
+        # 唯一约束：同一用户对同一消息只能有一种有效反应
+        UniqueConstraint('user_id', 'message_id', 'chat_id', 'is_active', name='uq_user_message_active_reaction'),
+    )
+    
+    def __repr__(self):
+        return f"<MessageReaction(id={self.id}, user_id={self.user_id}, emoji={self.reaction_emoji}, active={self.is_active})>"
+
+
+class MessageInteraction(Base):
+    """
+    消息交互模型 - 存储用户对消息的操作行为
+    Message interaction model for storing user actions on messages
+    
+    设计说明：
+    - 记录复制、回复、pin、举报、复制链接等操作
+    - 用于商业分析：理解用户行为模式
+    - 支持高频操作的批量统计
+    
+    并发控制说明：
+    - 使用复合索引优化查询性能
+    - 支持批量插入和统计查询
+    """
+    __tablename__ = "message_interactions"
+
+    # 主键和标识符
+    id = Column(Integer, primary_key=True, index=True, comment="内部自增主键")
+    uuid = Column(String(36), unique=True, index=True, default=generate_uuid, nullable=False, comment="外部引用UUID")
+    
+    # 关联关系
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="操作用户ID")
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True, comment="关联的对话记录ID")
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="SET NULL"), nullable=True, index=True, comment="被操作的机器人消息所属机器人ID")
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="SET NULL"), nullable=True, index=True, comment="发生操作的频道ID")
+    
+    # Telegram消息标识
+    message_id = Column(BigInteger, nullable=False, index=True, comment="Telegram消息ID")
+    chat_id = Column(BigInteger, nullable=False, index=True, comment="Telegram聊天ID")
+    
+    # 交互信息
+    interaction_type = Column(String(50), nullable=False, comment="交互类型：copy/reply/pin/report/copy_link等")
+    
+    # 扩展元数据（JSON格式存储额外信息）
+    extra_data = Column(JSON, default={}, comment="交互的额外元数据，如：reply_to_message_id, forward_to_chat_id等")
+    
+    # 交互结果
+    is_successful = Column(Boolean, default=True, comment="操作是否成功")
+    error_message = Column(Text, nullable=True, comment="如果操作失败，记录错误信息")
+    
+    # 来源信息
+    source_platform = Column(String(50), default="telegram", comment="来源平台：telegram/web/api等")
+    client_info = Column(JSON, default={}, comment="客户端信息，如版本、设备类型等")
+    
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="操作时间")
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    conversation = relationship("Conversation", foreign_keys=[conversation_id])
+    bot = relationship("Bot", foreign_keys=[bot_id])
+    channel = relationship("Channel", foreign_keys=[channel_id])
+    
+    # 索引和约束
+    __table_args__ = (
+        # 复合索引：优化按消息查询交互记录
+        Index('idx_message_interaction_lookup', 'chat_id', 'message_id'),
+        # 复合索引：优化用户交互历史查询
+        Index('idx_user_interactions', 'user_id', 'interaction_type', 'created_at'),
+        # 复合索引：优化机器人交互统计
+        Index('idx_bot_interactions', 'bot_id', 'interaction_type'),
+        # 复合索引：优化按时间段统计
+        Index('idx_interaction_analytics', 'interaction_type', 'created_at', 'is_successful'),
+    )
+    
+    def __repr__(self):
+        return f"<MessageInteraction(id={self.id}, user_id={self.user_id}, type={self.interaction_type})>"
+
+
+class FeedbackSummary(Base):
+    """
+    反馈汇总模型 - 按时间段汇总用户反馈统计
+    Feedback summary model for aggregated feedback statistics
+    
+    设计说明：
+    - 定期（每小时/每天）汇总反应和交互数据
+    - 用于快速获取统计数据，避免实时聚合查询
+    - 支持商业报表和数据分析
+    
+    并发控制说明：
+    - 使用唯一约束确保同一统计周期不重复
+    - 使用version字段支持并发更新
+    """
+    __tablename__ = "feedback_summaries"
+
+    # 主键和标识符
+    id = Column(Integer, primary_key=True, index=True, comment="内部自增主键")
+    
+    # 统计维度
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=True, index=True, comment="统计的机器人ID，NULL表示全局统计")
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=True, index=True, comment="统计的频道ID，NULL表示所有频道")
+    period_type = Column(String(20), nullable=False, comment="统计周期类型：hourly/daily/weekly/monthly")
+    period_start = Column(DateTime, nullable=False, index=True, comment="统计周期开始时间")
+    period_end = Column(DateTime, nullable=False, comment="统计周期结束时间")
+    
+    # 反应统计
+    total_reactions = Column(Integer, default=0, comment="总反应数")
+    positive_reactions = Column(Integer, default=0, comment="正面反应数（👍❤️🔥👏🎉等）")
+    negative_reactions = Column(Integer, default=0, comment="负面反应数（👎💩🤮等）")
+    neutral_reactions = Column(Integer, default=0, comment="中性反应数（🤔👀等）")
+    reaction_breakdown = Column(JSON, default={}, comment="各类反应的详细数量，如：{'👍': 100, '❤️': 50}")
+    
+    # 交互统计
+    total_interactions = Column(Integer, default=0, comment="总交互数")
+    copy_count = Column(Integer, default=0, comment="复制次数")
+    reply_count = Column(Integer, default=0, comment="回复次数")
+    forward_count = Column(Integer, default=0, comment="转发次数")
+    pin_count = Column(Integer, default=0, comment="置顶次数")
+    report_count = Column(Integer, default=0, comment="举报次数")
+    interaction_breakdown = Column(JSON, default={}, comment="各类交互的详细数量")
+    
+    # 计算指标
+    satisfaction_score = Column(Integer, nullable=True, comment="满意度分数（0-100），基于正负反应比例计算")
+    engagement_score = Column(Integer, nullable=True, comment="参与度分数（0-100），基于交互频率计算")
+    
+    # 并发控制
+    version = Column(Integer, default=1, nullable=False, comment="乐观锁版本号")
+    
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.utcnow, comment="记录创建时间")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="最后更新时间")
+    
+    # Relationships
+    bot = relationship("Bot", foreign_keys=[bot_id])
+    channel = relationship("Channel", foreign_keys=[channel_id])
+    
+    # 索引和约束
+    __table_args__ = (
+        # 唯一约束：确保同一维度同一周期不重复
+        UniqueConstraint('bot_id', 'channel_id', 'period_type', 'period_start', name='uq_feedback_summary_period'),
+        # 复合索引：优化按周期查询
+        Index('idx_summary_period', 'period_type', 'period_start'),
+        # 复合索引：优化按机器人查询
+        Index('idx_summary_bot', 'bot_id', 'period_type', 'period_start'),
+    )
+    
+    def __repr__(self):
+        return f"<FeedbackSummary(id={self.id}, bot_id={self.bot_id}, period={self.period_type}, start={self.period_start})>"

@@ -48,6 +48,10 @@ SoulmateBot/
 │   │   ├── bot_commands.py           # 机器人管理命令（新增）
 │   │   │                             #   - /list_bots, /add_bot, /remove_bot
 │   │   │                             #   - /my_bots, /config_bot
+│   │   ├── feedback.py               # 反馈处理器（新增）
+│   │   │                             #   - 消息反应处理（👍、❤️、👎等）
+│   │   │                             #   - 交互行为记录（复制、回复、置顶等）
+│   │   │                             #   - /feedback_stats, /my_feedback
 │   │   └── messages.py               # 消息处理器
 │   │                                 #   - 文本/图片/表情包处理
 │   │                                 #   - 多机器人消息路由
@@ -62,6 +66,9 @@ SoulmateBot/
 │   │                                 #   - Conversation（对话）
 │   │                                 #   - UsageRecord（使用记录）
 │   │                                 #   - Payment（支付）
+│   │                                 #   - MessageReaction（消息反应）- 新增
+│   │                                 #   - MessageInteraction（消息交互）- 新增
+│   │                                 #   - FeedbackSummary（反馈汇总）- 新增
 │   │
 │   ├── 📁 database/                  # 数据库连接
 │   │   ├── __init__.py
@@ -78,6 +85,11 @@ SoulmateBot/
 │   │   ├── message_router.py         # 消息路由器（新增）
 │   │   │                             #   - 消息路由逻辑
 │   │   │                             #   - 机器人选择算法
+│   │   ├── feedback_service.py       # 反馈服务（新增）
+│   │   │                             #   - 反应管理（添加/移除/查询）
+│   │   │                             #   - 交互记录（复制/回复/置顶等）
+│   │   │                             #   - 反馈统计和汇总
+│   │   │                             #   - 满意度分析
 │   │   └── image_service.py          # 图片服务
 │   │
 │   ├── 📁 subscription/              # 订阅管理
@@ -104,6 +116,10 @@ SoulmateBot/
 ├── 📁 migrations/                    # 数据库迁移脚本
 │   ├── README.md
 │   ├── migrate_to_multibot.py        # 多机器人架构迁移（新增）
+│   ├── add_feedback_tables.py        # 反馈表迁移脚本（新增）
+│   │                                 #   - message_reactions（消息反应表）
+│   │                                 #   - message_interactions（消息交互表）
+│   │                                 #   - feedback_summaries（反馈汇总表）
 │   └── fix_subscription_tier_enum.sql # 订阅层级修复
 │
 ├── 📁 tests/                         # 测试文件
@@ -111,7 +127,8 @@ SoulmateBot/
 │   ├── conftest.py                   # pytest 配置
 │   ├── test_subscription.py          # 订阅测试
 │   ├── test_vllm.py                 # vLLM 测试
-│   └── test_wechat_pay.py           # 微信支付测试
+│   ├── test_wechat_pay.py           # 微信支付测试
+│   └── test_feedback.py              # 反馈功能测试（新增）
 │
 ├── 📁 data/                          # 数据目录
 │   └── uploads/                      # 用户上传文件
@@ -265,6 +282,42 @@ SoulmateBot/
 - status: 状态
 ```
 
+**MessageReaction（消息反应模型）- 新增**
+```python
+- user_id: 用户 ID
+- message_id: Telegram消息ID
+- chat_id: Telegram聊天ID
+- reaction_emoji: 反应表情（👍、❤️、👎等）
+- reaction_type: 反应类型（positive/negative/neutral）
+- is_active: 反应是否有效
+- created_at: 反应时间
+- removed_at: 取消反应时间
+```
+
+**MessageInteraction（消息交互模型）- 新增**
+```python
+- user_id: 用户 ID
+- message_id: Telegram消息ID
+- chat_id: Telegram聊天ID
+- interaction_type: 交互类型（copy/reply/pin/report/forward等）
+- extra_data: 额外元数据（JSON）
+- source_platform: 来源平台
+- created_at: 交互时间
+```
+
+**FeedbackSummary（反馈汇总模型）- 新增**
+```python
+- bot_id: 机器人 ID
+- channel_id: 频道 ID
+- period_type: 统计周期（hourly/daily/weekly/monthly）
+- period_start: 周期开始时间
+- total_reactions: 总反应数
+- positive_reactions: 正面反应数
+- negative_reactions: 负面反应数
+- satisfaction_score: 满意度分数
+- engagement_score: 参与度分数
+```
+
 ### 5. 业务服务层 (`src/services/`)
 
 #### `bot_manager.py` - 机器人管理服务（新增）
@@ -301,6 +354,24 @@ SoulmateBot/
 
 #### `image_service.py` - 图片服务
 处理图片相关功能（待完善）。
+
+#### `feedback_service.py` - 反馈服务（新增）
+管理用户对消息的反馈和交互：
+- `add_reaction()` - 添加或更新消息反应
+- `remove_reaction()` - 移除消息反应
+- `get_message_reactions()` - 获取消息的所有反应
+- `get_reaction_summary()` - 获取消息反应统计摘要
+- `record_interaction()` - 记录用户交互行为
+- `record_copy()` / `record_reply()` / `record_pin()` - 特定交互快捷方法
+- `get_user_interactions()` - 获取用户交互历史
+- `get_bot_feedback_stats()` - 获取机器人反馈统计
+- `generate_feedback_summary()` - 生成反馈汇总报告
+- `get_trending_reactions()` - 获取热门反应趋势
+
+**反应分类**：
+- 正面反应：👍、❤️、🔥、👏、🎉、🤩、👌、💯、😂
+- 负面反应：👎、💩、🤮、😡
+- 中性反应：👀、🤔、😱、😢、😔
 
 ### 6. 订阅管理 (`src/subscription/`)
 
