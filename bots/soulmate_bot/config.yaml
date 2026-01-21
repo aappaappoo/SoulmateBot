@@ -78,7 +78,7 @@ agents:
 # 消息路由配置
 routing:
   # 路由模式: mention（需@）, auto（自动回复）, keyword（关键词触发）
-  mode: "auto"
+  mode: "mention"
   
   # 私聊是否自动回复
   private_chat_auto_reply: true

@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     wechat_pay_notify_url: Optional[str] = None
     
     # Subscription Limits
-    free_plan_daily_limit: int = 10
+    free_plan_daily_limit: int = 100
     basic_plan_daily_limit: int = 100
     premium_plan_daily_limit: int = 1000
     
