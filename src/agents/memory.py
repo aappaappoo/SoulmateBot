@@ -115,33 +115,45 @@ class FileMemoryStore(MemoryStore):
 class SQLiteMemoryStore(MemoryStore):
     """
     SQLite-based memory storage.
+    SQLite 内存存储实现。
     
     Stores agent memory in a SQLite database with a simple schema.
+    使用简单的表结构在 SQLite 数据库中存储代理记忆。
     """
     
     def __init__(self, db_path: str = "data/agent_memory.db"):
         """
         Initialize SQLite memory store.
+        初始化 SQLite 内存存储。
         
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to SQLite database file / SQLite 数据库文件路径
         """
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
     
     def _init_db(self) -> None:
-        """Initialize database schema."""
+        """
+        Initialize database schema.
+        初始化数据库表结构。
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS agent_memory (
-                    agent_name TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    agent_name TEXT NOT NULL,    -- 代理名称，用于区分不同AI代理
+                    user_id TEXT NOT NULL,       -- 用户标识，支持字符串格式（可为UUID/MD5）
+                    data TEXT NOT NULL,          -- 存储的记忆数据（JSON格式）
+                    session_id TEXT,             -- 会话标识，用于并发场景下的会话隔离
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 创建时间
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 最后更新时间
                     PRIMARY KEY (agent_name, user_id)
                 )
+            """)
+            # 为并发场景添加会话索引
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_agent_user_session 
+                ON agent_memory(agent_name, user_id, session_id)
             """)
             conn.commit()
     
