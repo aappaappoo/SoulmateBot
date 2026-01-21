@@ -368,42 +368,48 @@ def get_llm_gateway() -> LLMGateway:
         _gateway_instance = LLMGateway()
         
         # 自动注册可用的Provider
-        from config import settings
+        try:
+            from config import settings
+            
+            if settings.vllm_api_url:
+                try:
+                    config = ProviderConfig(
+                        api_url=settings.vllm_api_url,
+                        api_key=settings.vllm_api_token,
+                        model=settings.vllm_model
+                    )
+                    _gateway_instance.register_provider("vllm", VLLMProvider(config))
+                    _gateway_instance.default_provider = "vllm"
+                except Exception as e:
+                    logger.warning(f"Failed to register vLLM provider: {e}")
+            
+            if settings.openai_api_key:
+                try:
+                    config = ProviderConfig(
+                        api_key=settings.openai_api_key,
+                        model=settings.openai_model
+                    )
+                    _gateway_instance.register_provider("openai", OpenAIProvider(config))
+                    if not _gateway_instance._providers:
+                        _gateway_instance.default_provider = "openai"
+                except Exception as e:
+                    logger.warning(f"Failed to register OpenAI provider: {e}")
         
-        if settings.vllm_api_url:
-            try:
-                config = ProviderConfig(
-                    api_url=settings.vllm_api_url,
-                    api_key=settings.vllm_api_token,
-                    model=settings.vllm_model
-                )
-                _gateway_instance.register_provider("vllm", VLLMProvider(config))
-                _gateway_instance.default_provider = "vllm"
-            except Exception as e:
-                logger.warning(f"Failed to register vLLM provider: {e}")
+            if settings.anthropic_api_key:
+                try:
+                    config = ProviderConfig(
+                        api_key=settings.anthropic_api_key,
+                        model=settings.anthropic_model
+                    )
+                    _gateway_instance.register_provider("anthropic", AnthropicProvider(config))
+                    if not _gateway_instance._providers:
+                        _gateway_instance.default_provider = "anthropic"
+                except Exception as e:
+                    logger.warning(f"Failed to register Anthropic provider: {e}")
         
-        if settings.openai_api_key:
-            try:
-                config = ProviderConfig(
-                    api_key=settings.openai_api_key,
-                    model=settings.openai_model
-                )
-                _gateway_instance.register_provider("openai", OpenAIProvider(config))
-                if not _gateway_instance._providers:
-                    _gateway_instance.default_provider = "openai"
-            except Exception as e:
-                logger.warning(f"Failed to register OpenAI provider: {e}")
-        
-        if settings.anthropic_api_key:
-            try:
-                config = ProviderConfig(
-                    api_key=settings.anthropic_api_key,
-                    model=settings.anthropic_model
-                )
-                _gateway_instance.register_provider("anthropic", AnthropicProvider(config))
-                if not _gateway_instance._providers:
-                    _gateway_instance.default_provider = "anthropic"
-            except Exception as e:
-                logger.warning(f"Failed to register Anthropic provider: {e}")
+        except ImportError as e:
+            logger.warning(f"Could not import config settings: {e}")
+        except Exception as e:
+            logger.warning(f"Error auto-registering providers: {e}")
     
     return _gateway_instance

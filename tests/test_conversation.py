@@ -404,11 +404,15 @@ class TestContextManager:
         """Test model-specific context limits"""
         manager = ContextManager()
         
-        # The matching logic iterates through keys and checks if key is in model
-        # Since "gpt-4" comes before "gpt-4-turbo" in dict, "gpt-4" matches first
-        # This is expected behavior based on implementation
+        # Test exact model names
         assert manager.get_model_limit("gpt-4") == 8192
         assert manager.get_model_limit("claude-3-opus") == 200000
+        
+        # Test longer matches are prioritized over shorter ones
+        # "gpt-4-turbo" should match before "gpt-4"
+        assert manager.get_model_limit("gpt-4-turbo-preview") == 128000
+        
+        # Test unknown models fall back to default
         assert manager.get_model_limit("unknown-model") == 4096
     
     def test_clear_context(self):

@@ -174,10 +174,15 @@ class ContextManager:
     
     def get_model_limit(self, model: str) -> int:
         """获取模型的上下文限制"""
-        # 尝试匹配模型名称
-        for key, limit in self._model_limits.items():
-            if key in model.lower():
-                return limit
+        model_lower = model.lower()
+        
+        # Sort keys by length (longest first) to prioritize more specific matches
+        sorted_keys = sorted(self._model_limits.keys(), key=len, reverse=True)
+        
+        for key in sorted_keys:
+            if key in model_lower:
+                return self._model_limits[key]
+        
         return self._model_limits.get("default", 4096)
     
     def create_context(

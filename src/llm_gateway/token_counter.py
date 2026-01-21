@@ -55,8 +55,10 @@ class UsageStats:
 
 
 # 模型定价表（每1000 tokens的价格，美元）
+# 注意：价格会随时间变化，此表更新于 2024-01
+# 建议定期检查并更新，或通过配置文件进行管理
 MODEL_PRICING = {
-    # OpenAI
+    # OpenAI (价格更新于 2024-01)
     "gpt-4": {"input": 0.03, "output": 0.06},
     "gpt-4-turbo": {"input": 0.01, "output": 0.03},
     "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
@@ -64,7 +66,7 @@ MODEL_PRICING = {
     "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
     "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
     
-    # Anthropic
+    # Anthropic (价格更新于 2024-01)
     "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
     "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},
     "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
