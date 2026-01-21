@@ -70,7 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_user_action_date ON usage_records(user_id, action
 -- 6. 频道机器人映射表（channel_bot_mappings）添加复合索引
 -- =============================================================================
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_bot_unique ON channel_bot_mappings(channel_id, bot_id);
+-- 使用唯一约束替代唯一索引，更清晰地表达业务意图
+ALTER TABLE channel_bot_mappings ADD CONSTRAINT IF NOT EXISTS uq_channel_bot UNIQUE (channel_id, bot_id);
 CREATE INDEX IF NOT EXISTS idx_channel_active_priority ON channel_bot_mappings(channel_id, is_active, priority);
 
 -- =============================================================================

@@ -7,7 +7,7 @@ Database models for SoulmateBot
 2. 支持高并发场景（乐观锁、会话隔离）
 3. 使用UUID/MD5字符串作为外部引用标识，内部仍使用Integer主键
 """
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey, Text, Enum as SQLEnum, JSON, Index
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey, Text, Enum as SQLEnum, JSON, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -267,7 +267,7 @@ class Channel(Base):
     username = Column(String(255), nullable=True, comment="频道/群组用户名")
     
     # 归属信息
-    owner_id = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="频道所有者用户ID")
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="频道所有者用户ID")
     
     # 频道设置
     settings = Column(JSON, default={}, comment="频道配置，如路由模式、通知设置等")
@@ -326,9 +326,9 @@ class ChannelBotMapping(Base):
     channel = relationship("Channel", back_populates="bot_mappings")
     bot = relationship("Bot", back_populates="channel_mappings")
     
-    # 复合唯一索引：防止同一频道重复添加同一机器人
+    # 复合唯一约束和索引：防止同一频道重复添加同一机器人
     __table_args__ = (
-        Index('idx_channel_bot_unique', 'channel_id', 'bot_id', unique=True),
+        UniqueConstraint('channel_id', 'bot_id', name='uq_channel_bot'),
         Index('idx_channel_active_priority', 'channel_id', 'is_active', 'priority'),
     )
     
