@@ -1,0 +1,132 @@
+# Soulmate Bot 配置文件
+# 情感陪伴机器人
+
+bot:
+  # 基础信息
+  name: "SoulmateBot"
+  description: "温暖的情感陪伴助手，倾听你的心声"
+  username: "soulmate_bot"  # Telegram @username
+  
+  # Bot类型：companion（陪伴）, assistant（助手）, service（客服）
+  type: "companion"
+  
+  # 语言设置
+  language: "zh"
+  
+  # 是否公开（可被其他用户添加到频道）
+  is_public: true
+
+# AI模型配置
+ai:
+  # 默认Provider: openai, anthropic, vllm
+  provider: "openai"
+  
+  # 模型名称
+  model: "gpt-4o"
+  
+  # 生成参数
+  temperature: 0.8
+  max_tokens: 1000
+  
+  # 上下文窗口大小
+  context_window: 4096
+
+# 系统提示词配置
+prompt:
+  # 使用预定义模板
+  template: "emotional_companion"
+  
+  # 或者自定义系统提示词
+  # custom: |
+  #   你是一个温柔的情感陪伴助手...
+  
+  # 模板变量
+  variables:
+    bot_name: "SoulmateBot"
+    interaction_count: 0
+
+# 功能配置
+features:
+  # 启用的功能模块
+  enabled:
+    - "emotional_support"    # 情感支持
+    - "daily_companion"      # 日常陪伴
+    - "mood_tracking"        # 情绪追踪
+    - "conversation_memory"  # 对话记忆
+  
+  # 禁用的功能
+  disabled:
+    - "code_execution"
+    - "web_search"
+
+# Agents配置
+agents:
+  # 启用的Agents
+  enabled:
+    - name: "EmotionalAgent"
+      priority: 100
+      config:
+        keywords:
+          - "难过"
+          - "开心"
+          - "焦虑"
+          - "压力"
+  
+  # 默认Agent（兜底）
+  fallback: "EmotionalAgent"
+
+# 消息路由配置
+routing:
+  # 路由模式: mention（需@）, auto（自动回复）, keyword（关键词触发）
+  mode: "auto"
+  
+  # 私聊是否自动回复
+  private_chat_auto_reply: true
+  
+  # 群聊是否需要@
+  group_chat_mention_required: true
+
+# 限额配置（每日）
+limits:
+  free_tier:
+    messages: 10
+    images: 0
+  
+  basic_tier:
+    messages: 100
+    images: 5
+  
+  premium_tier:
+    messages: 1000
+    images: 50
+
+# 回复消息模板
+messages:
+  welcome: |
+    👋 你好！我是你的情感陪伴助手。
+    
+    我在这里倾听你的心声，无论开心还是难过，都可以和我聊聊。
+    
+    有什么想说的吗？
+  
+  help: |
+    🌟 我可以帮你：
+    
+    💬 倾听你的烦恼
+    🤗 提供情感支持
+    💡 给予温暖的建议
+    
+    有什么我可以帮忙的吗？
+  
+  limit_reached: |
+    ⚠️ 今天的对话次数已用完。
+    
+    明天再来和我聊天吧！
+    或者升级订阅获取更多额度。
+
+# 元数据
+metadata:
+  version: "1.0.0"
+  author: "SoulmateBot Team"
+  created_at: "2024-01-01"
+  updated_at: "2024-01-01"
