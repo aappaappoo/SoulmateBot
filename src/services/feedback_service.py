@@ -792,7 +792,9 @@ class FeedbackService:
         summary.interaction_breakdown = interaction_breakdown
         
         summary.satisfaction_score = satisfaction_score
-        summary.engagement_score = min(100, total_interactions)  # 简单的参与度分数
+        # 参与度分数：简单实现，后续可根据历史数据和用户基数进行标准化
+        # TODO: 实现更复杂的参与度算法，考虑用户活跃度、历史均值等因素
+        summary.engagement_score = min(100, total_interactions)
         
         if not existing:
             self.db.add(summary)
@@ -803,7 +805,11 @@ class FeedbackService:
         return summary
     
     def _calculate_period_end(self, period_start: datetime, period_type: str) -> datetime:
-        """计算周期结束时间"""
+        """
+        计算周期结束时间
+        
+        注意：monthly使用calendar模块获取准确的月份天数
+        """
         if period_type == 'hourly':
             return period_start + timedelta(hours=1)
         elif period_type == 'daily':
@@ -811,8 +817,12 @@ class FeedbackService:
         elif period_type == 'weekly':
             return period_start + timedelta(weeks=1)
         elif period_type == 'monthly':
-            # 简化处理：假设30天
-            return period_start + timedelta(days=30)
+            # 使用calendar获取准确的月份天数
+            import calendar
+            year = period_start.year
+            month = period_start.month
+            days_in_month = calendar.monthrange(year, month)[1]
+            return period_start + timedelta(days=days_in_month)
         else:
             return period_start + timedelta(days=1)
     

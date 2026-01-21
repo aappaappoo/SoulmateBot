@@ -459,7 +459,9 @@ class MessageReaction(Base):
         Index('idx_user_reactions', 'user_id', 'created_at'),
         # 复合索引：优化机器人反应统计
         Index('idx_bot_reactions', 'bot_id', 'reaction_type', 'is_active'),
-        # 唯一约束：同一用户对同一消息只能有一种有效反应
+        # 唯一约束说明：包含is_active是有意设计，允许保留历史反应记录（is_active=False）
+        # 同时确保每个用户对每条消息只有一个活跃反应（is_active=True）
+        # 应用层通过FeedbackService确保更新反应时先将旧反应设为inactive
         UniqueConstraint('user_id', 'message_id', 'chat_id', 'is_active', name='uq_user_message_active_reaction'),
     )
     
