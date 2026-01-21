@@ -1,0 +1,122 @@
+# Assistant Bot 配置文件
+# 通用智能助手
+
+bot:
+  # 基础信息
+  name: "AssistantBot"
+  description: "智能助手，帮你解决各种问题"
+  username: "assistant_bot"  # Telegram @username
+  
+  # Bot类型
+  type: "assistant"
+  
+  # 语言设置
+  language: "zh"
+  
+  # 是否公开
+  is_public: true
+
+# AI模型配置
+ai:
+  # 默认Provider
+  provider: "openai"
+  
+  # 模型名称
+  model: "gpt-4o-mini"
+  
+  # 生成参数
+  temperature: 0.7
+  max_tokens: 2000
+  
+  # 上下文窗口大小
+  context_window: 8192
+
+# 系统提示词配置
+prompt:
+  # 使用预定义模板
+  template: "general_assistant"
+  
+  # 模板变量
+  variables:
+    bot_name: "AssistantBot"
+
+# 功能配置
+features:
+  # 启用的功能模块
+  enabled:
+    - "general_qa"           # 通用问答
+    - "task_assistance"      # 任务协助
+    - "information_lookup"   # 信息查询
+    - "conversation_memory"  # 对话记忆
+  
+  # 禁用的功能
+  disabled:
+    - "emotional_support"
+    - "code_execution"
+
+# Agents配置
+agents:
+  # 启用的Agents
+  enabled:
+    - name: "TechAgent"
+      priority: 80
+      config:
+        specialties:
+          - "编程"
+          - "技术问题"
+    
+    - name: "ToolAgent"
+      priority: 60
+      config:
+        tools:
+          - "calculator"
+          - "translator"
+  
+  # 默认Agent
+  fallback: "TechAgent"
+
+# 消息路由配置
+routing:
+  mode: "auto"
+  private_chat_auto_reply: true
+  group_chat_mention_required: true
+
+# 限额配置
+limits:
+  free_tier:
+    messages: 20
+    images: 0
+  
+  basic_tier:
+    messages: 200
+    images: 10
+  
+  premium_tier:
+    messages: 2000
+    images: 100
+
+# 回复消息模板
+messages:
+  welcome: |
+    👋 你好！我是智能助手。
+    
+    我可以帮你解答问题、完成任务、查找信息。
+    
+    有什么我可以帮忙的吗？
+  
+  help: |
+    🤖 我可以帮你：
+    
+    ❓ 回答各种问题
+    📝 协助完成任务
+    🔍 查找和整理信息
+    💻 解答技术问题
+    
+    直接发消息给我就可以了！
+
+# 元数据
+metadata:
+  version: "1.0.0"
+  author: "SoulmateBot Team"
+  created_at: "2024-01-01"
+  updated_at: "2024-01-01"
