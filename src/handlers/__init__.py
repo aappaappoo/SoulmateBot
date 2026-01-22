@@ -39,14 +39,6 @@ from .agent_integration import (
     handle_skills_command,
     get_skill_callback_handler
 )
-from .group_monitor_commands import (
-    start_monitor_command,
-    stop_monitor_command,
-    monitor_status_command,
-    monitor_report_command,
-    my_monitors_command,
-    handle_monitor_callback
-)
 
 __all__ = [
     # 基础命令
@@ -77,16 +69,9 @@ __all__ = [
     "handle_forward",
     "feedback_stats_command",
     "my_feedback_command",
-    # Agent集成
+    # Agent集成 - 支持工具调用
     "handle_message_with_agents",
     "handle_skill_callback",
     "handle_skills_command",
     "get_skill_callback_handler",
-    # 群组监控
-    "start_monitor_command",
-    "stop_monitor_command",
-    "monitor_status_command",
-    "monitor_report_command",
-    "my_monitors_command",
-    "handle_monitor_callback"
 ]

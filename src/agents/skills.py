@@ -84,7 +84,7 @@ class SkillRegistry:
                 category=SkillCategory.EMOTIONAL,
                 icon="💝",
                 agent_name="EmotionalAgent",
-                keywords=["难过", "开心", "焦虑", "压力", "心情", "feel", "sad", "happy"],
+                keywords=["难过", "开心", "焦虑", "压力", "心情", "feel", "sad", "happy", "孤独", "累", "疲惫"],
                 priority=10
             ),
             Skill(
@@ -106,16 +106,6 @@ class SkillRegistry:
                 agent_name="ToolAgent",
                 keywords=["天气", "时间", "计算", "翻译", "weather", "time"],
                 priority=8
-            ),
-            Skill(
-                id="group_monitor",
-                name="群组监控",
-                description="监控群组讨论，总结话题",
-                category=SkillCategory.ANALYSIS,
-                icon="📊",
-                agent_name="GroupMonitorAgent",
-                keywords=["监控", "群组", "总结", "讨论", "monitor", "group", "summary"],
-                priority=7
             ),
             Skill(
                 id="general_chat",

@@ -44,14 +44,6 @@ from src.handlers.agent_integration import (
     handle_skills_command,
     get_skill_callback_handler
 )
-from src.handlers.group_monitor_commands import (
-    start_monitor_command,
-    stop_monitor_command,
-    monitor_status_command,
-    monitor_report_command,
-    my_monitors_command,
-    handle_monitor_callback
-)
 
 
 class SoulmateBot:
@@ -89,19 +81,11 @@ class SoulmateBot:
         self.app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
         self.app.add_handler(CommandHandler("my_feedback", my_feedback_command))
         
-        # Skills命令 - Agent技能选择
+        # Skills命令 - Agent技能选择（支持工具调用能力）
         self.app.add_handler(CommandHandler("skills", handle_skills_command))
-        
-        # 群组监控命令
-        self.app.add_handler(CommandHandler("start_monitor", start_monitor_command))
-        self.app.add_handler(CommandHandler("stop_monitor", stop_monitor_command))
-        self.app.add_handler(CommandHandler("monitor_status", monitor_status_command))
-        self.app.add_handler(CommandHandler("monitor_report", monitor_report_command))
-        self.app.add_handler(CommandHandler("my_monitors", my_monitors_command))
 
         # 回调查询处理器
         self.app.add_handler(get_skill_callback_handler())  # 技能选择回调
-        self.app.add_handler(CallbackQueryHandler(handle_monitor_callback, pattern=r"^stop_monitor:"))  # 监控回调
 
         # 消息处理器 - 使用Agent集成版本
         # 注意：这是对原有handle_message的替代，会自动分析用户消息并选择合适的Agent处理

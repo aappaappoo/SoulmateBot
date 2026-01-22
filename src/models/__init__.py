@@ -13,11 +13,6 @@ from .database import (
     SubscriptionTier,
     BotStatus
 )
-from .group_monitor import (
-    GroupMonitorConfig,
-    GroupMessage,
-    TopicSummary
-)
 
 __all__ = [
     "Base",
@@ -29,8 +24,5 @@ __all__ = [
     "UsageRecord",
     "Payment",
     "SubscriptionTier",
-    "BotStatus",
-    "GroupMonitorConfig",
-    "GroupMessage",
-    "TopicSummary"
+    "BotStatus"
 ]
