@@ -1,7 +1,7 @@
 """
 Main bot entry point - Async Version
 """
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from loguru import logger
 
 from config import settings
@@ -37,6 +37,20 @@ from src.handlers.feedback import (
     handle_forward,
     feedback_stats_command,
     my_feedback_command
+)
+from src.handlers.agent_integration import (
+    handle_message_with_agents,
+    handle_skill_callback,
+    handle_skills_command,
+    get_skill_callback_handler
+)
+from src.handlers.group_monitor_commands import (
+    start_monitor_command,
+    stop_monitor_command,
+    monitor_status_command,
+    monitor_report_command,
+    my_monitors_command,
+    handle_monitor_callback
 )
 
 
@@ -74,14 +88,28 @@ class SoulmateBot:
         # 反馈命令
         self.app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
         self.app.add_handler(CommandHandler("my_feedback", my_feedback_command))
+        
+        # Skills命令 - Agent技能选择
+        self.app.add_handler(CommandHandler("skills", handle_skills_command))
+        
+        # 群组监控命令
+        self.app.add_handler(CommandHandler("start_monitor", start_monitor_command))
+        self.app.add_handler(CommandHandler("stop_monitor", stop_monitor_command))
+        self.app.add_handler(CommandHandler("monitor_status", monitor_status_command))
+        self.app.add_handler(CommandHandler("monitor_report", monitor_report_command))
+        self.app.add_handler(CommandHandler("my_monitors", my_monitors_command))
 
-        # 消息处理器
-        self. app.add_handler(MessageHandler(
-            filters.TEXT & ~filters. COMMAND,
-            handle_message
+        # 回调查询处理器
+        self.app.add_handler(get_skill_callback_handler())  # 技能选择回调
+        self.app.add_handler(CallbackQueryHandler(handle_monitor_callback, pattern=r"^stop_monitor:"))  # 监控回调
+
+        # 消息处理器 - 使用Agent集成版本
+        self.app.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_message_with_agents  # 使用集成Agent的消息处理器
         ))
         self.app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        self.app.add_handler(MessageHandler(filters. Sticker. ALL, handle_sticker))
+        self.app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
 
         # 错误处理器
         self.app.add_error_handler(error_handler)

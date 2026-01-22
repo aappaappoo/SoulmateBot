@@ -10,6 +10,8 @@ Key components:
 - Router: Intelligent message routing system
 - AgentLoader: Dynamic agent discovery and loading
 - MemoryStore: Persistent and session memory management
+- AgentOrchestrator: LLM-powered intelligent orchestration
+- Skills: Token-efficient skill selection with Telegram buttons
 
 Example usage:
     from src.agents import Router, AgentLoader, RouterConfig, Message, ChatContext
@@ -26,12 +28,22 @@ Example usage:
     message = Message(content="I'm feeling sad today", user_id="123", chat_id="456")
     context = ChatContext(chat_id="456")
     responses = router.route(message, context)
+    
+    # Or use the orchestrator for intelligent agent selection
+    from src.agents import AgentOrchestrator
+    orchestrator = AgentOrchestrator(agents, llm_provider=your_llm_provider)
+    result = await orchestrator.process(message, context)
 """
 from .models import Message, ChatContext, AgentResponse, MessageType
 from .base_agent import BaseAgent
 from .router import Router, RouterConfig
 from .loader import AgentLoader
 from .memory import MemoryStore, FileMemoryStore, SQLiteMemoryStore, InMemoryStore
+from .orchestrator import AgentOrchestrator, OrchestratorResult, IntentType, AgentCapability
+from .skills import (
+    Skill, SkillCategory, SkillRegistry, SkillButtonGenerator,
+    skill_registry, skill_button_generator, register_skill
+)
 
 __all__ = [
     # Data models
@@ -51,6 +63,21 @@ __all__ = [
     "FileMemoryStore",
     "SQLiteMemoryStore",
     "InMemoryStore",
+    
+    # Orchestrator
+    "AgentOrchestrator",
+    "OrchestratorResult",
+    "IntentType",
+    "AgentCapability",
+    
+    # Skills
+    "Skill",
+    "SkillCategory",
+    "SkillRegistry",
+    "SkillButtonGenerator",
+    "skill_registry",
+    "skill_button_generator",
+    "register_skill",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
