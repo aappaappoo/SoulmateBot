@@ -65,7 +65,7 @@ cache/
 
 # Jupyter
 .ipynb_checkpoints/
-notebooks/*.ipynb
+# notebooks/*.ipynb  # Commented out - we want to track debug notebooks
 
 # Docker
 docker-compose.override.yml
