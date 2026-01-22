@@ -55,10 +55,14 @@ class DatabaseManager:
 
     def rebuild(self, confirm: bool = False) -> bool:
         """重建数据库：删除所有表并重新创建"""
+        import sys
+        import time
+        
         print("\n" + "=" * 60)
         print("🗑️  数据库重建工具")
         print("=" * 60)
         print("\n⚠️  警告：这将删除所有数据！\n")
+        sys.stdout.flush()
 
         if not confirm:
             user_input = input("输入 'yes' 继续:  ")
@@ -67,19 +71,38 @@ class DatabaseManager:
                 return False
 
         try:
-            print("\n🗑️  正在删除所有表...")
+            # 显示进度的辅助函数
+            def show_progress(message: str, done: bool = False):
+                if done:
+                    print(f"\r{message} ✅")
+                else:
+                    print(f"\r{message}", end="")
+                sys.stdout.flush()
+            
+            # 删除表
+            show_progress("🗑️  正在删除所有表...")
+            start_time = time.time()
             Base.metadata.drop_all(bind=self.engine)
-            print("✅ 所有表已删除")
+            elapsed = time.time() - start_time
+            show_progress(f"🗑️  所有表已删除 ({elapsed:.2f}s)", done=True)
 
-            print("\n🔨 正在重新创建所有表...")
+            # 创建表
+            show_progress("🔨 正在创建所有表...")
+            start_time = time.time()
             Base.metadata.create_all(bind=self.engine)
-            print("✅ 所有表已创建完成!")
-
+            elapsed = time.time() - start_time
+            show_progress(f"🔨 所有表已创建 ({elapsed:.2f}s)", done=True)
+            
+            print()  # 换行
             self._show_tables()
+            
+            print("\n✅ 数据库重建完成！")
+            sys.stdout.flush()
             return True
 
         except Exception as e:
-            print(f"❌ 重建失败: {e}")
+            print(f"\n❌ 重建失败: {e}")
+            sys.stdout.flush()
             return False
 
     def init_test_data(
@@ -757,41 +780,50 @@ class DatabaseManager:
 
     def status(self) -> None:
         """显示数据库状态"""
+        import sys
+        
         print("\n" + "=" * 60)
         print("📊 数据库状态")
         print("=" * 60)
+        sys.stdout.flush()
 
         self._show_tables()
 
         db = get_db_session()
         try:
             print("\n📈 数据统计:")
+            sys.stdout.flush()
             print(f"   👤 用户数: {db.query(User).count()}")
             print(f"   🤖 Bot 数: {db.query(Bot).count()}")
             print(f"   💬 Channel 数: {db.query(Channel).count()}")
             print(f"   🔗 绑定数:  {db.query(ChannelBotMapping).count()}")
             print(f"   💭 对话数: {db.query(Conversation).count()}")
+            sys.stdout.flush()
 
             print("\n" + "-" * 60)
             print("📋 详细数据:")
+            sys.stdout.flush()
 
             users = db.query(User).all()
             if users:
                 print("\n   👤 用户列表:")
                 for u in users:
                     print(f"      [{u.id}] @{u.username} | {u.first_name} | tier:{u.subscription_tier}")
+                sys.stdout.flush()
 
             bots = db.query(Bot).all()
             if bots:
                 print("\n   🤖 Bot 列表:")
                 for b in bots:
                     print(f"      [{b.id}] @{b.bot_username} | {b.bot_name} | {b.ai_provider}/{b.ai_model}")
+                sys.stdout.flush()
 
             channels = db.query(Channel).all()
             if channels:
                 print("\n   💬 Channel 列表:")
                 for c in channels:
                     print(f"      [{c.id}] {c.chat_type}:  {c.title or '(无标题)'} | chat_id:{c.telegram_chat_id}")
+                sys.stdout.flush()
 
             mappings = db.query(ChannelBotMapping).all()
             if mappings:
@@ -804,6 +836,7 @@ class DatabaseManager:
                         channel.telegram_chat_id) if channel else f"Channel#{m.channel_id}"
                     status = "✅" if m.is_active else "❌"
                     print(f"      {status} {channel_name} <-> {bot_name} | mode:{m.routing_mode}")
+                sys.stdout.flush()
 
         finally:
             db.close()
