@@ -36,7 +36,7 @@ class UserCRUD:
         username: Optional[str] = None,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
-        subscription_tier: str = None,
+        subscription_tier: Optional[str] = None,
         is_active: bool = True
     ) -> Optional[User]:
         """

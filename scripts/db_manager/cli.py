@@ -63,6 +63,14 @@ def init_test_data() -> bool:
     print("📦 初始化测试数据")
     print("=" * 60)
     
+    # 尝试导入配置
+    try:
+        from config import settings
+    except Exception as e:
+        print(f"❌ 无法加载配置: {e}")
+        print("   请确保已配置 .env 文件")
+        return False
+    
     try:
         # 创建用户
         telegram_user_id = int(input("\n请输入你的 Telegram User ID: "))
@@ -81,9 +89,6 @@ def init_test_data() -> bool:
         
         if not user:
             return False
-        
-        # 获取settings
-        from config import settings
         
         # 创建Bot
         bot = BotCRUD.create(

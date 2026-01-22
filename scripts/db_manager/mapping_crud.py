@@ -127,8 +127,7 @@ class MappingCRUD:
             db.close()
             return MappingCRUD.bind(channel.id, bot_id, routing_mode) is not None
         finally:
-            if db:
-                db.close()
+            db.close()
 
     @staticmethod
     def bind_interactive() -> Optional[ChannelBotMapping]:
@@ -244,8 +243,7 @@ class MappingCRUD:
             print(f"❌ 输入错误: {e}")
             return None
         finally:
-            if db:
-                db.close()
+            db.close()
 
     # ==================== UNBIND (DELETE) ====================
     

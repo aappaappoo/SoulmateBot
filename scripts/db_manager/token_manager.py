@@ -84,8 +84,7 @@ class TokenManager:
             print(f"❌ 输入错误: {e}")
             return False
         finally:
-            if db:
-                db.close()
+            db.close()
 
     @staticmethod
     def list_tokens() -> None:
