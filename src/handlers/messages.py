@@ -83,8 +83,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 处理用户信息（仅私聊或群组有用户）
         user = update.effective_user
         if not user:
-            logger.warning("No effective_user")
-            return
+            if "channel" in str(chat_type).lower():
+                # 频道消息：直接生成回复
+                logger.info("📢 Channel message - processing without user")
+                await message.chat.send_action("typing")
+                try:
+                    history = []
+                    if selected_bot.system_prompt:
+                        history.insert(0, {"role": "system", "content": selected_bot.system_prompt})
+                    response = await conversation_service.get_response(message_text, history)
+                    await message.reply_text(response)
+                    logger.info(f"✅ Replied to channel with @{selected_bot.bot_username}")
+                except Exception as e:
+                    logger.error(f"❌ Channel error: {e}")
+                finally:
+                    db.close()
+                return
+            else:
+                logger.warning("No effective_user")
+                return
         
         logger.info(f"Processing message from user {user.id}: {message_text[:50]}...")
         
