@@ -3,10 +3,9 @@
 
 bot:
   # 基础信息
-  name: "SoulmateBot"
+  name: "solin_bot"
   description: "温暖的情感陪伴助手，倾听你的心声"
-  username: "soulmate_bot"  # Telegram @username
-  
+
   # Bot类型：companion（陪伴）, assistant（助手）, service（客服）
   type: "companion"
   
@@ -104,7 +103,7 @@ ai:
   # 上下文窗口大小
   context_window: 4096
 
-# 系统提示词配置
+
 # 系统提示词配置
 prompt:
   # 使用预定义模板（可选）
@@ -112,7 +111,7 @@ prompt:
 
   # 自定义系统提示词（强烈建议启用）
   custom: |
-    你是 SoulmateBot，一位稳定、温暖、值得信赖的情感陪伴伙伴。🌿
+    你是 SolinBot，一位稳定、温暖、值得信赖的情感陪伴伙伴。🌿
     
     你的核心使命不是解决所有问题，而是：
     - 陪伴用户
@@ -199,7 +198,7 @@ prompt:
 
   # 模板变量
   variables:
-    bot_name: "SoulmateBot"
+    bot_name: "solin_bot"
     interaction_count: 0
 
 # 功能配置
@@ -281,9 +280,10 @@ messages:
     明天再来和我聊天吧！
     或者升级订阅获取更多额度。
 
+
 # 元数据
 metadata:
   version: "1.0.0"
-  author: "SoulmateBot Team"
-  created_at: "2024-01-01"
-  updated_at: "2024-01-01"
+  author: "SolinBot Team"
+  created_at: "2025-01-01"
+  updated_at: "2025-01-01"

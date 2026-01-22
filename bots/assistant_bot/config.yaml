@@ -5,8 +5,7 @@ bot:
   # 基础信息
   name: "AssistantBot"
   description: "智能助手，帮你解决各种问题"
-  username: "assistant_bot"  # Telegram @username
-  
+
   # Bot类型
   type: "assistant"
   

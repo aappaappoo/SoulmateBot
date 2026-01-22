@@ -22,7 +22,7 @@ services:
     command: ["python", "main.py"]
 
   # 可选：运行特定Bot的示例服务
-  # soulmate_bot:
+  # solin_bot:
   #   build: .
   #   container_name: soulmate-bot
   #   restart: unless-stopped
@@ -37,8 +37,8 @@ services:
   #   networks:
   #     - soulmatebot-network
   #   environment:
-  #     - BOT_ID=soulmate_bot
-  #   command: ["python", "-c", "from src.bot.platform import get_platform; p = get_platform(); p.run_polling('soulmate_bot', '${TELEGRAM_BOT_TOKEN}')"]
+  #     - BOT_ID=solin_bot
+  #   command: ["python", "-c", "from src.bot.platform import get_platform; p = get_platform(); p.run_polling('solin_bot', '${TELEGRAM_BOT_TOKEN}')"]
 
   db:
     image: postgres:15-alpine

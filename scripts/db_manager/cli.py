@@ -203,20 +203,28 @@ def main():
             UserCRUD.delete_interactive()
         else:
             print("用法: python -m scripts.db_manager user [list|create|update|delete]")
-    
+
     # Bot命令
     elif command == 'bot':
         if subcommand == 'list':
             BotCRUD.list_print()
         elif subcommand == 'create':
-            BotCRUD.create_interactive()
+            BotCRUD. create_interactive()
+        elif subcommand == 'create-from-template' or subcommand == 'template':
+            BotCRUD.create_from_template_interactive()
         elif subcommand == 'update':
             BotCRUD.update_interactive()
         elif subcommand == 'delete':
             BotCRUD.delete_interactive()
         else:
-            print("用法: python -m scripts.db_manager bot [list|create|update|delete]")
-    
+            print("用法:  python -m scripts.db_manager bot [list|create|template|update|delete]")
+            print("\n命令说明:")
+            print("   list     - 列出所有Bot")
+            print("   create   - 手动创建Bot")
+            print("   template - 从模板创建Bot (推荐)")
+            print("   update   - 更新Bot信息")
+            print("   delete   - 删除Bot")
+
     # Channel命令
     elif command == 'channel':
         if subcommand == 'list':
@@ -229,7 +237,12 @@ def main():
             ChannelCRUD.delete_interactive()
         else:
             print("用法: python -m scripts.db_manager channel [list|create|update|delete]")
-    
+
+    # 添加快捷命令
+    elif command == 'register':
+        # 快捷命令：从模板注册Bot
+        BotCRUD.create_from_template_interactive()
+
     # 绑定命令
     elif command == 'bind':
         MappingCRUD.bind_interactive()
@@ -244,20 +257,16 @@ def main():
             print("用法: python -m scripts.db_manager bind-quick <chat_id> <bot_id> [mode]")
     
     elif command == 'unbind':
-        MappingCRUD.list_print()
-        try:
-            channel_id = int(input("\n请输入Channel ID: "))
-            bot_id = int(input("请输入Bot ID: "))
-            MappingCRUD.unbind(channel_id, bot_id)
-        except ValueError:
-            print("❌ 输入错误")
-    
+        MappingCRUD.unbind_interactive()
+
     elif command == 'mapping':
         if subcommand == 'list':
             MappingCRUD.list_print()
+        elif subcommand == 'update':
+            MappingCRUD.update_interactive()
         else:
-            print("用法: python -m scripts.db_manager mapping list")
-    
+            print("用法: python -m scripts.db_manager mapping [list|update]")
+
     # Token命令
     elif command == 'token':
         TokenManager.manage_interactive()

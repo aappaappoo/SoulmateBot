@@ -7,7 +7,7 @@ Multi-Bot Platform Launcher
     python platform_launcher.py
     
     # 运行指定 Bot
-    python platform_launcher.py --bot soulmate_bot --token YOUR_TOKEN
+    python platform_launcher.py --bot solin_bot --token YOUR_TOKEN
     
     # 列出可用 Bot
     python platform_launcher.py --list
@@ -27,7 +27,7 @@ def main():
     parser.add_argument(
         "--bot",
         type=str,
-        help="Bot ID to run (e.g., soulmate_bot)"
+        help="Bot ID to run (e.g., solin_bot)"
     )
     parser.add_argument(
         "--token",

@@ -12,21 +12,13 @@ Bots Package - Bot模板系统
 
 目录结构：
 bots/
-├── soulmate_bot/     # 情感陪伴机器人
+├── solin_bot/     # 情感陪伴机器人
 │   ├── config.yaml
 │   └── __init__.py
 ├── assistant_bot/    # 通用智能助手
 │   ├── config.yaml
 │   └── __init__.py
-├── teacher_bot/      # 智慧导师 - 教育辅导
-│   ├── config.yaml
-│   └── __init__.py
-├── fitness_bot/      # 健身教练 - 运动指导
-│   ├── config.yaml
-│   └── __init__.py
-└── creative_bot/     # 创意达人 - 写作助手
-    ├── config.yaml
-    └── __init__.py
+
 
 开发新机器人步骤：
 1. 在 bots/ 下创建新的目录（如 my_bot/）

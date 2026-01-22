@@ -13,5 +13,4 @@ CONFIG_FILE = BOT_DIR / "config.yaml"
 
 # Bot标识
 BOT_ID = "assistant_bot"
-BOT_NAME = "AssistantBot"
 BOT_DESCRIPTION = "智能助手，帮你解决各种问题"

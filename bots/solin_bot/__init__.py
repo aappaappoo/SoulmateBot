@@ -12,6 +12,5 @@ BOT_DIR = Path(__file__).parent
 CONFIG_FILE = BOT_DIR / "config.yaml"
 
 # Bot标识
-BOT_ID = "soulmate_bot"
-BOT_NAME = "SoulmateBot"
+BOT_ID = "solin_bot"
 BOT_DESCRIPTION = "温暖的情感陪伴助手，倾听你的心声"

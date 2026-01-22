@@ -267,7 +267,7 @@ class Channel(Base):
     username = Column(String(255), nullable=True, comment="频道/群组用户名")
     
     # 归属信息
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="频道所有者用户ID")
+    owner_id = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="频道所有者用户ID")
     
     # 频道设置
     settings = Column(JSON, default={}, comment="频道配置，如路由模式、通知设置等")
