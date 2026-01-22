@@ -211,7 +211,7 @@ class GroupMonitorAgent(BaseAgent):
             f"2. 确保Bot有读取消息的权限\n\n"
             f"🚀 请使用以下命令确认启动监控：\n"
             f"`/start_monitor {group_link}`\n\n"
-            f"或者回复"确认"开始监控。"
+            f"或者回复\"确认\"开始监控。"
         )
     
     def _handle_stop_monitor(
