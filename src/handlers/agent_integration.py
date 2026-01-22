@@ -270,9 +270,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                             else:
                                 history.append({"role": "assistant", "content": conv.response})
                     
-                    # 添加系统提示
-                    if system_prompt:
-                        history.insert(0, {"role": "system", "content": system_prompt})
+                    # 添加系统提示（已经在外层条件检查过了，这里不需要再检查）
+                    history.insert(0, {"role": "system", "content": system_prompt})
                     
                     # 使用conversation_service生成响应
                     response = await conversation_service.get_response(
