@@ -4,14 +4,16 @@ SoulmateBot 数据库管理工具
 ===========================
 
 功能:
-  1. rebuild  - 重建数据库（删除所有表并重新创建）
-  2. init     - 初始化测试数据
-  3. status   - 查看数据库状态
-  4. fix      - 修复数据库结构
-  5. clear    - 清空所有数据
-  6. bot      - 创建/管理 Bot
-  7. bind     - 绑定 Bot 到 Channel
-  8. all      - 重建 + 初始化
+  1. rebuild    - 重建数据库（删除所有表并重新创建）
+  2. init       - 初始化测试数据
+  3. status     - 查看数据库状态
+  4. fix        - 修复数据库结构
+  5. clear      - 清空所有数据
+  6. bot        - 创建/管理 Bot
+  7. bind       - 绑定 Bot 到 Channel
+  8. token      - Token/ID 管理（新增）
+  9. register   - 批量注册机器人（新增）
+  10. all       - 重建 + 初始化
 
 使用方法:
   python scripts/db_manager.py rebuild
@@ -19,10 +21,13 @@ SoulmateBot 数据库管理工具
   python scripts/db_manager.py status
   python scripts/db_manager.py fix
   python scripts/db_manager.py clear
-  python scripts/db_manager.py bot           # 创建新 Bot
+  python scripts/db_manager.py bot           # 创建新 Bot（交互式）
   python scripts/db_manager.py bind          # 绑定 Bot 到 Channel
   python scripts/db_manager.py bind-quick <chat_id> <bot_id> <mode>
-  python scripts/db_manager. py all
+  python scripts/db_manager.py token         # Token/ID 管理
+  python scripts/db_manager.py token-set <bot_id> <token>  # 快速设置Token
+  python scripts/db_manager.py register      # 批量注册机器人
+  python scripts/db_manager.py all
 """
 
 import sys
@@ -879,6 +884,430 @@ class DatabaseManager:
             cols = [col['name'] for col in inspector.get_columns(table)]
             print(f"   • {table}:  {len(cols)} 列")
 
+    # ======================================
+    # Token/ID 管理功能
+    # ======================================
+    
+    def manage_token(self) -> None:
+        """
+        Token/ID 管理菜单
+        
+        管理机器人的 Token 绑定，不涉及人设配置。
+        
+        提供以下子操作：
+        - [1] 查看所有 Bot Token - 列出所有机器人的 Token 信息
+        - [2] 设置/更新 Bot Token - 交互式设置单个机器人的 Token
+        - [3] 验证 Token 有效性 - 通过 Telegram API 验证 Token
+        - [4] 批量导入 Token - 批量导入多个机器人的 Token
+        """
+        print("\n" + "=" * 60)
+        print("🔑 Token/ID 管理")
+        print("=" * 60)
+        
+        print("\n选择操作:")
+        print("   [1] 查看所有 Bot Token")
+        print("   [2] 设置/更新 Bot Token")
+        print("   [3] 验证 Token 有效性")
+        print("   [4] 批量导入 Token")
+        
+        choice = input("\n请选择 (1/2/3/4): ").strip()
+        
+        if choice == "1":
+            self._list_tokens()
+        elif choice == "2":
+            self._set_token()
+        elif choice == "3":
+            self._validate_tokens()
+        elif choice == "4":
+            self._batch_import_tokens()
+        else:
+            print("❌ 无效选择")
+    
+    def _list_tokens(self) -> None:
+        """列出所有 Bot 的 Token 信息"""
+        db = get_db_session()
+        try:
+            bots = db.query(Bot).all()
+            if not bots:
+                print("\n📭 没有任何 Bot")
+                return
+            
+            print("\n🔑 Bot Token 列表:")
+            print("-" * 80)
+            for b in bots:
+                # 隐藏 Token 中间部分
+                token = b.bot_token
+                if token and len(token) > 20:
+                    masked_token = token[:10] + "..." + token[-10:]
+                else:
+                    masked_token = token or "(未设置)"
+                
+                print(f"""
+   ID: {b.id}
+   用户名: @{b.bot_username}
+   名称: {b.bot_name}
+   Token: {masked_token}
+   状态: {b.status}
+""")
+                print("-" * 80)
+        finally:
+            db.close()
+    
+    def _set_token(self) -> bool:
+        """设置或更新 Bot Token"""
+        db = get_db_session()
+        try:
+            # 显示所有 Bot
+            bots = db.query(Bot).all()
+            if not bots:
+                print("\n❌ 没有任何 Bot，请先创建 Bot")
+                return False
+            
+            print("\n🤖 可用的 Bot:")
+            for b in bots:
+                print(f"   [{b.id}] @{b.bot_username} - {b.bot_name}")
+            
+            bot_id = int(input("\n请输入 Bot ID: "))
+            bot = db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                print(f"❌ Bot ID {bot_id} 不存在")
+                return False
+            
+            print(f"\n正在更新 @{bot.bot_username} 的 Token")
+            new_token = input("请输入新的 Bot Token (从 BotFather 获取): ").strip()
+            
+            if not new_token:
+                print("❌ Token 不能为空")
+                return False
+            
+            # 验证 Token 格式
+            if ':' not in new_token:
+                print("⚠️  Token 格式可能不正确 (应包含 ':')")
+                if input("是否继续? (yes/no): ").lower() != 'yes':
+                    return False
+            
+            bot.bot_token = new_token
+            db.commit()
+            
+            print(f"\n✅ Token 已更新: @{bot.bot_username}")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 更新失败: {e}")
+            return False
+        finally:
+            db.close()
+    
+    def quick_set_token(self, bot_id: int, token: str) -> bool:
+        """
+        快速设置 Token (命令行模式)
+        
+        Args:
+            bot_id: Bot ID
+            token: Telegram Bot Token
+            
+        Returns:
+            bool: 设置成功返回 True，失败返回 False
+        """
+        print(f"\n🔑 快速设置 Token: Bot {bot_id}")
+        
+        db = get_db_session()
+        try:
+            bot = db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                print(f"❌ Bot ID {bot_id} 不存在")
+                return False
+            
+            bot.bot_token = token
+            db.commit()
+            
+            print(f"✅ Token 已设置: @{bot.bot_username}")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 设置失败: {e}")
+            return False
+        finally:
+            db.close()
+    
+    def _validate_tokens(self) -> None:
+        """验证所有 Bot Token 的有效性"""
+        print("\n🔍 验证 Token 有效性...")
+        print("   (此功能需要网络连接)\n")
+        
+        try:
+            import requests
+        except ImportError:
+            print("❌ 需要安装 requests 库")
+            return
+        
+        db = get_db_session()
+        try:
+            bots = db.query(Bot).all()
+            
+            for bot in bots:
+                if not bot.bot_token:
+                    print(f"   ⚠️  @{bot.bot_username}: Token 未设置")
+                    continue
+                
+                try:
+                    # 使用 Telegram API 验证 Token
+                    url = f"https://api.telegram.org/bot{bot.bot_token}/getMe"
+                    response = requests.get(url, timeout=10)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('ok'):
+                            api_username = data['result'].get('username', '')
+                            print(f"   ✅ @{bot.bot_username}: Token 有效 (API: @{api_username})")
+                        else:
+                            print(f"   ❌ @{bot.bot_username}: Token 无效")
+                    else:
+                        print(f"   ❌ @{bot.bot_username}: Token 无效 (HTTP {response.status_code})")
+                        
+                except Exception as e:
+                    print(f"   ⚠️  @{bot.bot_username}: 验证失败 ({e})")
+                    
+        finally:
+            db.close()
+    
+    def _batch_import_tokens(self) -> bool:
+        """批量导入 Token"""
+        print("\n📥 批量导入 Token")
+        print("-" * 60)
+        print("格式说明：每行一个 Token，格式为:")
+        print("   bot_username,token")
+        print("   或")
+        print("   bot_id,token")
+        print("\n示例:")
+        print("   my_bot,123456:ABC-DEF1234")
+        print("   1,789012:GHI-JKL5678")
+        print("\n输入 Token 列表 (输入 'END' 结束):")
+        
+        lines = []
+        while True:
+            line = input("> ").strip()
+            if line.upper() == 'END':
+                break
+            if line:
+                lines.append(line)
+        
+        if not lines:
+            print("❌ 没有输入任何 Token")
+            return False
+        
+        db = get_db_session()
+        try:
+            success_count = 0
+            for line in lines:
+                parts = line.split(',')
+                if len(parts) != 2:
+                    print(f"   ⚠️  格式错误: {line}")
+                    continue
+                
+                identifier, token = parts[0].strip(), parts[1].strip()
+                
+                # 判断是 ID 还是 username
+                try:
+                    bot_id = int(identifier)
+                    bot = db.query(Bot).filter(Bot.id == bot_id).first()
+                except ValueError:
+                    # 是 username
+                    bot = db.query(Bot).filter(Bot.bot_username == identifier).first()
+                
+                if not bot:
+                    print(f"   ⚠️  Bot 不存在: {identifier}")
+                    continue
+                
+                bot.bot_token = token
+                success_count += 1
+                print(f"   ✅ @{bot.bot_username}: Token 已更新")
+            
+            db.commit()
+            print(f"\n✅ 批量导入完成: {success_count}/{len(lines)} 成功")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 批量导入失败: {e}")
+            return False
+        finally:
+            db.close()
+    
+    # ======================================
+    # 批量注册机器人功能
+    # ======================================
+    
+    def batch_register_bots(self) -> bool:
+        """
+        批量注册机器人
+        
+        从 bots/ 目录中自动发现并注册所有机器人到数据库。
+        仅处理 Token 和基本信息，人设配置由代码中的 config.yaml 决定。
+        
+        Returns:
+            bool: 至少成功注册一个机器人返回 True，否则返回 False
+        """
+        print("\n" + "=" * 60)
+        print("📦 批量注册机器人")
+        print("=" * 60)
+        
+        import yaml
+        from pathlib import Path
+        
+        # 获取 bots 目录
+        project_root = Path(__file__).parent.parent
+        bots_dir = project_root / "bots"
+        
+        if not bots_dir.exists():
+            print(f"❌ bots 目录不存在: {bots_dir}")
+            return False
+        
+        # 发现所有 bot 目录
+        bot_dirs = [d for d in bots_dir.iterdir() 
+                    if d.is_dir() and (d / "config.yaml").exists()]
+        
+        print(f"\n🔍 发现 {len(bot_dirs)} 个机器人配置:")
+        for bot_dir in bot_dirs:
+            print(f"   • {bot_dir.name}")
+        
+        if not bot_dirs:
+            print("❌ 没有发现任何机器人配置")
+            return False
+        
+        print("\n选择操作:")
+        print("   [1] 注册所有机器人")
+        print("   [2] 选择性注册")
+        
+        choice = input("\n请选择 (1/2): ").strip()
+        
+        if choice == "2":
+            print("\n输入要注册的机器人 ID (用逗号分隔):")
+            selected = input("> ").strip().split(',')
+            selected = [s.strip() for s in selected if s.strip()]
+            bot_dirs = [d for d in bot_dirs if d.name in selected]
+        
+        if not bot_dirs:
+            print("❌ 没有选择任何机器人")
+            return False
+        
+        # 获取创建者用户
+        db = get_db_session()
+        try:
+            users = db.query(User).all()
+            if not users:
+                print("\n⚠️  数据库中没有用户，需要先创建一个用户")
+                telegram_user_id = int(input("请输入你的 Telegram User ID: "))
+                username = input("请输入你的 Telegram 用户名 (不含@): ")
+                first_name = input("请输入你的名字: ")
+                
+                user = User(
+                    telegram_id=telegram_user_id,
+                    username=username,
+                    first_name=first_name,
+                    subscription_tier=SubscriptionTier.FREE.value,
+                    is_active=True
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+                print(f"   ✅ 用户已创建: ID={user.id}")
+            else:
+                print("\n👤 选择创建者:")
+                for u in users:
+                    print(f"   [{u.id}] @{u.username} - {u.first_name}")
+                user_id = int(input("\n请输入用户 ID: ") or str(users[0].id))
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user:
+                    user = users[0]
+            
+            # 注册每个机器人
+            success_count = 0
+            for bot_dir in bot_dirs:
+                try:
+                    config_file = bot_dir / "config.yaml"
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config = yaml.safe_load(f)
+                    
+                    bot_config = config.get('bot', {})
+                    bot_username = bot_config.get('username', bot_dir.name)
+                    bot_name = bot_config.get('name', bot_username)
+                    description = bot_config.get('description', '')
+                    
+                    # 检查是否已存在
+                    existing = db.query(Bot).filter(Bot.bot_username == bot_username).first()
+                    if existing:
+                        print(f"   ⚠️  @{bot_username} 已存在 (ID: {existing.id})")
+                        continue
+                    
+                    # AI 配置
+                    ai_config = config.get('ai', {})
+                    ai_provider = ai_config.get('provider', 'openai')
+                    ai_model = ai_config.get('model', 'gpt-4')
+                    
+                    # 获取系统提示词
+                    prompt_config = config.get('prompt', {})
+                    system_prompt = prompt_config.get('custom', f"你是 {bot_name}。{description}")
+                    
+                    # 人设配置
+                    personality_config = config.get('personality', {})
+                    personality = ', '.join(personality_config.get('traits', []))
+                    
+                    # 创建 Bot
+                    # 使用明确的占位符格式，包含 PENDING_SETUP 标记
+                    # 机器人在使用前必须通过 token-set 命令设置真实的 Token
+                    placeholder_token = f"PENDING_SETUP:{bot_username}:请使用 token-set 命令设置真实Token"
+                    bot = Bot(
+                        bot_token=placeholder_token,
+                        bot_name=bot_name,
+                        bot_username=bot_username,
+                        description=description,
+                        personality=personality,
+                        system_prompt=system_prompt,
+                        ai_model=ai_model,
+                        ai_provider=ai_provider,
+                        created_by=user.id,
+                        is_public=bot_config.get('is_public', True),
+                        status=BotStatus.ACTIVE.value
+                    )
+                    db.add(bot)
+                    db.commit()
+                    db.refresh(bot)
+                    
+                    print(f"   ✅ @{bot_username} 已注册 (ID: {bot.id})")
+                    success_count += 1
+                    
+                except Exception as e:
+                    print(f"   ❌ {bot_dir.name} 注册失败: {e}")
+            
+            print("\n" + "=" * 60)
+            print(f"📊 注册结果: {success_count}/{len(bot_dirs)} 成功")
+            print("=" * 60)
+            
+            if success_count > 0:
+                print("""
+💡 下一步:
+   1. 在 BotFather 中创建对应的 Telegram Bot
+   2. 获取每个 Bot 的 Token
+   3. 使用以下命令设置 Token:
+      python scripts/db_manager.py token
+      或
+      python scripts/db_manager.py token-set <bot_id> <token>
+""")
+            
+            return success_count > 0
+            
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 批量注册失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+        finally:
+            db.close()
+
 
 def main():
     """主函数"""
@@ -889,8 +1318,11 @@ def main():
         print("\n📌 常用命令:")
         print("   python scripts/db_manager.py status              # 查看数据库状态")
         print("   python scripts/db_manager.py bot                 # 创建/管理 Bot")
-        print("   python scripts/db_manager. py bind                # 绑定 Bot 到 Channel")
+        print("   python scripts/db_manager.py bind                # 绑定 Bot 到 Channel")
+        print("   python scripts/db_manager.py token               # Token/ID 管理")
+        print("   python scripts/db_manager.py register            # 批量注册机器人")
         print("   python scripts/db_manager.py bind-quick <chat_id> <bot_id> <mode>")
+        print("   python scripts/db_manager.py token-set <bot_id> <token>")
         sys.exit(0)
 
     command = sys.argv[1].lower()
@@ -917,6 +1349,17 @@ def main():
             manager.quick_bind_channel(chat_id, bot_id, mode)
         else:
             print("用法: python scripts/db_manager.py bind-quick <chat_id> [bot_id] [mode]")
+    elif command == 'token':
+        manager.manage_token()
+    elif command == 'token-set':
+        if len(sys.argv) >= 4:
+            bot_id = int(sys.argv[2])
+            token = sys.argv[3]
+            manager.quick_set_token(bot_id, token)
+        else:
+            print("用法: python scripts/db_manager.py token-set <bot_id> <token>")
+    elif command == 'register':
+        manager.batch_register_bots()
     elif command == 'all':
         if manager.rebuild(confirm=False):
             manager.init_test_data()
