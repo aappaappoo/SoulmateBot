@@ -19,8 +19,8 @@ def get_async_database_url(url: str) -> str:
         return url.replace("postgres://", "postgresql+asyncpg://")
     elif url.startswith("mysql://"):
         return url.replace("mysql://", "mysql+aiomysql://")
-    elif url.startswith("sqlite: ///"):
-        return url.replace("sqlite: ///", "sqlite+aiosqlite: ///")
+    elif url.startswith("sqlite:///"):
+        return url.replace("sqlite:///", "sqlite+aiosqlite:///")
     return url
 
 

@@ -211,7 +211,159 @@ SoulmateBot/
 
 ## 🚀 快速开始
 
-## Database Migration
+本节将指导您完成从零开始启动 SoulmateBot 的完整流程。
+
+### 📋 前置要求
+
+- **Python 3.11+** - [下载Python](https://www.python.org/downloads/)
+- **Telegram Bot Token** - 从 [@BotFather](https://t.me/BotFather) 获取
+- **AI API Key** (以下选一):
+  - OpenAI API Key - [获取](https://platform.openai.com/api-keys)
+  - Anthropic API Key - [获取](https://console.anthropic.com/)
+  - 或自托管的 vLLM 服务
+- **数据库** (可选): PostgreSQL 15+ 或使用默认的 SQLite
+
+### 🛠️ 第一步：获取 Telegram Bot Token
+
+1. 在 Telegram 中搜索并打开 [@BotFather](https://t.me/BotFather)
+2. 发送 `/newbot` 命令
+3. 按提示输入机器人名称和用户名
+4. 保存获得的 **Bot Token** (格式如: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
+
+### 🛠️ 第二步：克隆项目并安装依赖
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/aappaappoo/SoulmateBot.git
+cd SoulmateBot
+
+# 2. 创建虚拟环境
+python -m venv venv
+
+# 3. 激活虚拟环境
+source venv/bin/activate  # Linux/Mac
+# 或
+venv\Scripts\activate  # Windows
+
+# 4. 安装依赖
+pip install -r requirements.txt
+```
+
+### 🛠️ 第三步：配置环境变量
+
+```bash
+# 1. 复制环境变量示例文件
+cp .env.example .env
+
+# 2. 编辑 .env 文件
+nano .env  # 或使用你喜欢的编辑器
+```
+
+**必须配置的环境变量:**
+
+```env
+# Telegram Bot Token (必填)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# AI 配置 (至少配置一个)
+# 方式1: 使用 OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4
+
+# 方式2: 使用 Anthropic Claude
+# ANTHROPIC_API_KEY=your_anthropic_api_key_here
+# ANTHROPIC_MODEL=claude-3-sonnet-20240229
+
+# 方式3: 使用自托管 vLLM
+# VLLM_API_URL=http://localhost:8000
+# VLLM_MODEL=your_model_name
+
+# 数据库配置 (默认使用 SQLite)
+DATABASE_URL=sqlite:///./soulmatebot.db
+# 或使用 PostgreSQL:
+# DATABASE_URL=postgresql://user:password@localhost:5432/soulmatebot
+```
+
+### 🛠️ 第四步：初始化数据库
+
+**方式1: 使用数据库管理工具 (推荐)**
+
+```bash
+# 重建数据库并初始化测试数据 (交互式)
+python -m scripts.db_manager all
+
+# 或者分步执行:
+# 仅创建数据库表
+python -m scripts.db_manager rebuild
+
+# 查看数据库状态
+python -m scripts.db_manager status
+```
+
+**方式2: 使用代码初始化**
+
+```bash
+python -c "from src.database import init_db; init_db()"
+```
+
+### 🛠️ 第五步：配置机器人数据
+
+使用数据库管理工具配置您的机器人:
+
+```bash
+# 创建用户和机器人 (交互式向导)
+python -m scripts.db_manager init
+
+# 或者分别创建:
+# 创建用户
+python -m scripts.db_manager user create
+
+# 创建机器人
+python -m scripts.db_manager bot create
+
+# 绑定机器人到频道
+python -m scripts.db_manager bind
+```
+
+### 🛠️ 第六步：启动机器人
+
+```bash
+python main.py
+```
+
+如果一切配置正确，您将看到类似以下的输出:
+
+```
+INFO     | Bot初始化成功
+INFO     | Bot用户名: @your_bot_username
+INFO     | 开始轮询监听...
+```
+
+现在可以在 Telegram 中与您的机器人对话了！ 🎉
+
+---
+
+### 📊 数据库管理工具
+
+SoulmateBot 提供了强大的数据库管理CLI工具，支持完整的CRUD操作:
+
+```bash
+# 查看帮助
+python -m scripts.db_manager help
+
+# 常用命令
+python -m scripts.db_manager status          # 查看数据库状态
+python -m scripts.db_manager user list       # 列出所有用户
+python -m scripts.db_manager bot list        # 列出所有Bot
+python -m scripts.db_manager channel list    # 列出所有Channel
+python -m scripts.db_manager mapping list    # 列出所有绑定关系
+python -m scripts.db_manager token           # Token管理菜单
+python -m scripts.db_manager token-set 1 YOUR_TOKEN  # 快速设置Token
+```
+
+---
+
+## 🗄️ Database Migration
 
 ⚠️ **重要提示：多机器人架构升级**
 
@@ -219,12 +371,7 @@ SoulmateBot/
 
 ```bash
 # 运行多机器人架构迁移
-```bash
 python migrations/migrate_to_multibot.py
-```
-
-```
-
 ```
 
 此脚本将：
@@ -245,56 +392,7 @@ invalid input value for enum subscriptiontier: "free"
 psql -U your_username -d your_database -f migrations/fix_subscription_tier_enum.sql
 ```
 
-### 前置要求
-
-- Python 3.11 或更高版本
-- PostgreSQL 15+ (可选，默认使用 SQLite)
-- Redis (可选)
-- Telegram Bot Token
-- OpenAI API Key 或 Anthropic API Key
-
-### 本地开发
-
-1. **克隆仓库**
-
-```bash
-git clone https://github.com/aappaappoo/SoulmateBot.git
-cd SoulmateBot
-```
-
-2. **创建虚拟环境**
-
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或
-venv\Scripts\activate  # Windows
-```
-
-3. **安装依赖**
-
-```bash
-pip install -r requirements.txt
-```
-
-4. **配置环境变量**
-
-```bash
-cp .env.example .env
-# 编辑 .env 文件，填入你的配置
-```
-
-5. **初始化数据库**
-
-```bash
-python -c "from src.database import init_db; init_db()"
-```
-
-6. **运行机器人**
-
-```bash
-python main.py
-```
+---
 
 ### Docker 部署
 
