@@ -1,27 +1,27 @@
 """
-Message handlers for conversations
+Message handlers for conversations - Async Version
+异步消息处理器
 """
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from loguru import logger
 
-from src.database import get_db_session
-from src.subscription.service import SubscriptionService
-from src.services.channel_manager import ChannelManagerService
-from src.services.message_router import MessageRouter
+from src.database import get_async_db_context
+from src.subscription.async_service import AsyncSubscriptionService
+from src.services.async_channel_manager import AsyncChannelManagerService
+from src. services.message_router import MessageRouter
 from src.models.database import Conversation
 from src.ai import conversation_service
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle incoming text messages with multi-bot routing support"""
+    """Handle incoming text messages with multi-bot routing support (Async Version)"""
 
-    # ===== 🔍 调试信息 =====
     logger.info("=" * 50)
     logger.info(f"Received update ID: {update.update_id}")
 
-    # ✅ 统一处理私聊消息和频道消息
     message = update.message or update.channel_post
 
     if not message:
@@ -29,176 +29,181 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not message.text:
-        logger.warning(f"❌ Message has no text")
+        logger. warning("❌ Message has no text")
         return
 
-    # 检查消息来源
     chat_type = message.chat.type
     chat_id = message.chat.id
     message_text = message.text
-    
+
     logger.info(f"📨 Message from chat type: {chat_type}")
-    logger.info(f"📝 Message text: {message_text[:50]}...")
+    logger.info(f"📝 Message text: {message_text[: 50]}...")
 
-    db = get_db_session()
-    try:
-        channel_service = ChannelManagerService(db)
-        
-        # 获取或创建频道记录
-        channel = channel_service.get_or_create_channel(
-            telegram_chat_id=chat_id,
-            chat_type=chat_type,
-            title=message.chat.title if hasattr(message.chat, 'title') else None,
-            username=message.chat.username if hasattr(message.chat, 'username') else None,
-            owner_id=update.effective_user.id if update.effective_user else None
-        )
-        
-        # 获取频道中的活跃机器人
-        mappings = channel_service.get_channel_bots(channel.id, active_only=True)
-        
-        # 检查是否应该响应
-        if not MessageRouter.should_respond_in_channel(chat_type, mappings):
-            logger.info("No active bots in this channel, skipping")
-            return
-        
-        # 提取@的机器人（如果有）
-        mentioned_username = MessageRouter.extract_mention(message_text)
-        
-        # 选择响应的机器人
-        selected_mapping = MessageRouter.select_bot(
-            message_text=message_text,
-            channel=channel,
-            mappings=mappings,
-            mentioned_username=mentioned_username
-        )
-        
-        if not selected_mapping:
-            # 没有机器人响应（例如：mention模式但没有@，或keyword模式但没有匹配）
-            logger.info("No bot selected to respond")
-            return
-        
-        selected_bot = selected_mapping.bot
-        logger.info(f"✅ Selected bot: @{selected_bot.bot_username}")
-        
-        # 处理用户信息（仅私聊或群组有用户）
-        user = update.effective_user
-        if not user:
-            if "channel" in str(chat_type).lower():
-                # 频道消息：直接生成回复
-                logger.info("📢 Channel message - processing without user")
-                await message.chat.send_action("typing")
-                try:
-                    history = []
-                    if selected_bot.system_prompt:
-                        history.insert(0, {"role": "system", "content": selected_bot.system_prompt})
-                    response = await conversation_service.get_response(message_text, history)
-                    await message.reply_text(response)
-                    logger.info(f"✅ Replied to channel with @{selected_bot.bot_username}")
-                except Exception as e:
-                    logger.error(f"❌ Channel error: {e}")
-                finally:
-                    db.close()
-                return
-            else:
-                logger.warning("No effective_user")
-                return
-        
-        logger.info(f"Processing message from user {user.id}: {message_text[:50]}...")
-        
-        subscription_service = SubscriptionService(db)
-
-        # Get or create user
-        db_user = subscription_service.get_user_by_telegram_id(user.id)
-
-        # Check if subscription is active
-        if not subscription_service.check_subscription_status(db_user):
-            await message.reply_text(
-                "⚠️ 你的订阅已过期。\n\n"
-                "使用 /subscribe 续订以继续使用高级功能。"
-            )
-            return
-
-        # Check usage limit
-        if not subscription_service.check_usage_limit(db_user, action_type="message"):
-            await message.reply_text(
-                "⚠️ 你今天的消息额度已用完。\n\n"
-                f"当前计划：{db_user.subscription_tier}\n"
-                "升级订阅以获取更多额度！\n\n"
-                "使用 /subscribe 查看订阅计划。"
-            )
-            return
-
-        # Send typing indicator
-        await message.chat.send_action("typing")
-
-        # Get conversation history
-        recent_conversations = db.query(Conversation).filter(
-            Conversation.user_id == db_user.id
-        ).order_by(Conversation.timestamp.desc()).limit(10).all()
-
-        # Build conversation history
-        history = []
-        for conv in reversed(recent_conversations):
-            if conv.is_user_message:
-                history.append({"role": "user", "content": conv.message})
-            else:
-                history.append({"role": "assistant", "content": conv.response})
-
+    # 使用异步上下文管理器
+    async with get_async_db_context() as db:
         try:
-            # 使用选定机器人的配置获取AI响应
-            # TODO: 这里可以根据 selected_bot 的 ai_provider 和 ai_model 使用不同的AI服务
-            # 当前先使用默认的 conversation_service
-            
-            # 可以将机器人的 system_prompt 添加到对话历史开头
-            if selected_bot.system_prompt:
-                history.insert(0, {"role": "system", "content": selected_bot.system_prompt})
-            
-            # Get AI response
-            response = await conversation_service.get_response(
-                user_message=message_text,
-                conversation_history=history
+            channel_service = AsyncChannelManagerService(db)
+
+            # 异步获取或创建频道记录
+            channel = await channel_service.get_or_create_channel(
+                telegram_chat_id=chat_id,
+                chat_type=chat_type,
+                title=message.chat.title if hasattr(message.chat, 'title') else None,
+                username=message.chat.username if hasattr(message.chat, 'username') else None,
+                owner_id=update.effective_user.id if update.effective_user else None
             )
 
-            # Save conversation to database
-            user_conv = Conversation(
-                user_id=db_user.id,
-                message=message_text,
-                response=response,
-                is_user_message=True,
-                message_type="text"
+            # 异步获取频道中的活跃机器人
+            mappings = await channel_service.get_channel_bots(channel.id, active_only=True)
+
+            # 检查是否应该响应
+            if not MessageRouter.should_respond_in_channel(chat_type, mappings):
+                logger.info("No active bots in this channel, skipping")
+                return
+
+            # 提取@的机器人（如果有）
+            mentioned_username = MessageRouter.extract_mention(message_text)
+
+            # 选择响应的机器人
+            selected_mapping = MessageRouter.select_bot(
+                message_text=message_text,
+                channel=channel,
+                mappings=mappings,
+                mentioned_username=mentioned_username
             )
-            db.add(user_conv)
 
-            bot_conv = Conversation(
-                user_id=db_user.id,
-                message=message_text,
-                response=response,
-                is_user_message=False,
-                message_type="text"
+            if not selected_mapping:
+                logger. info("No bot selected to respond")
+                return
+
+            selected_bot = selected_mapping.bot
+            logger.info(f"✅ Selected bot: @{selected_bot.bot_username}")
+
+            # 处理用户信息
+            user = update.effective_user
+            if not user:
+                if "channel" in str(chat_type).lower():
+                    logger.info("📢 Channel message - processing without user")
+                    await message. chat.send_action("typing")
+                    try:
+                        history = []
+                        if selected_bot.system_prompt:
+                            history. insert(0, {"role": "system", "content":  selected_bot.system_prompt})
+                        response = await conversation_service.get_response(message_text, history)
+                        await message.reply_text(response)
+                        logger.info(f"✅ Replied to channel with @{selected_bot.bot_username}")
+                    except Exception as e:
+                        logger.error(f"❌ Channel error: {e}")
+                    return
+                else:
+                    logger.warning("No effective_user")
+                    return
+
+            logger.info(f"Processing message from user {user.id}:  {message_text[: 50]}...")
+
+            subscription_service = AsyncSubscriptionService(db)
+
+            # 异步获取或创建用户
+            db_user = await subscription_service. get_user_by_telegram_id(user.id)
+
+            # 更新用户信息
+            await subscription_service.update_user_info(
+                telegram_id=user.id,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                language_code=user.language_code
             )
-            db.add(bot_conv)
 
-            # Record usage
-            subscription_service.record_usage(db_user, action_type="message")
+            # 检查订阅状态
+            if not await subscription_service.check_subscription_status(db_user):
+                await message.reply_text(
+                    "⚠️ 你的订阅已过期。\n\n"
+                    "使用 /subscribe 续订以继续使用高级功能。"
+                )
+                return
 
-            db.commit()
+            # 检查使用限制
+            if not await subscription_service.check_usage_limit(db_user, action_type="message"):
+                await message.reply_text(
+                    "⚠️ 你今天的消息额度已用完。\n\n"
+                    f"当前计划：{db_user.subscription_tier}\n"
+                    "升级订阅以获取更多额度！\n\n"
+                    "使用 /subscribe 查看订阅计划。"
+                )
+                return
 
-            # Send response
-            await message.reply_text(response)
-            logger.info(f"✅ Successfully replied to user {user.id} with bot @{selected_bot.bot_username}")
+            # 发送typing指示
+            await message.chat. send_action("typing")
+
+            # 异步获取对话历史
+            result = await db.execute(
+                select(Conversation)
+                .where(Conversation. user_id == db_user.id)
+                .order_by(Conversation.timestamp.desc())
+                .limit(10)
+            )
+            recent_conversations = result.scalars().all()
+
+            # 构建对话历史
+            history = []
+            for conv in reversed(list(recent_conversations)):
+                if conv.is_user_message:
+                    history.append({"role": "user", "content": conv.message})
+                else:
+                    history.append({"role": "assistant", "content": conv.response})
+
+            try:
+                # 添加系统提示
+                if selected_bot.system_prompt:
+                    history.insert(0, {"role": "system", "content":  selected_bot.system_prompt})
+
+                # 获取AI响应
+                response = await conversation_service.get_response(
+                    user_message=message_text,
+                    conversation_history=history
+                )
+
+                # 保存用户消息到数据库
+                user_conv = Conversation(
+                    user_id=db_user.id,
+                    message=message_text,
+                    response=response,
+                    is_user_message=True,
+                    message_type="text"
+                )
+                db. add(user_conv)
+
+                # 保存机器人回复到数据库
+                bot_conv = Conversation(
+                    user_id=db_user.id,
+                    message=message_text,
+                    response=response,
+                    is_user_message=False,
+                    message_type="text"
+                )
+                db.add(bot_conv)
+
+                # 记录使用量
+                await subscription_service.record_usage(db_user, action_type="message")
+
+                # 提交事务（由上下文管理���自动处理）
+                await db.commit()
+
+                # 发送响应
+                await message.reply_text(response)
+                logger.info(f"✅ Successfully replied to user {user.id} with bot @{selected_bot.bot_username}")
+
+            except Exception as e:
+                logger.error(f"❌ Error getting AI response: {str(e)}", exc_info=True)
+                await db.rollback()
+                await message.reply_text(
+                    f"抱歉，我遇到了一些问题：{str(e)}\n\n"
+                    "请稍后再试，或联系管理员。"
+                )
 
         except Exception as e:
-            logger.error(f"❌ Error getting AI response: {str(e)}", exc_info=True)
-            db.rollback()
-            await message.reply_text(
-                f"抱歉，我遇到了一些问题：{str(e)}\n\n"
-                "请稍后再试，或联系管理员。"
-            )
-            
-    except Exception as e:
-        logger.error(f"❌ Error in handle_message: {str(e)}", exc_info=True)
-    finally:
-        db.close()
+            logger.error(f"❌ Error in handle_message: {str(e)}", exc_info=True)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -208,7 +213,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not message:
         return
 
-    logger.info(f"Received photo")
+    logger.info("Received photo")
 
     await message.reply_text(
         "📷 谢谢你分享的照片！\n\n"
@@ -225,7 +230,7 @@ async def handle_sticker(update: Update, context:  ContextTypes.DEFAULT_TYPE):
     if not message:
         return
 
-    logger.info(f"Received sticker")
+    logger.info("Received sticker")
 
     await message.reply_text(
         "😊 收到了你的表情包！\n\n"
@@ -237,7 +242,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle errors"""
     import traceback
 
-    # 打印完整的错误堆栈
     error_traceback = ''.join(traceback.format_exception(
         type(context.error),
         context.error,

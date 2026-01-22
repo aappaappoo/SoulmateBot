@@ -15,6 +15,10 @@ engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
     echo=settings.debug,
+    pool_timeout=30,  # 连接池超时
+    pool_recycle=1800,  # 连接回收时间
+    connect_args={"connect_timeout": 10}  # 连接超时
+
 )
 
 # Create session factory
