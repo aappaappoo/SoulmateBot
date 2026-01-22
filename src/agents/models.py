@@ -74,11 +74,13 @@ class ChatContext:
         conversation_history: Recent message history
         active_users: List of active user IDs in this chat
         chat_metadata: Additional chat information
+        system_prompt: System prompt for the bot
     """
     chat_id: str
     conversation_history: List[Message] = field(default_factory=list)
     active_users: List[str] = field(default_factory=list)
     chat_metadata: Dict[str, Any] = field(default_factory=dict)
+    system_prompt: Optional[str] = None
     
     def add_message(self, message: Message) -> None:
         """Add a message to conversation history."""
