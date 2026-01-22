@@ -12,6 +12,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    MessageReactionHandler,
     filters
 )
 from loguru import logger
@@ -35,7 +36,13 @@ from src.handlers import (
     handle_message,
     handle_photo,
     handle_sticker,
-    error_handler
+    error_handler,
+    # 反馈处理器
+    handle_message_reaction,
+    handle_message_reaction_count,
+    handle_pinned_message,
+    feedback_stats_command,
+    my_feedback_command
 )
 
 
@@ -93,6 +100,16 @@ class SoulmateBot:
         
         # 贴纸处理器
         self.app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
+        
+        # 反馈相关命令
+        self.app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
+        self.app.add_handler(CommandHandler("my_feedback", my_feedback_command))
+        
+        # 反应处理器（处理用户对消息的表情反应）
+        self.app.add_handler(MessageReactionHandler(handle_message_reaction))
+        
+        # 置顶消息处理器
+        self.app.add_handler(MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_pinned_message))
         
         # 错误处理器（捕获并处理所有错误）
         self.app.add_error_handler(error_handler)

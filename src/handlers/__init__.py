@@ -24,8 +24,18 @@ from .bot_commands import (
     my_bots_command,
     config_bot_command
 )
+from .feedback import (
+    handle_message_reaction,
+    handle_message_reaction_count,
+    handle_reply_interaction,
+    handle_pinned_message,
+    handle_forward,
+    feedback_stats_command,
+    my_feedback_command
+)
 
 __all__ = [
+    # 基础命令
     "start_command",
     "help_command",
     "status_command",
@@ -34,13 +44,23 @@ __all__ = [
     "pay_basic_command",
     "pay_premium_command",
     "check_payment_command",
+    # 消息处理
     "handle_message",
     "handle_photo",
     "handle_sticker",
     "error_handler",
+    # Bot管理命令
     "list_bots_command",
     "add_bot_command",
     "remove_bot_command",
     "my_bots_command",
-    "config_bot_command"
+    "config_bot_command",
+    # 反馈处理
+    "handle_message_reaction",
+    "handle_message_reaction_count",
+    "handle_reply_interaction",
+    "handle_pinned_message",
+    "handle_forward",
+    "feedback_stats_command",
+    "my_feedback_command"
 ]
