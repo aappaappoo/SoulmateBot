@@ -116,7 +116,15 @@ SoulmateBot/
 
 #### 📚 详细文档
 
-查看 [多机器人使用指南](MULTI_BOT_GUIDE.md) 了解详细配置和使用方法。
+查看 [多机器人使用指南](docs/MULTI_BOT_GUIDE.md) 了解详细配置和使用方法。
+
+更多文档请查看 `docs/` 目录：
+- [快速开始](docs/QUICKSTART.md) - 快速入门指南
+- [架构设计](docs/ARCHITECTURE.md) - 系统架构详解
+- [API 文档](docs/API.md) - API 接口说明
+- [部署指南](docs/DEPLOYMENT.md) - 生产环境部署
+- [开发指南](docs/DEVELOPMENT_GUIDE.md) - 开发者指南
+- [Agent 系统](docs/AGENT_SYSTEM_README.md) - 多 Agent 系统说明
 
 ### 快速使用
 

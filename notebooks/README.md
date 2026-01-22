@@ -10,6 +10,7 @@
 | `02_conversation_debug.ipynb` | 会话管理调试 | Session 管理、Prompt 模板、上下文窗口 |
 | `03_bot_config_debug.ipynb` | Bot 配置调试 | YAML 配置加载、功能检查、热重载 |
 | `04_payment_debug.ipynb` | 支付系统调试 | 额度管理、订阅流程、支付模拟 |
+| `05_multibot_debug.ipynb` | **多机器人开发调试** | 人设配置、技能匹配、Agent路由、批量注册 |
 
 ## 使用方法
 
@@ -79,3 +80,12 @@ export VLLM_API_URL="http://your-vllm-server:8000"
 - 支付流程模拟
 - 订阅过期处理
 - 完整支付流程演示
+
+### 05_multibot_debug.ipynb
+- 多机器人配置加载和验证
+- 人设（personality）配置测试
+- 技能（skills）匹配测试
+- Agent 系统路由测试
+- 数据库状态检查
+- 新机器人模板生成
+- 批量创建和注册机器人
