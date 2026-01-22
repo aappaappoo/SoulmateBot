@@ -892,7 +892,13 @@ class DatabaseManager:
         """
         Token/ID 管理菜单
         
-        管理机器人的 Token 绑定，不涉及人设配置
+        管理机器人的 Token 绑定，不涉及人设配置。
+        
+        提供以下子操作：
+        - [1] 查看所有 Bot Token - 列出所有机器人的 Token 信息
+        - [2] 设置/更新 Bot Token - 交互式设置单个机器人的 Token
+        - [3] 验证 Token 有效性 - 通过 Telegram API 验证 Token
+        - [4] 批量导入 Token - 批量导入多个机器人的 Token
         """
         print("\n" + "=" * 60)
         print("🔑 Token/ID 管理")
@@ -1000,6 +1006,9 @@ class DatabaseManager:
         Args:
             bot_id: Bot ID
             token: Telegram Bot Token
+            
+        Returns:
+            bool: 设置成功返回 True，失败返回 False
         """
         print(f"\n🔑 快速设置 Token: Bot {bot_id}")
         
@@ -1135,8 +1144,11 @@ class DatabaseManager:
         """
         批量注册机器人
         
-        从 bots/ 目录中自动发现并注册所有机器人到数据库
-        仅处理 Token 和基本信息，人设配置由代码中的 config.yaml 决定
+        从 bots/ 目录中自动发现并注册所有机器人到数据库。
+        仅处理 Token 和基本信息，人设配置由代码中的 config.yaml 决定。
+        
+        Returns:
+            bool: 至少成功注册一个机器人返回 True，否则返回 False
         """
         print("\n" + "=" * 60)
         print("📦 批量注册机器人")
@@ -1244,8 +1256,11 @@ class DatabaseManager:
                     personality = ', '.join(personality_config.get('traits', []))
                     
                     # 创建 Bot
+                    # 使用明确的占位符格式，包含 PENDING_SETUP 标记
+                    # 机器人在使用前必须通过 token-set 命令设置真实的 Token
+                    placeholder_token = f"PENDING_SETUP:{bot_username}:请使用 token-set 命令设置真实Token"
                     bot = Bot(
-                        bot_token=f"PLACEHOLDER_{bot_username}",  # 占位符，需要后续设置
+                        bot_token=placeholder_token,
                         bot_name=bot_name,
                         bot_username=bot_username,
                         description=description,
