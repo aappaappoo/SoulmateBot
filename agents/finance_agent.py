@@ -113,28 +113,6 @@ class FinanceAgent(BaseAgent):
         
         return 0.0
     
-    async def _generate_llm_response(self, message: str, user_context: Dict) -> str:
-        """使用LLM生成专业回复"""
-        if not self._llm_provider:
-            return None
-        
-        try:
-            context_info = ""
-            if user_context.get("risk_preference"):
-                context_info += f"\n用户风险偏好: {user_context['risk_preference']}"
-            if user_context.get("investment_experience"):
-                context_info += f"\n投资经验: {user_context['investment_experience']}"
-            
-            messages = [
-                {"role": "system", "content": self._system_prompt + context_info},
-                {"role": "user", "content": message}
-            ]
-            
-            response = await self._llm_provider.generate_response(messages, context=None)
-            return response
-        except Exception:
-            return None
-    
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """生成金融咨询回复"""
         user_memory = self.memory_read(message.user_id)

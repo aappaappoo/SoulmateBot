@@ -373,14 +373,14 @@ class AgentOrchestrator:
         """
         result = OrchestratorResult(intent_type=IntentType.DIRECT_RESPONSE)
         
-        # 分析意图 - 现在返回4个值，包括意图来源
+        # Analyze intent - returns intent type, agent names, metadata, and intent source
         intent_type, agent_names, metadata, intent_source = await self.analyze_intent(message, context)
         result.intent_type = intent_type
         result.intent_source = intent_source
         result.selected_agents = agent_names
         result.metadata = metadata
         
-        # 将意图来源添加到metadata中以便日志追踪
+        # Add intent source to metadata for logging
         result.metadata["intent_source"] = intent_source.value
         
         logger.info(f"🎯 Intent type: {intent_type} | Source: {intent_source.value}")
