@@ -33,6 +33,12 @@ from .feedback import (
     feedback_stats_command,
     my_feedback_command
 )
+from .agent_integration import (
+    handle_message_with_agents,
+    handle_skill_callback,
+    handle_skills_command,
+    get_skill_callback_handler
+)
 
 __all__ = [
     # 基础命令
@@ -62,5 +68,10 @@ __all__ = [
     "handle_pinned_message",
     "handle_forward",
     "feedback_stats_command",
-    "my_feedback_command"
+    "my_feedback_command",
+    # Agent集成 - 支持工具调用
+    "handle_message_with_agents",
+    "handle_skill_callback",
+    "handle_skills_command",
+    "get_skill_callback_handler",
 ]
