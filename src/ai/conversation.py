@@ -93,7 +93,7 @@ class VLLMProvider(AIProvider):
         """Generate response using vLLM API"""
         system_message = {
             "role": "system",
-            "content": context or "你是一个温柔、善解人意的情感陪伴助手。你的任务是倾听用户的心声，提供情感支持和陪伴。请用温暖、关怀的语气回复用户。"
+            "content": context or "你是一个温柔、善解人意的情感陪伴助手。"
         }
         
         full_messages = [system_message] + messages
