@@ -63,6 +63,10 @@ data/uploads/*
 temp/
 cache/
 
+# Jupyter
+.ipynb_checkpoints/
+notebooks/*.ipynb
+
 # Docker
 docker-compose.override.yml
 
