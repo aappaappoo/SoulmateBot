@@ -104,9 +104,15 @@ class SoulmateBot:
         self.app.add_handler(CallbackQueryHandler(handle_monitor_callback, pattern=r"^stop_monitor:"))  # 监控回调
 
         # 消息处理器 - 使用Agent集成版本
+        # 注意：这是对原有handle_message的替代，会自动分析用户消息并选择合适的Agent处理
+        # 如果需要恢复原有行为，可以将handle_message_with_agents替换为handle_message
+        # 主要变化：
+        # 1. 自动判断是否需要调用Agent能力
+        # 2. 支持多Agent协作响应
+        # 3. 可选的技能选择按钮（减少token消耗）
         self.app.add_handler(MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            handle_message_with_agents  # 使用集成Agent的消息处理器
+            handle_message_with_agents
         ))
         self.app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         self.app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))

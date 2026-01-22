@@ -197,6 +197,14 @@ class TopicSummary(Base):
     
     def to_dict(self) -> dict:
         """转换为字典，用于API响应"""
+        start_time_str = None
+        end_time_str = None
+        
+        if self.start_time and isinstance(self.start_time, datetime):
+            start_time_str = self.start_time.isoformat()
+        if self.end_time and isinstance(self.end_time, datetime):
+            end_time_str = self.end_time.isoformat()
+        
         return {
             "id": self.uuid,
             "title": self.topic_title,
@@ -205,8 +213,8 @@ class TopicSummary(Base):
             "message_count": self.message_count,
             "participant_count": self.participant_count,
             "active_participants": self.active_participants,
-            "start_time": self.start_time.isoformat() if self.start_time else None,
-            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "start_time": start_time_str,
+            "end_time": end_time_str,
             "sentiment": self.sentiment,
             "importance_score": self.importance_score,
         }

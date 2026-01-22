@@ -21,6 +21,11 @@ from src.models.group_monitor import GroupMonitorConfig, GroupMessage, TopicSumm
 from src.models.database import User
 
 
+# Configuration constants
+MAX_MESSAGES_TEXT_LENGTH = 10000  # Maximum characters for LLM analysis
+UUID_SHORT_LENGTH = 8  # Length of shortened UUID for display
+
+
 class GroupMonitorService:
     """
     群组监控服务
@@ -386,7 +391,7 @@ class GroupMonitorService:
 - 时间范围：{stats['start_time']} 到 {stats['end_time']}
 
 群聊消息：
-{messages_text[:10000]}  # 限制长度
+{messages_text[:MAX_MESSAGES_TEXT_LENGTH]}
 
 请以JSON格式返回话题列表，每个话题包含：
 - title: 话题标题

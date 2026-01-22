@@ -18,8 +18,13 @@ from loguru import logger
 
 from src.database import get_async_db_context
 from src.subscription.async_service import AsyncSubscriptionService
-from src.services.group_monitor import GroupMonitorService
+from src.services.group_monitor import GroupMonitorService, UUID_SHORT_LENGTH
 from src.ai import conversation_service
+
+
+def short_uuid(uuid_str: str) -> str:
+    """Get shortened UUID for display"""
+    return uuid_str[:UUID_SHORT_LENGTH] if uuid_str else ""
 
 
 async def start_monitor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -103,13 +108,13 @@ async def start_monitor_command(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text(
                 f"✅ **监控已启动**\n\n"
                 f"🔗 群组: {group_link}\n"
-                f"🆔 配置ID: {config.uuid[:8]}\n"
+                f"🆔 配置ID: {short_uuid(config.uuid)}\n"
                 f"📅 开始时间: {config.start_time.strftime('%Y-%m-%d %H:%M')}\n"
                 f"📅 结束时间: {config.end_time.strftime('%Y-%m-%d %H:%M') if config.end_time else '持续监控'}\n"
                 f"🔑 关键词: {', '.join(keywords) if keywords else '无'}\n\n"
                 f"⚠️ **注意**: 请确保Bot已加入目标群组并有读取消息权限。\n\n"
-                f"使用 `/stop_monitor {config.uuid[:8]}` 停止监控\n"
-                f"使用 `/monitor_report {config.uuid[:8]}` 查看报告"
+                f"使用 `/stop_monitor {short_uuid(config.uuid)}` 停止监控\n"
+                f"使用 `/monitor_report {short_uuid(config.uuid)}` 查看报告"
             )
             
         except Exception as e:
@@ -160,7 +165,7 @@ async def stop_monitor_command(update: Update, context: ContextTypes.DEFAULT_TYP
                 await update.message.reply_text(
                     f"✅ **监控已停止**\n\n"
                     f"🔗 群组: {target_config.group_link}\n"
-                    f"🆔 配置ID: {target_config.uuid[:8]}"
+                    f"🆔 配置ID: {target_short_uuid(config.uuid)}"
                 )
             else:
                 # 显示所有活跃监控供选择
@@ -175,7 +180,7 @@ async def stop_monitor_command(update: Update, context: ContextTypes.DEFAULT_TYP
                     buttons.append([
                         InlineKeyboardButton(
                             f"🔴 {config.group_link[:30]}...",
-                            callback_data=f"stop_monitor:{config.uuid[:8]}"
+                            callback_data=f"stop_monitor:{short_uuid(config.uuid)}"
                         )
                     ])
                 
@@ -231,7 +236,7 @@ async def monitor_status_command(update: Update, context: ContextTypes.DEFAULT_T
                 stats = await monitor_service.get_message_stats(config.id)
                 
                 status_lines.append(f"**{i}. {config.group_link}**")
-                status_lines.append(f"   🆔 ID: `{config.uuid[:8]}`")
+                status_lines.append(f"   🆔 ID: `{short_uuid(config.uuid)}`")
                 status_lines.append(f"   📝 消息: {stats['total_messages']}")
                 status_lines.append(f"   👥 用户: {stats['unique_users']}")
                 status_lines.append("")
@@ -347,7 +352,7 @@ async def my_monitors_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             for i, config in enumerate(configs[:10], 1):
                 status_emoji = "🟢" if config.is_active else "🔴"
                 lines.append(
-                    f"{i}. {status_emoji} `{config.uuid[:8]}` - {config.group_link[:25]}..."
+                    f"{i}. {status_emoji} `{short_uuid(config.uuid)}` - {config.group_link[:25]}..."
                 )
             
             if len(configs) > 10:
