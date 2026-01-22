@@ -125,6 +125,46 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
     logger.info(f"📝 Message text: {message_text[:50]}...")
     
     async with get_async_db_context() as db:
+        # Initialize channel service for routing
+        channel_service = AsyncChannelManagerService(db)
+        
+        # Get or create channel record
+        channel = await channel_service.get_or_create_channel(
+            telegram_chat_id=chat_id,
+            chat_type=chat_type,
+            title=message.chat.title if hasattr(message.chat, 'title') else None,
+            username=message.chat.username if hasattr(message.chat, 'username') else None,
+            owner_id=update.effective_user.id if update.effective_user else None
+        )
+        
+        # Get active bot mappings for this channel
+        mappings = await channel_service.get_channel_bots(channel.id, active_only=True)
+        
+        # Check if should respond in channel
+        if not MessageRouter.should_respond_in_channel(chat_type, mappings):
+            logger.info("No active bots in this channel, skipping")
+            return
+        
+        # Extract mentioned bot (if any)
+        mentioned_username = MessageRouter.extract_mention(message_text)
+        
+        # Select bot to respond
+        selected_mapping = MessageRouter.select_bot(
+            message_text=message_text,
+            channel=channel,
+            mappings=mappings,
+            mentioned_username=mentioned_username
+        )
+        
+        if not selected_mapping:
+            logger.info("No bot selected to respond")
+            return
+        
+        selected_bot = selected_mapping.bot
+        logger.info(f"✅ Selected bot: @{selected_bot.bot_username}")
+        
+        # Store the system prompt for later use
+        system_prompt = selected_bot.system_prompt
         try:
             # 检查用户和订阅状态
             user = update.effective_user
@@ -166,16 +206,17 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             
             # 获取对话历史（构建ChatContext）
             history_messages = []
+            recent_conversations = []
             if db_user:
-                result = await db.execute(
+                db_result = await db.execute(
                     select(Conversation)
                     .where(Conversation.user_id == db_user.id)
                     .order_by(Conversation.timestamp.desc())
                     .limit(10)
                 )
-                recent_conversations = result.scalars().all()
+                recent_conversations = list(db_result.scalars().all())
                 
-                for conv in reversed(list(recent_conversations)):
+                for conv in reversed(recent_conversations):
                     history_messages.append(AgentMessage(
                         content=conv.message if conv.is_user_message else conv.response,
                         user_id=user_id,
@@ -216,8 +257,31 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     reply_markup=keyboard
                 )
             else:
-                # 直接发送响应
-                response = result.final_response
+                # 如果是直接响应且有system_prompt，使用conversation_service重新生成
+                if result.intent_type == IntentType.DIRECT_RESPONSE and system_prompt:
+                    # 构建对话历史（用于conversation_service）
+                    # 重用已经获取的recent_conversations
+                    history = []
+                    if db_user and recent_conversations:
+                        # 构建对话历史
+                        for conv in reversed(recent_conversations):
+                            if conv.is_user_message:
+                                history.append({"role": "user", "content": conv.message})
+                            else:
+                                history.append({"role": "assistant", "content": conv.response})
+                    
+                    # 添加系统提示
+                    if system_prompt:
+                        history.insert(0, {"role": "system", "content": system_prompt})
+                    
+                    # 使用conversation_service生成响应
+                    response = await conversation_service.get_response(
+                        user_message=message_text,
+                        conversation_history=history
+                    )
+                else:
+                    # 使用编排器的响应
+                    response = result.final_response
                 await message.reply_text(response)
                 
                 # 保存对话到数据库
