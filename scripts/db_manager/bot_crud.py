@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+"""
+Bot CRUD操作
+============
+
+提供Bot的增删改查操作。
+"""
+
+import sys
+import os
+from typing import Optional, List
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from src.database import get_db_session
+from src.models.database import Bot, User, ChannelBotMapping, BotStatus, SubscriptionTier
+from config import settings
+
+
+class BotCRUD:
+    """
+    Bot CRUD操作类
+    
+    提供Bot管理的所有数据库操作:
+    - create: 创建Bot
+    - get: 获取Bot
+    - list: 列出所有Bot
+    - update: 更新Bot
+    - delete: 删除Bot
+    """
+
+    # ==================== CREATE ====================
+    
+    @staticmethod
+    def create(
+        bot_token: str,
+        bot_username: str,
+        bot_name: str,
+        description: str = "",
+        personality: str = "",
+        system_prompt: str = "",
+        ai_provider: str = "openai",
+        ai_model: str = "gpt-4",
+        created_by: int = None,
+        is_public: bool = True,
+        status: str = None
+    ) -> Optional[Bot]:
+        """
+        创建新Bot
+        
+        Args:
+            bot_token: Telegram Bot Token
+            bot_username: Bot用户名
+            bot_name: Bot显示名称
+            description: Bot描述
+            personality: 人设特征
+            system_prompt: 系统提示词
+            ai_provider: AI提供商
+            ai_model: AI模型
+            created_by: 创建者用户ID
+            is_public: 是否公开
+            status: Bot状态
+            
+        Returns:
+            Bot: 创建的Bot对象，失败返回None
+        """
+        db = get_db_session()
+        try:
+            # 检查是否已存在
+            existing = db.query(Bot).filter(Bot.bot_username == bot_username).first()
+            if existing:
+                print(f"⚠️  Bot已存在: @{bot_username} (ID={existing.id})")
+                return existing
+            
+            bot = Bot(
+                bot_token=bot_token,
+                bot_name=bot_name,
+                bot_username=bot_username,
+                description=description,
+                personality=personality,
+                system_prompt=system_prompt,
+                ai_model=ai_model,
+                ai_provider=ai_provider,
+                created_by=created_by,
+                is_public=is_public,
+                status=status or BotStatus.ACTIVE.value
+            )
+            db.add(bot)
+            db.commit()
+            db.refresh(bot)
+            print(f"✅ Bot创建成功: @{bot_username} (ID={bot.id})")
+            return bot
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 创建Bot失败: {e}")
+            return None
+        finally:
+            db.close()
+
+    @staticmethod
+    def create_interactive() -> Optional[Bot]:
+        """交互式创建Bot"""
+        print("\n" + "=" * 60)
+        print("🤖 创建新Bot")
+        print("=" * 60)
+        
+        db = get_db_session()
+        try:
+            # 获取创建者
+            users = db.query(User).all()
+            if not users:
+                print("\n⚠️  数据库中没有用户，需要先创建用户")
+                print("   运行: python -m scripts.db_manager user create")
+                return None
+            
+            print("\n👤 选择创建者:")
+            for u in users:
+                print(f"   [{u.id}] @{u.username} - {u.first_name}")
+            user_id = int(input("\n请输入用户ID: "))
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                print(f"❌ 用户不存在: ID={user_id}")
+                return None
+        finally:
+            db.close()
+        
+        # 获取Bot信息
+        print("\n📝 请输入Bot信息:")
+        
+        bot_token = input("Bot Token (从BotFather获取): ").strip()
+        if not bot_token:
+            print("   使用.env中的TELEGRAM_BOT_TOKEN")
+            bot_token = settings.telegram_bot_token
+        
+        bot_username = input("Bot用户名 (不含@): ").strip()
+        if not bot_username:
+            print("❌ Bot用户名不能为空")
+            return None
+        
+        bot_name = input(f"显示名称 (默认{bot_username}): ").strip() or bot_username
+        description = input("描述 (可选): ").strip() or "智能情感陪伴助手"
+        
+        # AI配置
+        print("\n🧠 选择AI提供商:")
+        print("   [1] OpenAI (GPT-4)")
+        print("   [2] Anthropic (Claude)")
+        print("   [3] vLLM (自托管)")
+        ai_choice = input("请选择 (1/2/3, 默认1): ").strip() or "1"
+        
+        ai_provider_map = {"1": "openai", "2": "anthropic", "3": "vllm"}
+        ai_provider = ai_provider_map.get(ai_choice, "openai")
+        
+        model_defaults = {
+            "openai": settings.openai_model,
+            "anthropic": settings.anthropic_model,
+            "vllm": settings.vllm_model
+        }
+        ai_model = input(f"模型名称 (默认{model_defaults[ai_provider]}): ").strip() or model_defaults[ai_provider]
+        
+        # 系统提示词
+        print("\n📌 请输入System Prompt (机器人人设):")
+        print("   直接回车使用默认人设，输入多行后输入'END'结束")
+        
+        lines = []
+        first_line = input("> ").strip()
+        if first_line:
+            lines.append(first_line)
+            while True:
+                line = input("> ")
+                if line.strip().upper() == 'END':
+                    break
+                lines.append(line)
+            system_prompt = "\n".join(lines)
+        else:
+            system_prompt = """你是一个温柔、善解人意的情感陪伴助手。
+你的任务是倾听用户的心声，提供情感支持和陪伴。
+请用温暖、关怀的语气回复，让用户感受到被理解和支持。
+回复要自然、真诚，避免机械化的回答。"""
+        
+        return BotCRUD.create(
+            bot_token=bot_token,
+            bot_username=bot_username,
+            bot_name=bot_name,
+            description=description,
+            system_prompt=system_prompt,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            created_by=user_id
+        )
+
+    # ==================== READ ====================
+    
+    @staticmethod
+    def get(bot_id: int = None, bot_username: str = None) -> Optional[Bot]:
+        """
+        获取Bot
+        
+        Args:
+            bot_id: Bot ID
+            bot_username: Bot用户名
+            
+        Returns:
+            Bot: Bot对象，未找到返回None
+        """
+        db = get_db_session()
+        try:
+            if bot_id:
+                return db.query(Bot).filter(Bot.id == bot_id).first()
+            elif bot_username:
+                return db.query(Bot).filter(Bot.bot_username == bot_username).first()
+            return None
+        finally:
+            db.close()
+
+    @staticmethod
+    def list_all() -> List[Bot]:
+        """
+        列出所有Bot
+        
+        Returns:
+            List[Bot]: Bot列表
+        """
+        db = get_db_session()
+        try:
+            return db.query(Bot).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def list_print() -> None:
+        """打印Bot列表"""
+        db = get_db_session()
+        try:
+            bots = db.query(Bot).all()
+            
+            print("\n" + "=" * 60)
+            print("🤖 Bot列表")
+            print("=" * 60)
+            
+            if not bots:
+                print("\n   📭 暂无Bot")
+                return
+            
+            print(f"\n   共 {len(bots)} 个Bot:\n")
+            for b in bots:
+                # 获取绑定数量
+                binding_count = db.query(ChannelBotMapping).filter(
+                    ChannelBotMapping.bot_id == b.id,
+                    ChannelBotMapping.is_active == True
+                ).count()
+                
+                # 隐藏Token
+                token = b.bot_token
+                if token and len(token) > 20:
+                    masked_token = token[:8] + "..." + token[-8:]
+                else:
+                    masked_token = token or "(未设置)"
+                
+                print(f"   [{b.id}] @{b.bot_username}")
+                print(f"       名称: {b.bot_name}")
+                print(f"       描述: {b.description or '(无)'}")
+                print(f"       AI: {b.ai_provider}/{b.ai_model}")
+                print(f"       Token: {masked_token}")
+                print(f"       状态: {b.status}")
+                print(f"       绑定Channel数: {binding_count}")
+                print()
+        finally:
+            db.close()
+
+    # ==================== UPDATE ====================
+    
+    @staticmethod
+    def update(
+        bot_id: int,
+        bot_name: str = None,
+        description: str = None,
+        personality: str = None,
+        system_prompt: str = None,
+        ai_provider: str = None,
+        ai_model: str = None,
+        bot_token: str = None,
+        status: str = None
+    ) -> Optional[Bot]:
+        """
+        更新Bot信息
+        
+        Args:
+            bot_id: Bot ID
+            bot_name: 新名称
+            description: 新描述
+            personality: 新人设特征
+            system_prompt: 新系统提示词
+            ai_provider: 新AI提供商
+            ai_model: 新AI模型
+            bot_token: 新Token
+            status: 新状态
+            
+        Returns:
+            Bot: 更新后的Bot对象
+        """
+        db = get_db_session()
+        try:
+            bot = db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                print(f"❌ Bot不存在: ID={bot_id}")
+                return None
+            
+            if bot_name is not None:
+                bot.bot_name = bot_name
+            if description is not None:
+                bot.description = description
+            if personality is not None:
+                bot.personality = personality
+            if system_prompt is not None:
+                bot.system_prompt = system_prompt
+            if ai_provider is not None:
+                bot.ai_provider = ai_provider
+            if ai_model is not None:
+                bot.ai_model = ai_model
+            if bot_token is not None:
+                bot.bot_token = bot_token
+            if status is not None:
+                bot.status = status
+            
+            db.commit()
+            db.refresh(bot)
+            print(f"✅ Bot更新成功: @{bot.bot_username}")
+            return bot
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 更新Bot失败: {e}")
+            return None
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_interactive() -> Optional[Bot]:
+        """交互式更新Bot"""
+        BotCRUD.list_print()
+        
+        try:
+            bot_id = int(input("\n请输入要更新的Bot ID: "))
+            
+            db = get_db_session()
+            bot = db.query(Bot).filter(Bot.id == bot_id).first()
+            db.close()
+            
+            if not bot:
+                print(f"❌ Bot不存在: ID={bot_id}")
+                return None
+            
+            print(f"\n正在更新 @{bot.bot_username}")
+            print("(直接回车保持原值不变)\n")
+            
+            bot_name = input(f"名称 [{bot.bot_name}]: ").strip() or None
+            description = input(f"描述 [{bot.description}]: ").strip() or None
+            ai_model = input(f"AI模型 [{bot.ai_model}]: ").strip() or None
+            
+            print("\n更新System Prompt? (yes/no)")
+            system_prompt = None
+            if input().lower() == 'yes':
+                print("输入新的System Prompt (输入'END'结束):")
+                lines = []
+                while True:
+                    line = input("> ")
+                    if line.strip().upper() == 'END':
+                        break
+                    lines.append(line)
+                if lines:
+                    system_prompt = "\n".join(lines)
+            
+            return BotCRUD.update(
+                bot_id=bot_id,
+                bot_name=bot_name,
+                description=description,
+                ai_model=ai_model,
+                system_prompt=system_prompt
+            )
+        except ValueError as e:
+            print(f"❌ 输入错误: {e}")
+            return None
+
+    # ==================== DELETE ====================
+    
+    @staticmethod
+    def delete(bot_id: int, confirm: bool = False) -> bool:
+        """
+        删除Bot
+        
+        Args:
+            bot_id: Bot ID
+            confirm: 是否跳过确认
+            
+        Returns:
+            bool: 删除是否成功
+        """
+        db = get_db_session()
+        try:
+            bot = db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                print(f"❌ Bot不存在: ID={bot_id}")
+                return False
+            
+            if not confirm:
+                print(f"\n⚠️  将删除Bot @{bot.bot_username} 及其所有绑定关系")
+                if input("输入 'yes' 确认: ").lower() != 'yes':
+                    print("❌ 已取消")
+                    return False
+            
+            # 删除相关绑定
+            db.query(ChannelBotMapping).filter(ChannelBotMapping.bot_id == bot_id).delete()
+            db.delete(bot)
+            db.commit()
+            print(f"✅ Bot已删除: @{bot.bot_username}")
+            return True
+        except Exception as e:
+            db.rollback()
+            print(f"❌ 删除Bot失败: {e}")
+            return False
+        finally:
+            db.close()
+
+    @staticmethod
+    def delete_interactive() -> bool:
+        """交互式删除Bot"""
+        BotCRUD.list_print()
+        
+        try:
+            bot_id = int(input("\n请输入要删除的Bot ID: "))
+            return BotCRUD.delete(bot_id)
+        except ValueError as e:
+            print(f"❌ 输入错误: {e}")
+            return False

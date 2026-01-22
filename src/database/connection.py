@@ -10,15 +10,29 @@ from config import settings
 from src.models.database import Base
 
 
+# Determine connect_args based on database type
+def get_connect_args(database_url: str) -> dict:
+    """Get database-specific connection arguments"""
+    if database_url.startswith("sqlite"):
+        # SQLite doesn't support connect_timeout
+        return {"check_same_thread": False}
+    elif database_url.startswith("postgresql") or database_url.startswith("postgres"):
+        return {"connect_timeout": 10}
+    else:
+        return {}
+
+
 # Create database engine
+_connect_args = get_connect_args(settings.database_url)
+_is_sqlite = settings.database_url.startswith("sqlite")
+
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
     echo=settings.debug,
-    pool_timeout=30,  # 连接池超时
-    pool_recycle=1800,  # 连接回收时间
-    connect_args={"connect_timeout": 10}  # 连接超时
-
+    # SQLite doesn't support pool_timeout and pool_recycle the same way
+    **({} if _is_sqlite else {"pool_timeout": 30, "pool_recycle": 1800}),
+    connect_args=_connect_args
 )
 
 # Create session factory
