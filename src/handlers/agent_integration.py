@@ -233,7 +233,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             
             chat_context = ChatContext(
                 chat_id=str(chat_id),
-                conversation_history=history_messages
+                conversation_history=history_messages,
+                system_prompt=system_prompt
             )
             
             # 使用编排器处理消息
@@ -257,30 +258,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     reply_markup=keyboard
                 )
             else:
-                # 如果是直接响应且有system_prompt，使用conversation_service重新生成
-                if result.intent_type == IntentType.DIRECT_RESPONSE and system_prompt:
-                    # 构建对话历史（用于conversation_service）
-                    # 重用已经获取的recent_conversations
-                    history = []
-                    if db_user and recent_conversations:
-                        # 构建对话历史
-                        for conv in reversed(recent_conversations):
-                            if conv.is_user_message:
-                                history.append({"role": "user", "content": conv.message})
-                            else:
-                                history.append({"role": "assistant", "content": conv.response})
-                    
-                    # 添加系统提示（已经在外层条件检查过了，这里不需要再检查）
-                    history.insert(0, {"role": "system", "content": system_prompt})
-                    
-                    # 使用conversation_service生成响应
-                    response = await conversation_service.get_response(
-                        user_message=message_text,
-                        conversation_history=history
-                    )
-                else:
-                    # 使用编排器的响应
-                    response = result.final_response
+                # 使用编排器的响应
+                response = result.final_response
                 await message.reply_text(response)
                 
                 # 保存对话到数据库

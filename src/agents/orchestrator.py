@@ -380,8 +380,14 @@ class AgentOrchestrator:
             # 使用LLM直接回复
             if self.llm_provider:
                 try:
+                    messages = []
+                    # 添加 system prompt（如果有）
+                    if context and context.system_prompt:
+                        messages.append({"role": "system", "content": context.system_prompt})
+                    messages.append({"role": "user", "content": message.content})
+                    
                     result.final_response = await self.llm_provider.generate_response(
-                        [{"role": "user", "content": message.content}],
+                        messages,
                         context=None
                     )
                 except Exception as e:
