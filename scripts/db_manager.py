@@ -32,6 +32,7 @@ SoulmateBot 数据库管理工具
 
 import sys
 import os
+import time
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,9 +56,6 @@ class DatabaseManager:
 
     def rebuild(self, confirm: bool = False) -> bool:
         """重建数据库：删除所有表并重新创建"""
-        import sys
-        import time
-        
         print("\n" + "=" * 60)
         print("🗑️  数据库重建工具")
         print("=" * 60)
@@ -780,8 +778,6 @@ class DatabaseManager:
 
     def status(self) -> None:
         """显示数据库状态"""
-        import sys
-        
         print("\n" + "=" * 60)
         print("📊 数据库状态")
         print("=" * 60)

@@ -291,8 +291,6 @@ def create_bot_directory(
     Returns:
         bool: 创建成功返回True
     """
-    import sys
-    
     # 获取项目根目录
     project_root = Path(__file__).parent.parent
     bots_dir = project_root / "bots"
