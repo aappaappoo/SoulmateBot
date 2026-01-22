@@ -241,7 +241,9 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             orchestrator = get_orchestrator()
             result = await orchestrator.process(agent_message, chat_context)
             
-            logger.info(f"🎯 Intent type: {result.intent_type}")
+            # 日志记录意图类型和来源
+            intent_source = result.metadata.get("intent_source", "unknown")
+            logger.info(f"🎯 Intent type: {result.intent_type} | Source: {intent_source}")
             logger.info(f"📋 Selected agents: {result.selected_agents}")
             
             # 处理不同类型的结果
