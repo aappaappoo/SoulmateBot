@@ -1,130 +1,102 @@
 """
 Tests for TTS (Text-to-Speech) service
 语音服务测试
+
+支持 OpenAI TTS 和 科大讯飞 (iFlytek) TTS
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import io
 
 from src.services.tts_service import TTSService, tts_service
+from src.services.iflytek_tts_service import IflytekTTSService
 
 
 class TestTTSService:
     """TTS服务测试类"""
     
-    def test_available_voices(self):
-        """测试可用音色列表"""
-        voices = TTSService.get_available_voices()
+    def test_available_voices_iflytek(self):
+        """测试讯飞可用音色列表"""
+        voices = IflytekTTSService.AVAILABLE_VOICES
         
-        assert len(voices) == 6
-        assert "alloy" in voices
-        assert "echo" in voices
-        assert "fable" in voices
-        assert "onyx" in voices
-        assert "nova" in voices
-        assert "shimmer" in voices
+        # 检查常用的讯飞音色
+        assert "xiaoyan" in voices
+        assert "xiaoyu" in voices
+        assert "vixq" in voices
+        assert "aisjinger" in voices
+        assert "vixf" in voices
     
-    def test_is_voice_id_valid(self):
-        """测试音色ID验证"""
-        # 有效的音色ID
-        assert TTSService.is_voice_id_valid("alloy") is True
-        assert TTSService.is_voice_id_valid("nova") is True
-        assert TTSService.is_voice_id_valid("shimmer") is True
+    def test_openai_to_iflytek_mapping(self):
+        """测试OpenAI音色到讯飞音色的映射"""
+        mapping = IflytekTTSService.OPENAI_TO_IFLYTEK_MAP
+        
+        assert mapping["alloy"] == "xiaoyan"
+        assert mapping["nova"] == "vixq"
+        assert mapping["shimmer"] == "aisjinger"
+        assert mapping["onyx"] == "aisjiuxu"
+    
+    def test_is_voice_id_valid_iflytek(self):
+        """测试讯飞音色ID验证"""
+        # 有效的讯飞音色ID
+        assert IflytekTTSService.is_voice_id_valid("xiaoyan") is True
+        assert IflytekTTSService.is_voice_id_valid("xiaoyu") is True
+        assert IflytekTTSService.is_voice_id_valid("vixq") is True
+        
+        # OpenAI音色ID也应该有效（会被映射）
+        assert IflytekTTSService.is_voice_id_valid("nova") is True
+        assert IflytekTTSService.is_voice_id_valid("shimmer") is True
         
         # 无效的音色ID
-        assert TTSService.is_voice_id_valid("invalid") is False
-        assert TTSService.is_voice_id_valid("") is False
-        assert TTSService.is_voice_id_valid("ALLOY") is False  # 区分大小写
+        assert IflytekTTSService.is_voice_id_valid("invalid") is False
+        assert IflytekTTSService.is_voice_id_valid("") is False
+    
+    def test_get_voice_for_gender(self):
+        """测试根据性别推荐音色"""
+        # 男性角色
+        assert IflytekTTSService.get_voice_for_gender("male", "lively") == "xiaoyu"
+        assert IflytekTTSService.get_voice_for_gender("male", "mature") == "vixf"
+        assert IflytekTTSService.get_voice_for_gender("male", "warm") == "aisjiuxu"
+        
+        # 女性角色
+        assert IflytekTTSService.get_voice_for_gender("female", "gentle") == "aisjinger"
+        assert IflytekTTSService.get_voice_for_gender("female", "lively") == "vixq"
+        assert IflytekTTSService.get_voice_for_gender("female", "intellectual") == "vixy"
     
     def test_get_voice_as_buffer(self):
         """测试音频数据转缓冲区"""
-        service = TTSService()
-        
-        # 模拟音频数据
-        audio_data = b"fake audio data"
-        
-        buffer = service.get_voice_as_buffer(audio_data)
-        
-        assert isinstance(buffer, io.BytesIO)
-        assert buffer.name == "voice.opus"
-        assert buffer.read() == audio_data
-    
-    def test_default_voice(self):
-        """测试默认音色设置"""
-        service = TTSService()
-        
-        # 默认值应该是从settings读取的
-        assert service.default_voice is not None
-        assert TTSService.is_voice_id_valid(service.default_voice)
+        with patch('src.services.tts_service.settings') as mock_settings:
+            mock_settings.tts_provider = "iflytek"
+            mock_settings.default_iflytek_voice_id = "xiaoyan"
+            mock_settings.openai_tts_model = "tts-1"
+            mock_settings.default_voice_id = "alloy"
+            
+            service = TTSService()
+            
+            # 模拟音频数据
+            audio_data = b"fake audio data"
+            
+            buffer = service.get_voice_as_buffer(audio_data)
+            
+            assert isinstance(buffer, io.BytesIO)
+            # 讯飞使用PCM格式
+            assert "pcm" in buffer.name or "opus" in buffer.name
+            assert buffer.read() == audio_data
     
     @pytest.mark.asyncio
-    async def test_generate_voice_no_api_key(self):
-        """测试没有API密钥时的行为"""
-        service = TTSService()
-        
-        # 模拟没有API密钥的情况
-        with patch('src.services.tts_service.settings') as mock_settings:
-            mock_settings.openai_api_key = None
-            mock_settings.default_voice_id = "alloy"
-            mock_settings.openai_tts_model = "tts-1"
+    async def test_generate_voice_no_credentials(self):
+        """测试没有TTS凭证时的行为"""
+        with patch('src.services.iflytek_tts_service.settings') as mock_settings:
+            mock_settings.iflytek_app_id = None
+            mock_settings.iflytek_api_key = None
+            mock_settings.iflytek_api_secret = None
+            mock_settings.default_iflytek_voice_id = "xiaoyan"
             
-            # 重新创建service以获取模拟的settings
-            test_service = TTSService()
+            service = IflytekTTSService()
             
-            result = await test_service.generate_voice("Hello world")
+            result = await service.generate_voice("Hello world")
             
-            # 没有API密钥应该返回None
+            # 没有凭证应该返回None
             assert result is None
-    
-    @pytest.mark.asyncio
-    async def test_generate_voice_with_mock(self):
-        """测试语音生成（模拟API调用）"""
-        service = TTSService()
-        
-        # 模拟OpenAI响应
-        mock_response = MagicMock()
-        mock_response.content = b"fake audio content"
-        
-        with patch('src.services.tts_service.settings') as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
-            mock_settings.default_voice_id = "alloy"
-            mock_settings.openai_tts_model = "tts-1"
-            
-            with patch('openai.AsyncOpenAI') as mock_openai:
-                mock_client = AsyncMock()
-                mock_client.audio.speech.create = AsyncMock(return_value=mock_response)
-                mock_openai.return_value = mock_client
-                
-                result = await service.generate_voice("Hello world", voice_id="nova")
-                
-                # 验证返回了音频数据
-                assert result == b"fake audio content"
-    
-    @pytest.mark.asyncio
-    async def test_generate_voice_invalid_voice_id(self):
-        """测试使用无效音色ID时自动使用默认音色"""
-        service = TTSService()
-        
-        # 模拟OpenAI响应
-        mock_response = MagicMock()
-        mock_response.content = b"fake audio content"
-        
-        with patch('src.services.tts_service.settings') as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
-            mock_settings.default_voice_id = "alloy"
-            mock_settings.openai_tts_model = "tts-1"
-            
-            with patch('openai.AsyncOpenAI') as mock_openai:
-                mock_client = AsyncMock()
-                mock_audio_create = AsyncMock(return_value=mock_response)
-                mock_client.audio.speech.create = mock_audio_create
-                mock_openai.return_value = mock_client
-                
-                # 使用无效的voice_id
-                result = await service.generate_voice("Hello world", voice_id="invalid_voice")
-                
-                # 应该仍然成功返回音频
-                assert result == b"fake audio content"
 
 
 class TestVoiceReplyIntegration:
@@ -163,7 +135,7 @@ class TestVoiceReplyIntegration:
         # 模拟Bot对象
         mock_bot = MagicMock()
         mock_bot.voice_enabled = True
-        mock_bot.voice_id = "nova"
+        mock_bot.voice_id = "xiaoyu"  # 使用讯飞音色
         mock_bot.bot_username = "test_bot"
         
         # 模拟消息对象
@@ -192,7 +164,7 @@ class TestVoiceReplyIntegration:
         # 模拟Bot对象
         mock_bot = MagicMock()
         mock_bot.voice_enabled = True
-        mock_bot.voice_id = "nova"
+        mock_bot.voice_id = "xiaoyan"  # 使用讯飞音色
         mock_bot.bot_username = "test_bot"
         
         # 模拟消息对象

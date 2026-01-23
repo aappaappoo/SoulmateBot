@@ -176,13 +176,15 @@ ai:
 # 启用后，Bot将使用TTS将文本回复转换为语音发送
 voice:
   enabled: false  # 是否启用语音回复
-  voice_id: "nova"  # 语音音色ID，可选值：alloy, echo, fable, onyx, nova, shimmer
-  # alloy: 中性，平衡的声音
-  # echo: 柔和，有质感的声音
-  # fable: 英式口音，叙事风格
-  # onyx: 深沉，有力的声音
-  # nova: 年轻，活泼的声音
-  # shimmer: 温暖，表达力强的声音
+  voice_id: "xiaoyu"  # 科大讯飞语音音色ID
+  # 科大讯飞可用音色说明：
+  # xiaoyan: 小燕，青年女声，温柔亲切
+  # xiaoyu: 小宇，青年男声，阳光开朗 (推荐用于幽默男性角色)
+  # vixy: 小研，青年女声，知性大方
+  # vixq: 小琪，青年女声，活泼可爱
+  # vixf: 小峰，青年男声，成熟稳重
+  # aisjinger: 小婧，青年女声，温婉动人
+  # aisjiuxu: 许久，青年男声，温暖磁性
 
 # 系统提示词配置
 prompt:

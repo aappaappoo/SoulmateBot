@@ -149,16 +149,21 @@ class VoiceConfig:
     
     启用后，Bot将使用TTS将文本回复转换为语音发送
     
-    可用音色 (voice_id):
-    - alloy: 中性，平衡的声音
-    - echo: 柔和，有质感的声音  
-    - fable: 英式口音，叙事风格
-    - onyx: 深沉，有力的声音
-    - nova: 年轻，活泼的声音
-    - shimmer: 温暖，表达力强的声音
+    科大讯飞可用音色 (voice_id):
+    - xiaoyan: 小燕，青年女声，温柔亲切
+    - xiaoyu: 小宇，青年男声，阳光开朗
+    - vixy: 小研，青年女声，知性大方
+    - vixq: 小琪，青年女声，活泼可爱
+    - vixf: 小峰，青年男声，成熟稳重
+    - aisjinger: 小婧，青年女声，温婉动人
+    - aisjiuxu: 许久，青年男声，温暖磁性
+    - vinn: 楠楠，童年女声，可爱甜美
+    - aisxping: 小萍，青年女声，甜美清新
+    
+    (兼容OpenAI音色ID: alloy, echo, fable, onyx, nova, shimmer，会自动映射到对应讯飞音色)
     """
     enabled: bool = False  # 是否启用语音回复
-    voice_id: str = "alloy"  # 语音音色ID
+    voice_id: str = "xiaoyan"  # 语音音色ID（默认使用讯飞音色）
 
 
 @dataclass
