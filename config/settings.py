@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     rate_limit_messages_per_minute: int = 10
     rate_limit_images_per_hour: int = 5
 
+    # Voice/TTS Configuration
+    openai_tts_model: str = "tts-1"  # OpenAI TTS模型：tts-1 或 tts-1-hd
+    default_voice_id: str = "alloy"  # 默认语音音色：alloy, echo, fable, onyx, nova, shimmer
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

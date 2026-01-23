@@ -11,7 +11,8 @@ from loguru import logger
 from src.database import get_async_db_context
 from src.subscription.async_service import AsyncSubscriptionService
 from src.services.async_channel_manager import AsyncChannelManagerService
-from src. services.message_router import MessageRouter
+from src.services.message_router import MessageRouter
+from src.utils.voice_helper import send_voice_or_text_reply
 from src.models.database import Conversation
 from src.ai import conversation_service
 
@@ -164,6 +165,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     conversation_history=history
                 )
 
+                # 发送响应（根据Bot设置决定是语音还是文本）
+                message_type = await send_voice_or_text_reply(
+                    message=message,
+                    response=response,
+                    bot=selected_bot,
+                    subscription_service=subscription_service,
+                    db_user=db_user
+                )
+                logger.info(f"✅ Successfully replied to user {user.id} with bot @{selected_bot.bot_username} (type: {message_type})")
+
                 # 保存用户消息到数据库
                 user_conv = Conversation(
                     user_id=db_user.id,
@@ -172,27 +183,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     is_user_message=True,
                     message_type="text"
                 )
-                db. add(user_conv)
+                db.add(user_conv)
 
-                # 保存机器人回复到数据库
+                # 保存机器人回复到数据库（记录消息类型）
                 bot_conv = Conversation(
                     user_id=db_user.id,
                     message=message_text,
                     response=response,
                     is_user_message=False,
-                    message_type="text"
+                    message_type=message_type
                 )
                 db.add(bot_conv)
 
                 # 记录使用量
                 await subscription_service.record_usage(db_user, action_type="message")
 
-                # 提交事务（由上下文管理���自动处理）
+                # 提交事务（由上下文管理器自动处理）
                 await db.commit()
-
-                # 发送响应
-                await message.reply_text(response)
-                logger.info(f"✅ Successfully replied to user {user.id} with bot @{selected_bot.bot_username}")
 
             except Exception as e:
                 logger.error(f"❌ Error getting AI response: {str(e)}", exc_info=True)

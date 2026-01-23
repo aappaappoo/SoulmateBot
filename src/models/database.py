@@ -229,6 +229,10 @@ class Bot(Base):
     # 机器人设置（JSON存储）
     settings = Column(JSON, default={}, comment="其他配置项，如temperature、max_tokens等")
     
+    # 语音配置
+    voice_enabled = Column(Boolean, default=False, comment="是否启用语音回复功能")
+    voice_id = Column(String(100), nullable=True, comment="语音音色ID，如OpenAI TTS的voice参数：alloy, echo, fable, onyx, nova, shimmer")
+    
     # 状态和归属
     status = Column(String(20), default=BotStatus.ACTIVE.value, comment="机器人状态：active/inactive/maintenance")
     is_public = Column(Boolean, default=True, comment="是否可被其他用户添加到频道")

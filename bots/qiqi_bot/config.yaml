@@ -174,6 +174,13 @@ ai:
   max_tokens: 800
   context_window: 4096
 
+# 语音配置
+# 启用后，Bot将使用TTS将文本回复转换为语音发送
+voice:
+  enabled: false  # 是否启用语音回复
+  voice_id: "shimmer"  # 语音音色ID，shimmer: 温暖，表达力强的声音
+  # 可选值：alloy, echo, fable, onyx, nova, shimmer
+
 # 系统提示词配置
 prompt:
   template: "gentle_companion"

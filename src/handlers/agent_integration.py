@@ -8,6 +8,7 @@ Integrated Message Handler with Agent Orchestrator
 2. 支持技能选择（生成Telegram按钮）
 3. 处理技能回调
 4. 与现有消息处理流程无缝集成
+5. 支持语音回复功能（当Bot启用语音时）
 """
 from typing import Optional, Dict, Any, List
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -19,6 +20,7 @@ from src.database import get_async_db_context
 from src.subscription.async_service import AsyncSubscriptionService
 from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
+from src.utils.voice_helper import send_voice_or_text_reply
 from src.models.database import Conversation
 from src.ai import conversation_service
 from src.agents import (
@@ -262,7 +264,15 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             else:
                 # 使用编排器的响应
                 response = result.final_response
-                await message.reply_text(response)
+                
+                # 发送回复（根据Bot设置决定是语音还是文本）
+                message_type = await send_voice_or_text_reply(
+                    message=message,
+                    response=response,
+                    bot=selected_bot,
+                    subscription_service=subscription_service if db_user else None,
+                    db_user=db_user
+                )
                 
                 # 保存对话到数据库
                 if db_user and response:
@@ -276,13 +286,13 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     )
                     db.add(user_conv)
                     
-                    # 保存机器人回复
+                    # 保存机器人回复（记录消息类型）
                     bot_conv = Conversation(
                         user_id=db_user.id,
                         message=message_text,
                         response=response,
                         is_user_message=False,
-                        message_type="text"
+                        message_type=message_type
                     )
                     db.add(bot_conv)
                     
