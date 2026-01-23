@@ -3,9 +3,14 @@ Agent基础类接口
 
 所有Agent都必须继承并实现这个基类。
 这是多Agent系统的核心抽象，定义了Agent的标准接口。
+
+Agent的设计理念：
+- Agent是技能的载体，专注于提供特定领域的能力
+- Bot是人格的外壳，拥有独特的性格、外貌、口头禅等特征
+- Bot通过配置选择启用哪些Agent的技能
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from .models import Message, ChatContext, AgentResponse
 
 
@@ -158,6 +163,67 @@ class BaseAgent(ABC):
         - 避免存储敏感信息
         """
         pass
+    
+    @property
+    def skills(self) -> List[str]:
+        """
+        Agent提供的技能列表
+        
+        返回值:
+            List[str]: 技能ID列表
+            
+        说明:
+            Agent可以提供多个技能，每个技能对应Bot配置中的skill_id。
+            默认返回空列表，子类可以重写此属性提供具体技能。
+            
+        示例:
+            ["emotional_support", "mood_tracking"]
+        """
+        return []
+    
+    @property
+    def skill_keywords(self) -> Dict[str, List[str]]:
+        """
+        技能对应的关键词映射
+        
+        返回值:
+            Dict[str, List[str]]: 技能ID到关键词列表的映射
+            
+        说明:
+            用于自动匹配用户消息中的关键词来确定调用哪个技能。
+            默认返回空字典，子类可以重写此属性。
+            
+        示例:
+            {
+                "emotional_support": ["难过", "开心", "焦虑"],
+                "mood_tracking": ["心情", "情绪", "记录"]
+            }
+        """
+        return {}
+    
+    def get_skill_description(self, skill_id: str) -> Optional[str]:
+        """
+        获取指定技能的描述
+        
+        参数:
+            skill_id: 技能ID
+            
+        返回值:
+            Optional[str]: 技能描述，如果技能不存在返回None
+        """
+        return None
+    
+    def can_provide_skill(self, skill_id: str) -> bool:
+        """
+        判断Agent是否能提供指定技能
+        
+        参数:
+            skill_id: 技能ID
+            
+        返回值:
+            bool: 是否能提供该技能
+        """
+        return skill_id in self.skills
     
     def __repr__(self) -> str:
         """Agent的字符串表示"""
