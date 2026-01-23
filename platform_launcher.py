@@ -3,7 +3,7 @@
 Multi-Bot Platform Launcher
 
 使用方式:
-    # 运行默认 Bot（使用 python main_bot_launcher.py 配置）
+    # 运行默认 Bot（使用 main.py 配置）
     python platform_launcher.py
     
     # 运行指定 Bot
@@ -127,7 +127,7 @@ def main():
         except KeyboardInterrupt:
             logger.info("Bot stopped by user")
     else:
-        # 运行默认配置（使用原有的 python main_bot_launcher.py 逻辑）
+        # 运行默认配置（使用原有的 main.py 逻辑）
         from src.bot import SoulmateBot
         
         logger.info("Starting default bot...")
