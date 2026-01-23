@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     # Voice/TTS Configuration
     openai_tts_model: str = "tts-1"  # OpenAI TTS模型：tts-1 或 tts-1-hd
     default_voice_id: str = "alloy"  # 默认语音音色：alloy, echo, fable, onyx, nova, shimmer
+    
+    # iFlytek (科大讯飞) TTS Configuration
+    iflytek_app_id: Optional[str] = None  # 讯飞应用ID
+    iflytek_api_key: Optional[str] = None  # 讯飞API Key
+    iflytek_api_secret: Optional[str] = None  # 讯飞API Secret
+    default_iflytek_voice_id: str = "xiaoyan"  # 默认讯飞语音音色
+    tts_provider: str = "iflytek"  # TTS服务提供商：openai 或 iflytek
 
     class Config:
         env_file = ".env"

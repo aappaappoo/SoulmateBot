@@ -336,7 +336,7 @@ python -m scripts.db_manager all
 ### 4. 启动机器人
 
 ```bash
-python python main_bot_launcher.py
+python main.py
 ```
 
 ---
@@ -465,37 +465,59 @@ register_skill(
 
 SoulmateBot 支持为每个 Bot 配置独立的语音回复功能。当启用时，Bot 的文本回复会自动转换为语音消息发送给用户。
 
-### 可用音色
+### TTS 服务提供商
 
-| 音色ID | 特点 | 适用场景 |
-|--------|------|----------|
-| `alloy` | 中性，平衡 | 通用场景 |
-| `echo` | 柔和，有质感 | 温柔型Bot |
-| `fable` | 英式口音，叙事风格 | 故事讲述 |
-| `onyx` | 深沉，有力 | 专业顾问 |
-| `nova` | 年轻，活泼 | 活泼型Bot |
-| `shimmer` | 温暖，表达力强 | 情感陪伴 |
+系统支持两种 TTS 服务提供商：
+
+- **科大讯飞 (iFlytek)** - 推荐使用，支持丰富的中文音色
+- **OpenAI TTS** - 备选方案
+
+### 科大讯飞可用音色（推荐）
+
+| 音色ID | 名称 | 性别 | 特点 | 适用场景 |
+|--------|------|------|------|----------|
+| `xiaoyan` | 小燕 | 女 | 温柔亲切 | 通用女声 |
+| `xiaoyu` | 小宇 | 男 | 阳光开朗 | 幽默/活泼男性角色 |
+| `vixy` | 小研 | 女 | 知性大方 | 专业顾问 |
+| `vixq` | 小琪 | 女 | 活泼可爱 | 活泼可爱角色 |
+| `vixf` | 小峰 | 男 | 成熟稳重 | 专业/成熟男性角色 |
+| `aisjinger` | 小婧 | 女 | 温婉动人 | 温柔陪伴型角色 |
+| `aisjiuxu` | 许久 | 男 | 温暖磁性 | 深沉有力角色 |
+| `vinn` | 楠楠 | 女 | 可爱甜美 | 童声角色 |
+| `aisxping` | 小萍 | 女 | 甜美清新 | 年轻女性角色 |
 
 ### 配置方式
 
-在 Bot 的 `config.yaml` 中添加语音配置：
+1. 在 `.env` 文件中配置讯飞 TTS 凭证：
+
+```env
+# 科大讯飞 TTS 配置
+IFLYTEK_APP_ID=your_app_id
+IFLYTEK_API_KEY=your_api_key
+IFLYTEK_API_SECRET=your_api_secret
+DEFAULT_IFLYTEK_VOICE_ID=xiaoyan
+TTS_PROVIDER=iflytek
+```
+
+2. 在 Bot 的 `config.yaml` 中配置语音：
 
 ```yaml
 # 语音配置
 voice:
-  enabled: true       # 启用语音回复
-  voice_id: "nova"    # 语音音色ID
+  enabled: true          # 启用语音回复
+  voice_id: "xiaoyu"     # 科大讯飞音色ID
 ```
 
-或者通过数据库直接设置 Bot 的 `voice_enabled` 和 `voice_id` 字段。
+### 音色推荐
 
-### 数据库迁移
+根据 Bot 角色特点选择合适的音色：
 
-如果是升级现有系统，需要运行迁移脚本：
-
-```bash
-python migrations/add_voice_settings_to_bot.py
-```
+| Bot类型 | 推荐音色 |
+|---------|----------|
+| 幽默男性角色 | `xiaoyu` (小宇，阳光开朗) |
+| 温柔女性角色 | `aisjinger` (小婧，温婉动人) |
+| 活泼可爱角色 | `vixq` (小琪，活泼可爱) |
+| 专业顾问 | `vixy` (小研，知性大方) 或 `vixf` (小峰) |
 
 ---
 
@@ -511,7 +533,17 @@ python migrations/add_voice_settings_to_bot.py
 | `ANTHROPIC_API_KEY` | Anthropic API密钥 | `sk-ant-...` |
 | `VLLM_API_URL` | vLLM服务地址 | `http://localhost:8000` |
 
-### 可选配置
+### TTS 语音配置
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `TTS_PROVIDER` | TTS服务提供商 | `iflytek` |
+| `IFLYTEK_APP_ID` | 讯飞应用ID | - |
+| `IFLYTEK_API_KEY` | 讯飞API Key | - |
+| `IFLYTEK_API_SECRET` | 讯飞API Secret | - |
+| `DEFAULT_IFLYTEK_VOICE_ID` | 默认讯飞音色 | `xiaoyan` |
+
+### 其他可选配置
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
@@ -519,8 +551,6 @@ python migrations/add_voice_settings_to_bot.py
 | `FREE_PLAN_DAILY_LIMIT` | 免费版日限额 | 10 |
 | `BASIC_PLAN_DAILY_LIMIT` | 基础版日限额 | 100 |
 | `PREMIUM_PLAN_DAILY_LIMIT` | 高级版日限额 | 1000 |
-| `OPENAI_TTS_MODEL` | TTS模型 | `tts-1` |
-| `DEFAULT_VOICE_ID` | 默认语音音色 | `alloy` |
 
 ---
 
@@ -693,9 +723,15 @@ python migrations/migrate_to_multibot.py
 
 ## 📝 更新日志
 
-### v0.4.0 (当前)
+### v0.5.0 (当前)
+- ✅ 语音合成切换到科大讯飞 (iFlytek) TTS
+- ✅ 支持多种中文音色（小燕、小宇、小琪、小婧等）
+- ✅ 根据Bot角色自动推荐合适的音色
+- ✅ 兼容OpenAI音色ID（自动映射到讯飞音色）
+
+### v0.4.0
 - ✅ 新增语音回复功能，支持TTS将文本转语音
-- ✅ 每个Bot可配置独立的音色（alloy, echo, fable, onyx, nova, shimmer）
+- ✅ 每个Bot可配置独立的音色
 - ✅ 新增语音配置字段（voice_enabled, voice_id）
 - ✅ 语音生成失败时自动回退到文本回复
 
