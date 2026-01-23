@@ -96,7 +96,7 @@ class PersonalityConfig:
     
     # 外貌特征
     appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
-    
+
     # 口头禅
     catchphrases: List[str] = field(default_factory=list)
     
