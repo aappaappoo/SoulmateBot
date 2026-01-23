@@ -14,9 +14,9 @@ class Environment(str, Enum):
 
 class Settings(BaseSettings):
     # Telegram Configuration
-    telegram_bot_token: str
+    telegram_bot_token: Optional[str] = None
     telegram_webhook_url: Optional[str] = None
-    
+
     # AI Provider Configuration
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4"
@@ -25,20 +25,20 @@ class Settings(BaseSettings):
     vllm_api_url: Optional[str] = None
     vllm_api_token: Optional[str] = None
     vllm_model: str = "default"
-    
+
     # Database Configuration
     database_url: str = "sqlite:///./soulmatebot.db"
     redis_url: Optional[str] = None
-    
+
     # Application Configuration
     app_env: Environment = Environment.DEVELOPMENT
     debug: bool = True
     log_level: str = "INFO"
-    
+
     # Subscription Configuration
     stripe_api_key: Optional[str] = None
     stripe_webhook_secret: Optional[str] = None
-    
+
     # WeChat Pay Configuration
     wechat_pay_app_id: Optional[str] = None
     wechat_pay_mch_id: Optional[str] = None
@@ -47,20 +47,20 @@ class Settings(BaseSettings):
     wechat_pay_cert_serial_no: Optional[str] = None
     wechat_pay_private_key_path: Optional[str] = None
     wechat_pay_notify_url: Optional[str] = None
-    
+
     # Subscription Limits
     free_plan_daily_limit: int = 100
     basic_plan_daily_limit: int = 100
     premium_plan_daily_limit: int = 1000
-    
+
     # Security
     secret_key: str = "change-me-in-production"
     admin_user_ids: List[int] = []
-    
+
     # Rate Limiting
     rate_limit_messages_per_minute: int = 10
     rate_limit_images_per_hour: int = 5
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
