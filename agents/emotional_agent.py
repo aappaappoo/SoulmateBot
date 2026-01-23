@@ -185,12 +185,14 @@ class EmotionalAgent(BaseAgent):
         """
         if interaction_count == 0:
             return (
+                "⬇️_respond_to_sadness固定模板"
                 "很抱歉你现在感到难过。感到悲伤是很正常的，"
                 "每个人都会有情绪低落的时候。"
                 "你愿意和我聊聊是什么让你烦恼吗？我在这里倾听。"
             )
         else:
             return (
+                "⬇️_respond_to_sadness固定模板"
                 "我理解你正在经历一段艰难的时期。"
                 "请记住，这些感受是暂时的，而且你愿意分享已经很勇敢了。"
                 "现在有什么能让你感觉好一点的吗？"

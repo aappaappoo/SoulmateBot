@@ -5,7 +5,7 @@ bot:
   # 基础信息
   name: "solin_bot"
   description: "温暖的情感陪伴助手，倾听你的心声"
-
+  
   # Bot类型：companion（陪伴）, assistant（助手）, service（客服）
   type: "companion"
   
@@ -279,6 +279,7 @@ messages:
     
     明天再来和我聊天吧！
     或者升级订阅获取更多额度。
+
 
 
 # 元数据
