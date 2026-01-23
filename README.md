@@ -43,6 +43,7 @@
 | 📊 **订阅管理** | 完整的订阅系统和使用限额管理 |
 | 💳 **支付集成** | 支持微信支付和 Stripe |
 | 🗄️ **记忆系统** | 用户记忆持久化，提供个性化服务 |
+| 🎤 **语音回复** | 支持TTS语音回复，每个Bot可配置不同音色 |
 
 ### 🧠 内置Agent
 
@@ -460,6 +461,44 @@ register_skill(
 
 ---
 
+## 🎤 语音回复系统
+
+SoulmateBot 支持为每个 Bot 配置独立的语音回复功能。当启用时，Bot 的文本回复会自动转换为语音消息发送给用户。
+
+### 可用音色
+
+| 音色ID | 特点 | 适用场景 |
+|--------|------|----------|
+| `alloy` | 中性，平衡 | 通用场景 |
+| `echo` | 柔和，有质感 | 温柔型Bot |
+| `fable` | 英式口音，叙事风格 | 故事讲述 |
+| `onyx` | 深沉，有力 | 专业顾问 |
+| `nova` | 年轻，活泼 | 活泼型Bot |
+| `shimmer` | 温暖，表达力强 | 情感陪伴 |
+
+### 配置方式
+
+在 Bot 的 `config.yaml` 中添加语音配置：
+
+```yaml
+# 语音配置
+voice:
+  enabled: true       # 启用语音回复
+  voice_id: "nova"    # 语音音色ID
+```
+
+或者通过数据库直接设置 Bot 的 `voice_enabled` 和 `voice_id` 字段。
+
+### 数据库迁移
+
+如果是升级现有系统，需要运行迁移脚本：
+
+```bash
+python migrations/add_voice_settings_to_bot.py
+```
+
+---
+
 ## ⚙️ 配置说明
 
 ### 必要配置
@@ -480,6 +519,8 @@ register_skill(
 | `FREE_PLAN_DAILY_LIMIT` | 免费版日限额 | 10 |
 | `BASIC_PLAN_DAILY_LIMIT` | 基础版日限额 | 100 |
 | `PREMIUM_PLAN_DAILY_LIMIT` | 高级版日限额 | 1000 |
+| `OPENAI_TTS_MODEL` | TTS模型 | `tts-1` |
+| `DEFAULT_VOICE_ID` | 默认语音音色 | `alloy` |
 
 ---
 
@@ -652,7 +693,13 @@ python migrations/migrate_to_multibot.py
 
 ## 📝 更新日志
 
-### v0.3.0 (当前)
+### v0.4.0 (当前)
+- ✅ 新增语音回复功能，支持TTS将文本转语音
+- ✅ 每个Bot可配置独立的音色（alloy, echo, fable, onyx, nova, shimmer）
+- ✅ 新增语音配置字段（voice_enabled, voice_id）
+- ✅ 语音生成失败时自动回退到文本回复
+
+### v0.3.0
 - ✅ 新增意图识别来源追踪（规则/LLM/回退）
 - ✅ 新增商业价值Agent：金融、健康、法律、教育
 - ✅ 完善Skills技能系统

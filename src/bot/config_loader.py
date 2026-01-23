@@ -143,6 +143,25 @@ class SkillsConfig:
 
 
 @dataclass
+class VoiceConfig:
+    """
+    Bot语音配置 - 定义Bot的语音回复设置
+    
+    启用后，Bot将使用TTS将文本回复转换为语音发送
+    
+    可用音色 (voice_id):
+    - alloy: 中性，平衡的声音
+    - echo: 柔和，有质感的声音  
+    - fable: 英式口音，叙事风格
+    - onyx: 深沉，有力的声音
+    - nova: 年轻，活泼的声音
+    - shimmer: 温暖，表达力强的声音
+    """
+    enabled: bool = False  # 是否启用语音回复
+    voice_id: str = "alloy"  # 语音音色ID
+
+
+@dataclass
 class BotConfig:
     """
     Bot完整配置
@@ -170,6 +189,9 @@ class BotConfig:
     
     # Bot技能配置 - 与Agent能力对应
     skills: SkillsConfig = field(default_factory=SkillsConfig)
+    
+    # Bot语音配置 - 定义Bot的语音回复设置
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
     
     # 功能开关
     features_enabled: List[str] = field(default_factory=list)
@@ -367,6 +389,17 @@ class BotConfigLoader:
             default_skill=data.get("default_skill")
         )
     
+    def _parse_voice_config(self, data: Dict) -> VoiceConfig:
+        """
+        解析语音配置
+        
+        配置Bot的语音回复设置
+        """
+        return VoiceConfig(
+            enabled=data.get("enabled", False),
+            voice_id=data.get("voice_id", "alloy")
+        )
+    
     def load_config(self, bot_id: str) -> Optional[BotConfig]:
         """
         加载指定Bot的配置
@@ -409,6 +442,9 @@ class BotConfigLoader:
                 
                 # Bot技能配置 - 与Agent能力对应
                 skills=self._parse_skills_config(data.get("skills", {})),
+                
+                # Bot语音配置 - 语音回复设置
+                voice=self._parse_voice_config(data.get("voice", {})),
                 
                 features_enabled=data.get("features", {}).get("enabled", []),
                 features_disabled=data.get("features", {}).get("disabled", []),
