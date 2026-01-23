@@ -39,7 +39,7 @@ from .base_agent import BaseAgent
 from .router import Router, RouterConfig
 from .loader import AgentLoader
 from .memory import MemoryStore, FileMemoryStore, SQLiteMemoryStore, InMemoryStore
-from .orchestrator import AgentOrchestrator, OrchestratorResult, IntentType, AgentCapability
+from .orchestrator import AgentOrchestrator, OrchestratorResult, IntentType, IntentSource, AgentCapability
 from .skills import (
     Skill, SkillCategory, SkillRegistry, SkillButtonGenerator,
     skill_registry, skill_button_generator, register_skill
@@ -68,6 +68,7 @@ __all__ = [
     "AgentOrchestrator",
     "OrchestratorResult",
     "IntentType",
+    "IntentSource",
     "AgentCapability",
     
     # Skills

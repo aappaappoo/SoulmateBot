@@ -41,10 +41,18 @@ class AgentCapability:
     is_tool: bool = False
 
 
+class IntentSource(str, Enum):
+    """意图识别来源"""
+    RULE_BASED = "rule_based"  # 基于规则（关键词匹配、置信度评分）
+    LLM_BASED = "llm_based"    # 基于大模型推理
+    FALLBACK = "fallback"      # 回退机制
+
+
 @dataclass
 class OrchestratorResult:
     """编排器处理结果"""
     intent_type: IntentType
+    intent_source: IntentSource = IntentSource.RULE_BASED  # 意图识别来源
     selected_agents: List[str] = field(default_factory=list)
     agent_responses: List[AgentResponse] = field(default_factory=list)
     final_response: str = ""
@@ -127,7 +135,7 @@ class AgentOrchestrator:
         self,
         message: Message,
         context: ChatContext
-    ) -> Tuple[IntentType, List[str], Dict[str, Any]]:
+    ) -> Tuple[IntentType, List[str], Dict[str, Any], IntentSource]:
         """
         分析用户消息的意图
         
@@ -138,20 +146,22 @@ class AgentOrchestrator:
             context: 对话上下文
             
         Returns:
-            Tuple[IntentType, List[str], Dict]: (意图类型, 选中的Agent名称列表, 元数据)
+            Tuple[IntentType, List[str], Dict, IntentSource]: 
+                (意图类型, 选中的Agent名称列表, 元数据, 意图识别来源)
         """
         # 首先使用Router的基于规则的置信度评估
         selected_by_confidence = self._router.select_agents(message, context)
         
         # 如果没有LLM提供者，直接使用基于规则的结果
         if not self.llm_provider:
+            logger.info("📌 意图识别来源: 基于规则 (无LLM提供者)")
             if not selected_by_confidence:
-                return IntentType.DIRECT_RESPONSE, [], {}
+                return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.RULE_BASED
             elif len(selected_by_confidence) == 1:
-                return IntentType.SINGLE_AGENT, [selected_by_confidence[0][0].name], {}
+                return IntentType.SINGLE_AGENT, [selected_by_confidence[0][0].name], {}, IntentSource.RULE_BASED
             else:
                 agent_names = [agent.name for agent, _ in selected_by_confidence]
-                return IntentType.MULTI_AGENT, agent_names, {}
+                return IntentType.MULTI_AGENT, agent_names, {}, IntentSource.RULE_BASED
         
         # 使用LLM进行更精确的意图识别
         try:
@@ -191,25 +201,28 @@ class AgentOrchestrator:
                 # 验证Agent名称
                 valid_agents = [a for a in agents if a in self.agents]
                 
-                return intent, valid_agents, metadata
+                logger.info("📌 意图识别来源: 基于LLM推理")
+                return intent, valid_agents, metadata, IntentSource.LLM_BASED
                 
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"解析LLM意图响应失败: {e}")
+                logger.info("📌 意图识别来源: 回退到规则 (LLM解析失败)")
                 # 回退到基于规则的结果
                 if selected_by_confidence:
                     agent_names = [agent.name for agent, _ in selected_by_confidence]
                     intent = IntentType.SINGLE_AGENT if len(agent_names) == 1 else IntentType.MULTI_AGENT
-                    return intent, agent_names, {}
-                return IntentType.DIRECT_RESPONSE, [], {}
+                    return intent, agent_names, {}, IntentSource.FALLBACK
+                return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK
                 
         except Exception as e:
             logger.error(f"LLM意图分析出错: {e}")
+            logger.info("📌 意图识别来源: 回退到规则 (LLM调用失败)")
             # 回退到基于规则的结果
             if selected_by_confidence:
                 agent_names = [agent.name for agent, _ in selected_by_confidence]
                 intent = IntentType.SINGLE_AGENT if len(agent_names) == 1 else IntentType.MULTI_AGENT
-                return intent, agent_names, {}
-            return IntentType.DIRECT_RESPONSE, [], {}
+                return intent, agent_names, {}, IntentSource.FALLBACK
+            return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK
     
     def generate_skill_options(
         self,
@@ -360,11 +373,17 @@ class AgentOrchestrator:
         """
         result = OrchestratorResult(intent_type=IntentType.DIRECT_RESPONSE)
         
-        # 分析意图
-        intent_type, agent_names, metadata = await self.analyze_intent(message, context)
+        # Analyze intent - returns intent type, agent names, metadata, and intent source
+        intent_type, agent_names, metadata, intent_source = await self.analyze_intent(message, context)
         result.intent_type = intent_type
+        result.intent_source = intent_source
         result.selected_agents = agent_names
         result.metadata = metadata
+        
+        # Add intent source to metadata for logging
+        result.metadata["intent_source"] = intent_source.value
+        
+        logger.info(f"🎯 Intent type: {intent_type} | Source: {intent_source.value}")
         
         # 检查是否需要使用技能选择
         if self.enable_skills and (force_skill_selection or len(agent_names) >= self.skill_threshold):

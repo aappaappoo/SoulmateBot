@@ -108,6 +108,46 @@ class SkillRegistry:
                 priority=8
             ),
             Skill(
+                id="finance_advisor",
+                name="金融理财",
+                description="投资理财咨询、股票基金分析、财务规划",
+                category=SkillCategory.ANALYSIS,
+                icon="💰",
+                agent_name="FinanceAgent",
+                keywords=["股票", "基金", "投资", "理财", "财务", "stock", "fund", "invest", "money"],
+                priority=7
+            ),
+            Skill(
+                id="health_advisor",
+                name="健康顾问",
+                description="健康生活指导、运动饮食建议、睡眠改善",
+                category=SkillCategory.OTHER,
+                icon="🏥",
+                agent_name="HealthAgent",
+                keywords=["健康", "运动", "健身", "饮食", "睡眠", "减肥", "health", "fitness", "diet"],
+                priority=6
+            ),
+            Skill(
+                id="legal_advisor",
+                name="法律咨询",
+                description="法律知识科普、权益保护、维权指导",
+                category=SkillCategory.ANALYSIS,
+                icon="⚖️",
+                agent_name="LegalAgent",
+                keywords=["法律", "权益", "合同", "劳动", "维权", "legal", "law", "rights"],
+                priority=5
+            ),
+            Skill(
+                id="education_advisor",
+                name="学习指导",
+                description="学习方法、考试准备、知识问答",
+                category=SkillCategory.OTHER,
+                icon="📚",
+                agent_name="EducationAgent",
+                keywords=["学习", "考试", "备考", "知识", "方法", "study", "learn", "exam"],
+                priority=4
+            ),
+            Skill(
                 id="general_chat",
                 name="日常聊天",
                 description="日常对话，闲聊陪伴",
