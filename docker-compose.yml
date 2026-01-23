@@ -19,7 +19,7 @@ services:
       - soulmatebot-network
     environment:
       - PYTHONPATH=/app
-    command: ["python", "main.py"]
+    command: ["python", "python main_bot_launcher.py"]
 
   # 可选：运行特定Bot的示例服务
   # solin_bot:

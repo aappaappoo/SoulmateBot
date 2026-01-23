@@ -86,7 +86,7 @@ python -c "from src.database import init_db; init_db()"
 ### 步骤 6: 运行机器人
 
 ```bash
-python main.py
+python python main_bot_launcher.py
 ```
 
 成功启动后，你会看到:
@@ -247,7 +247,7 @@ docker-compose up -d
 python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python main.py
+python python main_bot_launcher.py
 ```
 
 #### 步骤 5: 配置进程管理 (systemd)

@@ -179,7 +179,7 @@ cp .env.example .env
 # 编辑 .env 填入配置
 
 # 4. 运行
-python main.py
+python python main_bot_launcher.py
 ```
 
 ### 方式二：Docker

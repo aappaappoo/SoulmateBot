@@ -62,7 +62,7 @@ pip install -r requirements.txt
 ### 步骤 6: 运行机器人
 
 ```bash
-python main.py
+python python main_bot_launcher.py
 ```
 
 看到以下输出表示成功:
@@ -85,7 +85,7 @@ Starting polling...
 
 ```bash
 # 启动机器人
-python main.py
+python python main_bot_launcher.py
 
 # 运行测试
 pytest tests/

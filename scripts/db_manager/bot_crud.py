@@ -719,7 +719,7 @@ class BotCRUD:
                 print(f"   创建者: {user.first_name or user.username}")
                 print("\n📌 下一步:")
                 print("   1. 运行 'python -m scripts.db_manager bind' 绑定到Channel")
-                print("   2. 运行 'python main.py' 启动Bot")
+                print("   2. 运行 'python python main_bot_launcher.py' 启动Bot")
 
             return bot
 

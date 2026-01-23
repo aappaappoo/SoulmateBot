@@ -102,7 +102,7 @@ def main():
         print("✓ All demos completed successfully!")
         print("\nNext steps:")
         print("1. Configure your .env file with Telegram Bot Token and OpenAI API Key")
-        print("2. Run 'python main.py' to start the bot")
+        print("2. Run 'python python main_bot_launcher.py' to start the bot")
         print("3. Test the bot by sending messages in Telegram")
         
     except Exception as e:

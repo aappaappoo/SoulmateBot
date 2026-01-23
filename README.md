@@ -335,7 +335,7 @@ python -m scripts.db_manager all
 ### 4. 启动机器人
 
 ```bash
-python main.py
+python python main_bot_launcher.py
 ```
 
 ---

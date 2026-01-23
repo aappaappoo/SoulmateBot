@@ -104,7 +104,7 @@ cp .env.example .env
 docker-compose up -d
 
 # 或直接运行
-python main.py
+python python main_bot_launcher.py
 ```
 
 ### 3. 创建新 Bot

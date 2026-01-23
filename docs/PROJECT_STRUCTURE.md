@@ -517,7 +517,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env 配置
-python main.py
+python python main_bot_launcher.py
 ```
 
 ### 生产环境（Docker）

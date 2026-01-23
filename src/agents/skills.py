@@ -78,16 +78,6 @@ class SkillRegistry:
         """注册默认技能"""
         default_skills = [
             Skill(
-                id="emotional_support",
-                name="情感支持",
-                description="倾听你的心声，提供情感陪伴和支持",
-                category=SkillCategory.EMOTIONAL,
-                icon="💝",
-                agent_name="EmotionalAgent",
-                keywords=["难过", "开心", "焦虑", "压力", "心情", "feel", "sad", "happy", "孤独", "累", "疲惫"],
-                priority=10
-            ),
-            Skill(
                 id="tech_help",
                 name="技术帮助",
                 description="编程问题解答、代码调试、技术指导",
