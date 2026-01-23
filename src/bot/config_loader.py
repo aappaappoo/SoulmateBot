@@ -75,6 +75,74 @@ class MessagesConfig:
 
 
 @dataclass
+class AppearanceConfig:
+    """外貌特征配置"""
+    avatar: Optional[str] = None  # 头像描述或URL
+    physical_description: str = ""  # 外貌描述
+    style: str = ""  # 穿着风格
+    distinctive_features: List[str] = field(default_factory=list)  # 独特特征
+
+
+@dataclass
+class PersonalityConfig:
+    """
+    Bot人格配置 - 定义Bot的独特个性
+    
+    包含性格、外貌、口头禅、理想、爱好等个人特征
+    """
+    # 性格特点
+    character: str = ""  # 基础人设描述
+    traits: List[str] = field(default_factory=list)  # 性格特点列表
+    
+    # 外貌特征
+    appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
+    
+    # 口头禅
+    catchphrases: List[str] = field(default_factory=list)
+    
+    # 理想和人生规划
+    ideals: str = ""  # 理想
+    life_goals: List[str] = field(default_factory=list)  # 人生规划/目标
+    
+    # 爱好和讨厌点
+    likes: List[str] = field(default_factory=list)  # 喜欢的事物
+    dislikes: List[str] = field(default_factory=list)  # 讨厌的事物
+    
+    # 居住环境
+    living_environment: str = ""  # 居住环境描述
+    
+    # 语言风格
+    speaking_style: Dict[str, Any] = field(default_factory=dict)
+    
+    # 交互偏好
+    interaction_style: Dict[str, Any] = field(default_factory=dict)
+    
+    # 情绪应对策略
+    emotional_response: Dict[str, Any] = field(default_factory=dict)
+    
+    # 安全策略
+    safety_policy: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SkillConfig:
+    """Bot技能配置 - 与Agent能力对应"""
+    id: str  # 技能ID
+    name: str  # 技能显示名称
+    description: str = ""  # 技能描述
+    agent_name: Optional[str] = None  # 关联的Agent名称
+    enabled: bool = True  # 是否启用
+    priority: int = 0  # 优先级
+
+
+@dataclass
+class SkillsConfig:
+    """Bot技能总配置"""
+    enabled: List[SkillConfig] = field(default_factory=list)
+    default_skill: Optional[str] = None  # 默认技能ID
+
+
+@dataclass
 class BotConfig:
     """
     Bot完整配置
@@ -96,6 +164,12 @@ class BotConfig:
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     agents: AgentsConfig = field(default_factory=AgentsConfig)
     messages: MessagesConfig = field(default_factory=MessagesConfig)
+    
+    # Bot人格配置 - 定义Bot的独特个性
+    personality: PersonalityConfig = field(default_factory=PersonalityConfig)
+    
+    # Bot技能配置 - 与Agent能力对应
+    skills: SkillsConfig = field(default_factory=SkillsConfig)
     
     # 功能开关
     features_enabled: List[str] = field(default_factory=list)
@@ -219,6 +293,80 @@ class BotConfigLoader:
             limit_reached=data.get("limit_reached", "今日额度已用完")
         )
     
+    def _parse_appearance_config(self, data: Dict) -> AppearanceConfig:
+        """解析外貌特征配置"""
+        return AppearanceConfig(
+            avatar=data.get("avatar"),
+            physical_description=data.get("physical_description", ""),
+            style=data.get("style", ""),
+            distinctive_features=data.get("distinctive_features", [])
+        )
+    
+    def _parse_personality_config(self, data: Dict) -> PersonalityConfig:
+        """
+        解析人格配置
+        
+        包含性格、外貌、口头禅、理想、爱好等个人特征
+        """
+        appearance_data = data.get("appearance", {})
+        
+        return PersonalityConfig(
+            # 性格特点
+            character=data.get("character", ""),
+            traits=data.get("traits", []),
+            
+            # 外貌特征
+            appearance=self._parse_appearance_config(appearance_data),
+            
+            # 口头禅
+            catchphrases=data.get("catchphrases", []),
+            
+            # 理想和人生规划
+            ideals=data.get("ideals", ""),
+            life_goals=data.get("life_goals", []),
+            
+            # 爱好和讨厌点
+            likes=data.get("likes", []),
+            dislikes=data.get("dislikes", []),
+            
+            # 居住环境
+            living_environment=data.get("living_environment", ""),
+            
+            # 语言风格
+            speaking_style=data.get("speaking_style", {}),
+            
+            # 交互偏好
+            interaction_style=data.get("interaction_style", {}),
+            
+            # 情绪应对策略
+            emotional_response=data.get("emotional_response", {}),
+            
+            # 安全策略
+            safety_policy=data.get("safety_policy", {})
+        )
+    
+    def _parse_skills_config(self, data: Dict) -> SkillsConfig:
+        """
+        解析技能配置
+        
+        技能与Agent能力对应，定义Bot可使用的能力
+        """
+        enabled = []
+        for skill_data in data.get("enabled", []):
+            enabled.append(SkillConfig(
+                id=skill_data.get("id", ""),
+                name=skill_data.get("name", ""),
+                description=skill_data.get("description", ""),
+                agent_name=skill_data.get("agent_name"),
+                enabled=skill_data.get("enabled", True),
+                priority=skill_data.get("priority", 0)
+            ))
+        
+        return SkillsConfig(
+            enabled=enabled,
+            default_skill=data.get("default_skill")
+        )
+    
     def load_config(self, bot_id: str) -> Optional[BotConfig]:
         """
         加载指定Bot的配置
@@ -255,6 +403,12 @@ class BotConfigLoader:
                 limits=self._parse_limits_config(data.get("limits", {})),
                 agents=self._parse_agents_config(data.get("agents", {})),
                 messages=self._parse_messages_config(data.get("messages", {})),
+                
+                # Bot人格配置 - 包含性格、外貌、口头禅、理想、爱好等
+                personality=self._parse_personality_config(data.get("personality", {})),
+                
+                # Bot技能配置 - 与Agent能力对应
+                skills=self._parse_skills_config(data.get("skills", {})),
                 
                 features_enabled=data.get("features", {}).get("enabled", []),
                 features_disabled=data.get("features", {}).get("disabled", []),

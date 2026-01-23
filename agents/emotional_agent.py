@@ -3,8 +3,12 @@
 
 专门处理情感相关的对话，提供心理支持和陪伴服务。
 这是SoulmateBot提供情感价值的核心Agent。
+
+设计理念:
+- Agent专注于提供技能（情感支持、情绪追踪等）
+- Bot作为人格外壳，通过配置选择启用Agent的技能
 """
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from src.agents import BaseAgent, Message, ChatContext, AgentResponse, MemoryStore, SQLiteMemoryStore
 
 
@@ -78,6 +82,40 @@ class EmotionalAgent(BaseAgent):
     def description(self) -> str:
         """Agent描述"""
         return self._description
+    
+    @property
+    def skills(self) -> List[str]:
+        """
+        Agent提供的技能列表
+        
+        EmotionalAgent提供以下技能:
+        - emotional_support: 情感支持
+        - mood_tracking: 情绪追踪
+        """
+        return ["emotional_support", "mood_tracking"]
+    
+    @property
+    def skill_keywords(self) -> Dict[str, List[str]]:
+        """
+        技能对应的关键词映射
+        """
+        return {
+            "emotional_support": [
+                "难过", "开心", "焦虑", "压力", "心情", "feel", "sad", "happy",
+                "孤独", "累", "疲惫", "抑郁", "担心", "紧张"
+            ],
+            "mood_tracking": [
+                "心情", "情绪", "记录", "追踪", "变化", "mood", "track", "log"
+            ]
+        }
+    
+    def get_skill_description(self, skill_id: str) -> Optional[str]:
+        """获取指定技能的描述"""
+        skill_descriptions = {
+            "emotional_support": "倾听心声，提供情感陪伴和支持",
+            "mood_tracking": "记录和追踪情绪变化，帮助了解情绪规律"
+        }
+        return skill_descriptions.get(skill_id)
     
     def can_handle(self, message: Message, context: ChatContext) -> float:
         """
