@@ -145,36 +145,6 @@ personality:
       - "鼓励联系现实中的人或专业机构"
       - "不做诊断、不承诺、不替代现实支持"
 
-# ======================================
-# 🛠️ 技能配置 - Bot的能力（对应Agent能力）
-# ======================================
-skills:
-  # 启用的技能
-  enabled:
-    - id: "emotional_support"
-      name: "情感支持"
-      description: "倾听心声，提供情感陪伴和支持"
-      agent_name: "EmotionalAgent"
-      enabled: true
-      priority: 10
-    
-    - id: "daily_companion"
-      name: "日常陪伴"
-      description: "日常对话，温暖陪伴"
-      agent_name: null
-      enabled: true
-      priority: 8
-    
-    - id: "mood_tracking"
-      name: "情绪追踪"
-      description: "记录和追踪情绪变化"
-      agent_name: "EmotionalAgent"
-      enabled: true
-      priority: 6
-
-  # 默认技能
-  default_skill: "emotional_support"
-
 # AI模型配置
 ai:
   # 默认Provider: openai, anthropic, vllm
@@ -301,22 +271,6 @@ features:
   disabled:
     - "code_execution"
     - "web_search"
-
-# Agents配置
-agents:
-  # 启用的Agents
-  enabled:
-    - name: "EmotionalAgent"
-      priority: 100
-      config:
-        keywords:
-          - "难过"
-          - "开心"
-          - "焦虑"
-          - "压力"
-  
-  # 默认Agent（兜底）
-  fallback: "EmotionalAgent"
 
 # 消息路由配置
 routing:
