@@ -265,8 +265,8 @@ class IflytekTTSService:
             on_open=on_open
         )
         
-        # 运行WebSocket（使用SSL）
-        ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
+        # 运行WebSocket（使用SSL，启用证书验证）
+        ws.run_forever(sslopt={"cert_reqs": ssl.CERT_REQUIRED})
         
         if error_occurred:
             logger.error(f"TTS generation failed: {error_message}")

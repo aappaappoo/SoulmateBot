@@ -55,8 +55,8 @@ class TTSService:
         self.voice_dir = Path("data/voice")
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         
-        # 确定TTS提供商
-        self.provider = settings.tts_provider.lower() if hasattr(settings, 'tts_provider') else "openai"
+        # 确定TTS提供商（默认使用讯飞）
+        self.provider = settings.tts_provider.lower() if hasattr(settings, 'tts_provider') else "iflytek"
         
         if self.provider == "iflytek":
             self.default_voice = settings.default_iflytek_voice_id if hasattr(settings, 'default_iflytek_voice_id') else "xiaoyan"
