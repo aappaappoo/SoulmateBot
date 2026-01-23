@@ -12,70 +12,9 @@ from src.database import get_async_db_context
 from src.subscription.async_service import AsyncSubscriptionService
 from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
-from src.services.tts_service import tts_service
+from src.utils.voice_helper import send_voice_or_text_reply
 from src.models.database import Conversation
 from src.ai import conversation_service
-
-
-async def send_voice_or_text_reply(message, response: str, bot, subscription_service=None, db_user=None):
-    """
-    发送语音或文本回复
-    
-    根据Bot的语音设置决定发送语音还是文本回复
-    
-    Args:
-        message: Telegram 消息对象
-        response: AI生成的回复文本
-        bot: 当前Bot数据库对象
-        subscription_service: 订阅服务（可选）
-        db_user: 数据库用户对象（可选）
-        
-    Returns:
-        str: 发送的消息类型 ("voice" 或 "text")
-    """
-    # 检查Bot是否启用语音
-    if not bot.voice_enabled:
-        await message.reply_text(response)
-        return "text"
-    
-    # 获取Bot的音色ID
-    voice_id = bot.voice_id
-    
-    try:
-        # 生成语音
-        logger.info(f"🎤 Generating voice response for bot @{bot.bot_username} with voice_id={voice_id}")
-        audio_data = await tts_service.generate_voice(
-            text=response,
-            voice_id=voice_id,
-            user_id=db_user.id if db_user else None
-        )
-        
-        if audio_data:
-            # 将音频数据转换为可发送的缓冲区
-            audio_buffer = tts_service.get_voice_as_buffer(audio_data)
-            
-            # 发送语音消息
-            if len(response) <= 1024:
-                await message.reply_voice(voice=audio_buffer, caption=response)
-            else:
-                await message.reply_voice(voice=audio_buffer)
-                await message.reply_text(response)
-            
-            # 记录语音使用量
-            if subscription_service and db_user:
-                await subscription_service.record_usage(db_user, action_type="voice")
-            
-            logger.info(f"✅ Voice response sent successfully for bot @{bot.bot_username}")
-            return "voice"
-        else:
-            logger.warning(f"⚠️ Voice generation returned None, falling back to text")
-            await message.reply_text(response)
-            return "text"
-            
-    except Exception as e:
-        logger.error(f"❌ Voice response failed: {e}, falling back to text")
-        await message.reply_text(response)
-        return "text"
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):

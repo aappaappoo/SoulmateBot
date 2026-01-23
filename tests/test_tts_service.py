@@ -133,7 +133,7 @@ class TestVoiceReplyIntegration:
     @pytest.mark.asyncio
     async def test_send_voice_or_text_reply_voice_disabled(self):
         """测试Bot禁用语音时发送文本"""
-        from src.handlers.agent_integration import send_voice_or_text_reply
+        from src.utils.voice_helper import send_voice_or_text_reply
         
         # 模拟Bot对象
         mock_bot = MagicMock()
@@ -158,7 +158,7 @@ class TestVoiceReplyIntegration:
     @pytest.mark.asyncio
     async def test_send_voice_or_text_reply_voice_enabled(self):
         """测试Bot启用语音时发送语音"""
-        from src.handlers.agent_integration import send_voice_or_text_reply
+        from src.utils.voice_helper import send_voice_or_text_reply
         
         # 模拟Bot对象
         mock_bot = MagicMock()
@@ -170,7 +170,7 @@ class TestVoiceReplyIntegration:
         mock_message = AsyncMock()
         
         # 模拟TTS服务
-        with patch('src.handlers.agent_integration.tts_service') as mock_tts:
+        with patch('src.utils.voice_helper.tts_service') as mock_tts:
             mock_tts.generate_voice = AsyncMock(return_value=b"fake audio")
             mock_tts.get_voice_as_buffer = MagicMock(return_value=io.BytesIO(b"fake audio"))
             
@@ -187,7 +187,7 @@ class TestVoiceReplyIntegration:
     @pytest.mark.asyncio
     async def test_send_voice_or_text_reply_fallback_on_error(self):
         """测试语音生成失败时回退到文本"""
-        from src.handlers.agent_integration import send_voice_or_text_reply
+        from src.utils.voice_helper import send_voice_or_text_reply
         
         # 模拟Bot对象
         mock_bot = MagicMock()
@@ -199,7 +199,7 @@ class TestVoiceReplyIntegration:
         mock_message = AsyncMock()
         
         # 模拟TTS服务返回None（生成失败）
-        with patch('src.handlers.agent_integration.tts_service') as mock_tts:
+        with patch('src.utils.voice_helper.tts_service') as mock_tts:
             mock_tts.generate_voice = AsyncMock(return_value=None)
             
             result = await send_voice_or_text_reply(

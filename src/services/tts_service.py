@@ -2,12 +2,12 @@
 Text-to-Speech (TTS) service for voice response generation
 文本转语音服务 - 用于生成语音回复
 """
-import os
 import io
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from loguru import logger
+import openai
 
 from config import settings
 
@@ -54,15 +54,14 @@ class TTSService:
         Returns:
             语音数据的字节流，如果失败返回None
         """
-        if not settings.openai_api_key:
+        if not settings.openai_api_key or not settings.openai_api_key.strip():
             logger.error("OpenAI API key not configured, cannot generate voice")
             return None
         
-        # 验证音色是否有效
-        voice = voice_id if voice_id in self.AVAILABLE_VOICES else self.default_voice
+        # 验证音色是否有效，使用统一的验证方法
+        voice = voice_id if self.is_voice_id_valid(voice_id) else self.default_voice
         
         try:
-            import openai
             client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
             
             logger.info(f"Generating voice with voice_id={voice}, text_length={len(text)}")
