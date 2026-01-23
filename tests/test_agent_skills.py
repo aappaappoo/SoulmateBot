@@ -16,6 +16,10 @@ from typing import Dict, Any, List, Optional
 src_path = Path(__file__).parent.parent
 sys.path.insert(0, str(src_path))
 
+# Also add the agents directory to sys.path for importing EmotionalAgent
+agents_path = src_path / "agents"
+sys.path.insert(0, str(agents_path))
+
 from src.agents.models import Message, ChatContext, AgentResponse
 from src.agents.base_agent import BaseAgent
 

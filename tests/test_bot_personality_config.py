@@ -15,6 +15,7 @@ import tempfile
 import shutil
 import sys
 from pathlib import Path
+import importlib.util
 
 # Add src to path for imports
 src_path = Path(__file__).parent.parent
@@ -23,18 +24,11 @@ sys.path.insert(0, str(src_path))
 # Import yaml directly
 import yaml
 
-# Import config loader classes - we need to import specifically to avoid telegram dependency
-# Using exec to load only config_loader.py without the __init__.py
+# Import config loader classes using importlib.util to avoid telegram dependency in __init__.py
 _config_loader_path = src_path / "src" / "bot" / "config_loader.py"
-_config_loader_code = _config_loader_path.read_text()
-
-# Create a namespace for the config_loader module
-import types
-config_loader_module = types.ModuleType("config_loader")
-config_loader_module.__file__ = str(_config_loader_path)
-
-# Execute the module code in the namespace
-exec(compile(_config_loader_code, str(_config_loader_path), 'exec'), config_loader_module.__dict__)
+_spec = importlib.util.spec_from_file_location("config_loader", _config_loader_path)
+config_loader_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(config_loader_module)
 
 # Import classes from the loaded module
 BotConfigLoader = config_loader_module.BotConfigLoader
