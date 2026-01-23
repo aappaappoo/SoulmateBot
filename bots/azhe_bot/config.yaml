@@ -168,7 +168,7 @@ personality:
 ai:
   provider: "openai"
   model: "gpt-4o"
-  temperature: 0.9
+  temperature: 0.85
   max_tokens: 800
   context_window: 4096
 
