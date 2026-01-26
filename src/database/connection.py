@@ -29,7 +29,7 @@ _is_sqlite = settings.database_url.startswith("sqlite")
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
-    echo=settings.debug,
+    echo=settings.sql_echo,  # Controlled by SQL_ECHO env var, defaults to False
     # SQLite doesn't support pool_timeout and pool_recycle the same way
     **({} if _is_sqlite else {"pool_timeout": 30, "pool_recycle": 1800}),
     connect_args=_connect_args
