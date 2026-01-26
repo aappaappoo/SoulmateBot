@@ -79,8 +79,8 @@ class TestTTSService:
             buffer = service.get_voice_as_buffer(audio_data)
             
             assert isinstance(buffer, io.BytesIO)
-            # 讯飞使用PCM格式
-            assert "pcm" in buffer.name or "opus" in buffer.name
+            # 讯飞使用MP3格式 (aue="lame")
+            assert "mp3" in buffer.name or "pcm" in buffer.name or "opus" in buffer.name
             assert buffer.read() == audio_data
     
     @pytest.mark.asyncio
@@ -195,6 +195,58 @@ class TestTTSServiceQwenProvider:
             assert "Cherry" in voices
             assert "Serena" in voices
             assert "Ethan" in voices
+    
+    def test_get_voice_as_buffer_qwen_routes_to_qwen_service(self):
+        """测试Qwen提供商的get_voice_as_buffer路由到Qwen服务"""
+        with patch('src.services.tts_service.settings') as mock_settings:
+            mock_settings.tts_provider = "qwen"
+            mock_settings.default_qwen_voice_id = "Cherry"
+            mock_settings.openai_tts_model = "tts-1"
+            mock_settings.default_voice_id = "alloy"
+            
+            service = TTSService()
+            
+            # 模拟Qwen服务的get_voice_as_buffer方法
+            mock_buffer = io.BytesIO(b"converted ogg data")
+            mock_buffer.name = "voice.ogg"
+            service._qwen_service.get_voice_as_buffer = MagicMock(return_value=mock_buffer)
+            
+            # 模拟PCM音频数据
+            pcm_data = b"fake pcm audio data"
+            
+            buffer = service.get_voice_as_buffer(pcm_data)
+            
+            # 验证调用了Qwen服务的转换方法
+            service._qwen_service.get_voice_as_buffer.assert_called_once_with(pcm_data)
+            assert buffer.name == "voice.ogg"
+    
+    @pytest.mark.asyncio
+    async def test_generate_voice_qwen_with_emotion(self):
+        """测试Qwen TTS带情感参数的语音生成"""
+        with patch('src.services.tts_service.settings') as mock_settings:
+            mock_settings.tts_provider = "qwen"
+            mock_settings.default_qwen_voice_id = "Cherry"
+            mock_settings.openai_tts_model = "tts-1"
+            mock_settings.default_voice_id = "alloy"
+            
+            service = TTSService()
+            
+            # 模拟Qwen服务的generate_voice方法
+            service._qwen_service.generate_voice = AsyncMock(return_value=b"fake audio")
+            
+            # 调用带emotion参数的generate_voice
+            result = await service.generate_voice(
+                text="Hello world",
+                voice_id="Cherry",
+                user_id=123,
+                emotion="happy"
+            )
+            
+            # 验证emotion参数被传递到Qwen服务
+            service._qwen_service.generate_voice.assert_called_once_with(
+                "Hello world", "Cherry", 123, "happy"
+            )
+            assert result == b"fake audio"
 
 
 class TestVoiceReplyIntegration:

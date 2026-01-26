@@ -96,7 +96,8 @@ class TTSService:
         self,
         text: str,
         voice_id: Optional[str] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        emotion: Optional[str] = None
     ) -> Optional[bytes]:
         """
         将文本转换为语音
@@ -105,15 +106,16 @@ class TTSService:
             text: 要转换的文本内容
             voice_id: 语音音色ID，默认使用配置中的音色
             user_id: 用户ID（用于日志记录）
+            emotion: 情感标签（可选，如 happy, gentle, sad, excited, angry, crying）
             
         Returns:
             语音数据的字节流，如果失败返回None
         """
-        logger.info(f"🔊 [TTS] generate_voice called: provider={self.provider}, voice_id={voice_id}, text_length={len(text)}, user_id={user_id}")
+        logger.info(f"🔊 [TTS] generate_voice called: provider={self.provider}, voice_id={voice_id}, text_length={len(text)}, user_id={user_id}, emotion={emotion}")
         if self.provider == "iflytek":
             return await self._generate_voice_iflytek(text, voice_id, user_id)
         elif self.provider == "qwen":
-            return await self._generate_voice_qwen(text, voice_id, user_id)
+            return await self._generate_voice_qwen(text, voice_id, user_id, emotion)
         else:
             return await self._generate_voice_openai(text, voice_id, user_id)
     
@@ -176,17 +178,18 @@ class TTSService:
         self,
         text: str,
         voice_id: Optional[str] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        emotion: Optional[str] = None
     ) -> Optional[bytes]:
         """
         使用 Qwen (通义千问) TTS 生成语音
         """
-        logger.info(f"🔊 [TTS QWEN] Delegating to Qwen TTS service: voice_id={voice_id}, text_length={len(text)}")
+        logger.info(f"🔊 [TTS QWEN] Delegating to Qwen TTS service: voice_id={voice_id}, text_length={len(text)}, emotion={emotion}")
         if self._qwen_service is None:
             from .qwen_tts_service import qwen_tts_service
             self._qwen_service = qwen_tts_service
         
-        return await self._qwen_service.generate_voice(text, voice_id, user_id)
+        return await self._qwen_service.generate_voice(text, voice_id, user_id, emotion)
     
     async def generate_voice_file(
         self,
@@ -232,17 +235,35 @@ class TTSService:
         """
         将音频数据转换为可用于Telegram API的字节流缓冲区
         
+        对于不同的TTS提供商，会进行不同的处理：
+        - OpenAI: 直接返回opus格式
+        - iFlytek: 返回MP3格式（使用aue="lame"配置）
+        - Qwen: 将PCM转换为OGG/Opus（必须转换，否则Telegram无法播放）
+        
         Args:
             audio_data: 音频数据字节
             
         Returns:
-            BytesIO 缓冲区对象
+            BytesIO 缓冲区对象（Telegram支持的音频格式）
         """
-        buffer = io.BytesIO(audio_data)
-        ext = "opus" if self.provider == "openai" else "pcm"
-        buffer.name = f"voice.{ext}"  # Telegram需要文件名
-        buffer.seek(0)
-        return buffer
+        if self.provider == "qwen":
+            # Qwen TTS 返回 PCM 格式，需要转换为 OGG/Opus
+            if self._qwen_service is None:
+                from .qwen_tts_service import qwen_tts_service
+                self._qwen_service = qwen_tts_service
+            return self._qwen_service.get_voice_as_buffer(audio_data)
+        elif self.provider == "iflytek":
+            # iFlytek TTS 返回 MP3 格式 (aue="lame")，直接使用
+            if self._iflytek_service is None:
+                from .iflytek_tts_service import iflytek_tts_service
+                self._iflytek_service = iflytek_tts_service
+            return self._iflytek_service.get_voice_as_buffer(audio_data)
+        else:
+            # OpenAI 返回 opus 格式，可以直接使用
+            buffer = io.BytesIO(audio_data)
+            buffer.name = "voice.opus"
+            buffer.seek(0)
+            return buffer
     
     def is_voice_id_valid(self, voice_id: str) -> bool:
         """
