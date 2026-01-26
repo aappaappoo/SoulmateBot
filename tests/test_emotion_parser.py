@@ -1,0 +1,195 @@
+"""
+Tests for emotion parser utility
+测试语气解析工具
+"""
+import pytest
+
+# Import directly from the module to avoid dependency issues
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from src.utils.emotion_parser import extract_emotion_and_text, strip_emotion_prefix
+
+
+class TestEmotionParser:
+    """语气解析器测试类"""
+    
+    def test_extract_happy_emotion(self):
+        """测试提取开心语气"""
+        response = "（语气：开心、轻快，语速稍快，语调上扬）你好啊！今天天气真好！"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "happy"
+        assert text == "你好啊！今天天气真好！"
+    
+    def test_extract_excited_emotion(self):
+        """测试提取兴奋语气（兴奋关键词优先级高于开心）"""
+        response = "（语气：开心、轻快、兴奋，语速稍快，语调上扬）你好啊！今天天气真好！"
+        emotion, text = extract_emotion_and_text(response)
+        
+        # 因为包含"兴奋"关键词，优先级高于"开心"
+        assert emotion == "excited"
+        assert text == "你好啊！今天天气真好！"
+    
+    def test_extract_gentle_emotion(self):
+        """测试提取温柔语气"""
+        response = "（语气：温柔、轻声、放慢语速，语调柔和）我理解你的感受，慢慢来没关系的"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "gentle"
+        assert text == "我理解你的感受，慢慢来没关系的"
+    
+    def test_extract_sad_emotion(self):
+        """测试提取低落语气"""
+        response = "（语气：低落、语速较慢，情绪克制）我知道这对你来说很难..."
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "sad"
+        assert text == "我知道这对你来说很难..."
+    
+    def test_extract_angry_emotion(self):
+        """测试提取生气语气"""
+        response = "（语气：生气，愤怒）这太过分了！"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "angry"
+        assert text == "这太过分了！"
+    
+    def test_extract_excited_emotion_from_node(self):
+        """测试提取兴奋语气"""
+        response = "（语气：非常兴奋，节奏活跃，富有感染力）太棒了！恭喜你！"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "excited"
+        assert text == "太棒了！恭喜你！"
+    
+    def test_extract_crying_emotion(self):
+        """测试提取哭泣语气"""
+        response = "（语气：委屈，哭泣）为什么会这样..."
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "crying"
+        assert text == "为什么会这样..."
+    
+    def test_no_emotion_prefix(self):
+        """测试没有语气前缀的情况"""
+        response = "这是一条普通的回复，没有语气标签"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion is None
+        assert text == "这是一条普通的回复，没有语气标签"
+    
+    def test_empty_response(self):
+        """测试空响应"""
+        emotion, text = extract_emotion_and_text("")
+        
+        assert emotion is None
+        assert text == ""
+    
+    def test_none_response(self):
+        """测试None响应"""
+        emotion, text = extract_emotion_and_text(None)
+        
+        assert emotion is None
+        assert text == ""
+    
+    def test_emotion_in_middle_not_matched(self):
+        """测试语气前缀不在开头时不匹配"""
+        response = "前面有内容（语气：开心）这个不应该被匹配"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion is None
+        assert text == response
+    
+    def test_strip_emotion_prefix(self):
+        """测试只剥离语气前缀"""
+        response = "（语气：开心、轻快）欢迎回来！"
+        clean_text = strip_emotion_prefix(response)
+        
+        assert clean_text == "欢迎回来！"
+    
+    def test_strip_no_prefix(self):
+        """测试没有前缀时返回原文本"""
+        response = "这是普通文本"
+        clean_text = strip_emotion_prefix(response)
+        
+        assert clean_text == response
+    
+    def test_complex_emotion_description(self):
+        """测试复杂的语气描述"""
+        response = "（语气：温柔但带着一丝担心，语速放慢，声音轻柔）你还好吗？"
+        emotion, text = extract_emotion_and_text(response)
+        
+        # 应该匹配到温柔
+        assert emotion == "gentle"
+        assert text == "你还好吗？"
+    
+    def test_emotion_priority_angry_over_sad(self):
+        """测试情绪优先级：生气优先于低落"""
+        response = "（语气：低落又生气，情绪复杂）这真是太让人失望了"
+        emotion, text = extract_emotion_and_text(response)
+        
+        # angry 优先级高于 sad
+        assert emotion == "angry"
+    
+    def test_text_with_leading_whitespace(self):
+        """测试内容前有空格的情况"""
+        response = "（语气：开心）   你好！"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "happy"
+        assert text == "你好！"  # 空格应该被去掉
+    
+    def test_multiline_content(self):
+        """测试多行内容"""
+        response = "（语气：温柔、轻声）第一行\n第二行\n第三行"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion == "gentle"
+        assert text == "第一行\n第二行\n第三行"
+
+
+class TestEmotionParserEdgeCases:
+    """边界情况测试"""
+    
+    def test_parentheses_only(self):
+        """测试只有括号的情况"""
+        response = "（）后面的内容"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion is None
+        assert text == response
+    
+    def test_incomplete_prefix(self):
+        """测试不完整的前缀"""
+        response = "（语气：开心"  # 缺少闭合括号
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion is None
+        assert text == response
+    
+    def test_wrong_prefix_format(self):
+        """测试错误的前缀格式"""
+        response = "（情绪：开心）这个格式不对"  # 使用"情绪"而不是"语气"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion is None
+        assert text == response
+    
+    def test_english_parentheses_not_matched(self):
+        """测试英文括号不匹配"""
+        response = "(语气：开心)这个不应该匹配"
+        emotion, text = extract_emotion_and_text(response)
+        
+        assert emotion is None
+        assert text == response
+    
+    def test_unknown_emotion_keywords(self):
+        """测试未知情绪关键词"""
+        response = "（语气：平静、冷漠）这是一个未知情绪"
+        emotion, text = extract_emotion_and_text(response)
+        
+        # 前缀被识别，但情绪标签为None因为没有匹配的关键词
+        assert emotion is None
+        assert text == "这是一个未知情绪"
