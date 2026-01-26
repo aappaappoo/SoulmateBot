@@ -33,9 +33,10 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     # 默认为 False，仅当 user_id 和 bot_username 都有效时才检查
     user_voice_enabled = False
     bot_username = getattr(bot, 'bot_username', None)
-    
+    # 确保 bot_username 格式一致（去掉 @ 前缀）
+    if bot_username and bot_username.startswith('@'):
+        bot_username = bot_username[1:]
     logger.info(f"🎤 [VOICE FLOW 1/5] PREFERENCE_CHECK: Checking voice preference for user_id={user_id}, bot=@{bot_username}")
-    
     if user_id is not None and bot_username:
         user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
 

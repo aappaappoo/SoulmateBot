@@ -127,46 +127,59 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
     
     logger.info(f"📨 Message from chat type: {chat_type}")
     logger.info(f"📝 Message text: {message_text[:50]}...")
-    
+
     async with get_async_db_context() as db:
-        # Initialize channel service for routing
         channel_service = AsyncChannelManagerService(db)
-        
-        # Get or create channel record
-        channel = await channel_service.get_or_create_channel(
-            telegram_chat_id=chat_id,
-            chat_type=chat_type,
-            title=message.chat.title if hasattr(message.chat, 'title') else None,
-            username=message.chat.username if hasattr(message.chat, 'username') else None,
-            owner_id=update.effective_user.id if update.effective_user else None
-        )
-        
-        # Get active bot mappings for this channel
-        mappings = await channel_service.get_channel_bots(channel.id, active_only=True)
-        
-        # Check if should respond in channel
-        if not MessageRouter.should_respond_in_channel(chat_type, mappings):
-            logger.info("No active bots in this channel, skipping")
-            return
-        
-        # Extract mentioned bot (if any)
-        mentioned_username = MessageRouter.extract_mention(message_text)
-        
-        # Select bot to respond
-        selected_mapping = MessageRouter.select_bot(
-            message_text=message_text,
-            channel=channel,
-            mappings=mappings,
-            mentioned_username=mentioned_username
-        )
-        
-        if not selected_mapping:
-            logger.info("No bot selected to respond")
-            return
-        
-        selected_bot = selected_mapping.bot
+
+        # 对于私聊，直接使用当前接收消息的 bot
+        if chat_type == "private":
+            # 获取当前处理消息的 bot
+            current_bot_username = context.bot.username
+
+            # 从数据库获取对应的 Bot 对象
+            from src.models.database import Bot
+            result = await db.execute(
+                select(Bot).where(Bot.bot_username == current_bot_username)
+            )
+            selected_bot = result.scalar_one_or_none()
+
+            if not selected_bot:
+                logger.warning(f"Bot not found in database: {current_bot_username}")
+                return
+
+            logger.info(f"✅ Private chat - using current bot: @{selected_bot.bot_username}")
+        else:
+            # 群聊/频道：使用原有的路由逻辑
+            channel = await channel_service.get_or_create_channel(
+                telegram_chat_id=chat_id,
+                chat_type=chat_type,
+                title=message.chat.title if hasattr(message.chat, 'title') else None,
+                username=message.chat.username if hasattr(message.chat, 'username') else None,
+                owner_id=update.effective_user.id if update.effective_user else None
+            )
+
+            mappings = await channel_service.get_channel_bots(channel.id, active_only=True)
+
+            if not MessageRouter.should_respond_in_channel(chat_type, mappings):
+                logger.info("No active bots in this channel, skipping")
+                return
+
+            mentioned_username = MessageRouter.extract_mention(message_text)
+
+            selected_mapping = MessageRouter.select_bot(
+                message_text=message_text,
+                channel=channel,
+                mappings=mappings,
+                mentioned_username=mentioned_username
+            )
+
+            if not selected_mapping:
+                logger.info("No bot selected to respond")
+                return
+
+            selected_bot = selected_mapping.bot
+
         logger.info(f"✅ Selected bot: @{selected_bot.bot_username}")
-        
         # Store the system prompt for later use
         system_prompt = selected_bot.system_prompt
         try:

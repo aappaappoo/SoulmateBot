@@ -1001,6 +1001,7 @@ class BotCRUD:
                     bot_data = data.get("bot", {})
                     personality_data = data.get("personality", {})
                     ai_data = data.get("ai", {})
+                    voice_data = data.get("voice", {})
 
                     # 更新字段
                     bot.bot_name = bot_data.get("name", bot.bot_name)
@@ -1017,8 +1018,12 @@ class BotCRUD:
 
                     bot.ai_provider = ai_data.get("provider", "openai")
                     bot.ai_model = ai_data.get("model", "gpt-4")
+                    # 添加语音配置同步
+                    bot.voice_enabled = voice_data.get("enabled", False)
+                    bot.voice_id = voice_data.get("voice_id", None)
 
                     print(f"\n✅ @{bot.bot_username}: 已从 bots/{config_dir}/ 同步")
+                    print(f"   voice_enabled={bot.voice_enabled}, voice_id={bot.voice_id}")
                     synced_count += 1
 
                 except Exception as e:
