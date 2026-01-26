@@ -5,6 +5,7 @@ python-telegram-bot[all]==20.7
 # AI/LLM Integration
 openai==1.12.0
 anthropic==0.18.1
+dashscope==1.25.9
 
 # Database
 sqlalchemy==2.0.25
@@ -23,6 +24,7 @@ redis==5.0.1
 celery==5.3.6
 requests==2.31.0
 websocket-client==1.7.0
+numpy==1.26.4
 
 # Logging & Monitoring
 loguru==0.7.2

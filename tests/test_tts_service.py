@@ -2,7 +2,7 @@
 Tests for TTS (Text-to-Speech) service
 语音服务测试
 
-支持 OpenAI TTS 和 科大讯飞 (iFlytek) TTS
+支持 OpenAI TTS、科大讯飞 (iFlytek) TTS 和 通义千问 (Qwen) TTS
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,6 +10,7 @@ import io
 
 from src.services.tts_service import TTSService, tts_service
 from src.services.iflytek_tts_service import IflytekTTSService
+from src.services.qwen_tts_service import QwenTTSService
 
 
 class TestTTSService:
@@ -97,6 +98,103 @@ class TestTTSService:
             
             # 没有凭证应该返回None
             assert result is None
+
+
+class TestQwenTTSService:
+    """Qwen TTS服务测试类"""
+    
+    def test_available_voices_qwen(self):
+        """测试Qwen可用音色列表"""
+        voices = QwenTTSService.AVAILABLE_VOICES
+        
+        # 检查常用的Qwen音色
+        assert "Cherry" in voices
+        assert "Serena" in voices
+        assert "Ethan" in voices
+        assert "Chelsie" in voices
+        assert "Dylan" in voices
+    
+    def test_is_voice_id_valid_qwen(self):
+        """测试Qwen音色ID验证"""
+        # 有效的Qwen音色ID
+        assert QwenTTSService.is_voice_id_valid("Cherry") is True
+        assert QwenTTSService.is_voice_id_valid("Serena") is True
+        assert QwenTTSService.is_voice_id_valid("Ethan") is True
+        
+        # 小写也应该有效
+        assert QwenTTSService.is_voice_id_valid("cherry") is True
+        
+        # 无效的音色ID
+        assert QwenTTSService.is_voice_id_valid("invalid") is False
+        assert QwenTTSService.is_voice_id_valid("") is False
+    
+    def test_get_voice_for_gender_qwen(self):
+        """测试Qwen根据性别推荐音色"""
+        # 男性角色
+        assert QwenTTSService.get_voice_for_gender("male", "warm") == "Ethan"
+        assert QwenTTSService.get_voice_for_gender("male", "mature") == "Dylan"
+        
+        # 女性角色
+        assert QwenTTSService.get_voice_for_gender("female", "gentle") == "Serena"
+        assert QwenTTSService.get_voice_for_gender("female", "lively") == "Cherry"
+    
+    def test_emotion_map(self):
+        """测试情感映射"""
+        emotions = QwenTTSService.EMOTION_MAP
+        
+        assert "happy" in emotions
+        assert "gentle" in emotions
+        assert "sad" in emotions
+        assert "excited" in emotions
+        assert "angry" in emotions
+    
+    @pytest.mark.asyncio
+    async def test_generate_voice_no_credentials_qwen(self):
+        """测试没有Qwen TTS凭证时的行为"""
+        with patch('src.services.qwen_tts_service.settings') as mock_settings:
+            mock_settings.dashscope_api_key = None
+            mock_settings.default_qwen_voice_id = "Cherry"
+            mock_settings.dashscope_api_url = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+            mock_settings.qwen_tts_model = "qwen3-tts-flash-realtime"
+            
+            service = QwenTTSService()
+            
+            result = await service.generate_voice("Hello world")
+            
+            # 没有凭证应该返回None
+            assert result is None
+
+
+class TestTTSServiceQwenProvider:
+    """TTS服务Qwen提供商测试类"""
+    
+    def test_tts_service_qwen_provider(self):
+        """测试TTS服务使用Qwen提供商"""
+        with patch('src.services.tts_service.settings') as mock_settings:
+            mock_settings.tts_provider = "qwen"
+            mock_settings.default_qwen_voice_id = "Cherry"
+            mock_settings.openai_tts_model = "tts-1"
+            mock_settings.default_voice_id = "alloy"
+            
+            service = TTSService()
+            
+            assert service.provider == "qwen"
+            assert service.default_voice == "Cherry"
+    
+    def test_get_available_voices_qwen(self):
+        """测试获取Qwen可用音色"""
+        with patch('src.services.tts_service.settings') as mock_settings:
+            mock_settings.tts_provider = "qwen"
+            mock_settings.default_qwen_voice_id = "Cherry"
+            mock_settings.openai_tts_model = "tts-1"
+            mock_settings.default_voice_id = "alloy"
+            
+            service = TTSService()
+            voices = service.get_available_voices()
+            
+            assert "Cherry" in voices
+            assert "Serena" in voices
+            assert "Ethan" in voices
 
 
 class TestVoiceReplyIntegration:

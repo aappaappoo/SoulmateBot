@@ -5,6 +5,7 @@ Text-to-Speech (TTS) service for voice response generation
 支持多个TTS服务提供商：
 - OpenAI TTS
 - 科大讯飞 (iFlytek) TTS
+- 通义千问 (Qwen) TTS - 阿里云 DashScope
 """
 import io
 from typing import Optional
@@ -20,7 +21,7 @@ class TTSService:
     """
     Text-to-Speech 统一服务
     
-    根据配置选择使用 OpenAI TTS 或 科大讯飞 TTS
+    根据配置选择使用 OpenAI TTS、科大讯飞 TTS 或 Qwen TTS
     支持多种音色选择，每个Bot可以有自己独特的声音
     
     OpenAI 可用音色 (voice_id):
@@ -39,6 +40,15 @@ class TTSService:
     - vixf: 小峰，青年男声（成熟稳重）
     - aisjinger: 小婧，青年女声（温婉动人）
     - aisjiuxu: 许久，青年男声（温暖磁性）
+    
+    Qwen (通义千问) 可用音色 (voice_id):
+    - Cherry: 阳光积极、亲切自然的女性音色
+    - Serena: 温柔的女性音色
+    - Ethan: 阳光、温暖、活力的男性音色
+    - Chelsie: 虚拟风格女生
+    - Dylan: 北京话风格男声
+    - Jada: 上海话风格女声
+    - Sunny: 四川话女声
     """
     
     # OpenAI可用的语音音色列表
@@ -48,24 +58,35 @@ class TTSService:
     IFLYTEK_VOICES = ["xiaoyan", "xiaoyu", "vixy", "vixq", "vixf", "vinn", "vixx", 
                       "aisjiuxu", "aisxping", "aisjinger"]
     
-    # 所有可用音色（合并两个提供商）
-    AVAILABLE_VOICES = OPENAI_VOICES + IFLYTEK_VOICES
+    # Qwen (通义千问) 可用音色列表
+    QWEN_VOICES = ["Cherry", "Serena", "Ethan", "Chelsie", "Dylan", "Jada", "Sunny"]
+    
+    # 所有可用音色（合并所有提供商）
+    AVAILABLE_VOICES = OPENAI_VOICES + IFLYTEK_VOICES + QWEN_VOICES
     
     def __init__(self):
         self.voice_dir = Path("data/voice")
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         
-        # 确定TTS提供商（默认使用讯飞）
-        self.provider = settings.tts_provider.lower() if hasattr(settings, 'tts_provider') else "iflytek"
+        # 确定TTS提供商（默认使用 Qwen）
+        self.provider = settings.tts_provider.lower() if hasattr(settings, 'tts_provider') else "qwen"
         
         if self.provider == "iflytek":
             self.default_voice = settings.default_iflytek_voice_id if hasattr(settings, 'default_iflytek_voice_id') else "xiaoyan"
             # 延迟导入讯飞TTS服务
             from .iflytek_tts_service import iflytek_tts_service
             self._iflytek_service = iflytek_tts_service
+            self._qwen_service = None
+        elif self.provider == "qwen":
+            self.default_voice = settings.default_qwen_voice_id if hasattr(settings, 'default_qwen_voice_id') else "Cherry"
+            # 延迟导入 Qwen TTS 服务
+            from .qwen_tts_service import qwen_tts_service
+            self._qwen_service = qwen_tts_service
+            self._iflytek_service = None
         else:
             self.default_voice = settings.default_voice_id
             self._iflytek_service = None
+            self._qwen_service = None
         
         self.model = settings.openai_tts_model
         
@@ -91,6 +112,8 @@ class TTSService:
         logger.info(f"🔊 [TTS] generate_voice called: provider={self.provider}, voice_id={voice_id}, text_length={len(text)}, user_id={user_id}")
         if self.provider == "iflytek":
             return await self._generate_voice_iflytek(text, voice_id, user_id)
+        elif self.provider == "qwen":
+            return await self._generate_voice_qwen(text, voice_id, user_id)
         else:
             return await self._generate_voice_openai(text, voice_id, user_id)
     
@@ -148,6 +171,22 @@ class TTSService:
             self._iflytek_service = iflytek_tts_service
         
         return await self._iflytek_service.generate_voice(text, voice_id, user_id)
+    
+    async def _generate_voice_qwen(
+        self,
+        text: str,
+        voice_id: Optional[str] = None,
+        user_id: Optional[int] = None
+    ) -> Optional[bytes]:
+        """
+        使用 Qwen (通义千问) TTS 生成语音
+        """
+        logger.info(f"🔊 [TTS QWEN] Delegating to Qwen TTS service: voice_id={voice_id}, text_length={len(text)}")
+        if self._qwen_service is None:
+            from .qwen_tts_service import qwen_tts_service
+            self._qwen_service = qwen_tts_service
+        
+        return await self._qwen_service.generate_voice(text, voice_id, user_id)
     
     async def generate_voice_file(
         self,
@@ -223,6 +262,11 @@ class TTSService:
                 from .iflytek_tts_service import IflytekTTSService
                 return IflytekTTSService.is_voice_id_valid(voice_id)
             return self._iflytek_service.is_voice_id_valid(voice_id)
+        elif self.provider == "qwen":
+            if self._qwen_service is None:
+                from .qwen_tts_service import QwenTTSService
+                return QwenTTSService.is_voice_id_valid(voice_id)
+            return self._qwen_service.is_voice_id_valid(voice_id)
         else:
             return voice_id in self.OPENAI_VOICES
     
@@ -235,6 +279,8 @@ class TTSService:
         """
         if self.provider == "iflytek":
             return self.IFLYTEK_VOICES.copy()
+        elif self.provider == "qwen":
+            return self.QWEN_VOICES.copy()
         else:
             return self.OPENAI_VOICES.copy()
 

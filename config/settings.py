@@ -71,7 +71,14 @@ class Settings(BaseSettings):
     iflytek_api_key: Optional[str] = None  # 讯飞API Key
     iflytek_api_secret: Optional[str] = None  # 讯飞API Secret
     default_iflytek_voice_id: str = "xiaoyan"  # 默认讯飞语音音色
-    tts_provider: str = "iflytek"  # TTS服务提供商：openai 或 iflytek
+    
+    # Qwen (通义千问) TTS Configuration - 阿里云 DashScope
+    dashscope_api_key: Optional[str] = None  # DashScope API Key
+    dashscope_api_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"  # DashScope WebSocket URL
+    qwen_tts_model: str = "qwen3-tts-flash-realtime"  # Qwen TTS 模型
+    default_qwen_voice_id: str = "Cherry"  # 默认 Qwen 语音音色: Cherry, Serena, Ethan, etc.
+    
+    tts_provider: str = "qwen"  # TTS服务提供商：openai, iflytek 或 qwen
 
     class Config:
         env_file = ".env"
