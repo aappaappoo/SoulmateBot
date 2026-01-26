@@ -168,11 +168,8 @@ class QwenTTSService:
         self.api_url = getattr(settings, 'dashscope_api_url', self.DEFAULT_API_URL)
         self.model = getattr(settings, 'qwen_tts_model', 'qwen3-tts-flash-realtime')
         
-        # 初始化 dashscope API key
-        if self.api_key:
-            dashscope.api_key = self.api_key
-        elif 'DASHSCOPE_API_KEY' in os.environ:
-            dashscope.api_key = os.environ['DASHSCOPE_API_KEY']
+        # 从环境变量获取 API key（如果未在配置中设置）
+        if not self.api_key and 'DASHSCOPE_API_KEY' in os.environ:
             self.api_key = os.environ['DASHSCOPE_API_KEY']
 
     def _get_qwen_voice_id(self, voice_id: Optional[str]) -> str:
@@ -266,11 +263,12 @@ class QwenTTSService:
         qwen_tts_realtime = None
         
         try:
-            # 创建 TTS 客户端
+            # 创建 TTS 客户端，传入 API key
             qwen_tts_realtime = QwenTtsRealtime(
                 model=self.model,
                 callback=callback,
-                url=self.api_url
+                url=self.api_url,
+                api_key=self.api_key
             )
             
             # 连接
@@ -321,6 +319,15 @@ class QwenTTSService:
         except Exception as e:
             logger.error(f"🔊 [TTS QWEN] Error in sync voice generation: {e}", exc_info=True)
             return None
+        finally:
+            # 确保清理连接资源
+            if qwen_tts_realtime is not None:
+                try:
+                    # 尝试关闭连接
+                    if hasattr(qwen_tts_realtime, 'close'):
+                        qwen_tts_realtime.close()
+                except Exception as cleanup_error:
+                    logger.debug(f"🔊 [TTS QWEN] Cleanup error (ignored): {cleanup_error}")
 
     async def generate_voice_file(
             self,
