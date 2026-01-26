@@ -18,13 +18,14 @@ from loguru import logger
 EMOTION_PATTERN = re.compile(r'^（语气：[^）]+）')
 
 # Mapping from keywords in emotion prefix to TTS emotion tags
+# Note: These keywords are extracted from common Chinese emotion descriptions
+# and mapped to the TTS service's supported emotion tags
 EMOTION_KEYWORDS_MAP = {
     # Happy/Excited emotions
     "开心": "happy",
     "轻快": "happy",
     "兴奋": "excited",
     "活跃": "excited",
-    "感染力": "excited",
     # Gentle/Warm emotions
     "温柔": "gentle",
     "轻声": "gentle",
