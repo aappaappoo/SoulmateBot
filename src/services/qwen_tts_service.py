@@ -14,10 +14,13 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from loguru import logger
+import subprocess
+import tempfile
 
 try:
     import dashscope
     from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCallback, AudioFormat
+
     DASHSCOPE_AVAILABLE = True
 except ImportError:
     DASHSCOPE_AVAILABLE = False
@@ -33,7 +36,7 @@ class QwenTTSCallback(QwenTtsRealtimeCallback):
     Qwen TTS 回调处理器
     用于接收和处理 TTS 生成的音频数据
     """
-    
+
     def __init__(self):
         self.complete_event = threading.Event()
         self.audio_buffer = bytearray()
@@ -62,7 +65,7 @@ class QwenTTSCallback(QwenTtsRealtimeCallback):
                 if self.first_audio_delay is None and self._start_time:
                     self.first_audio_delay = time.time() - self._start_time
                     logger.debug(f"Qwen TTS first audio delay: {self.first_audio_delay:.3f}s")
-                
+
                 recv_audio_b64 = response.get('delta', '')
                 if recv_audio_b64:
                     pcm_bytes = base64.b64decode(recv_audio_b64)
@@ -74,7 +77,7 @@ class QwenTTSCallback(QwenTtsRealtimeCallback):
             elif msg_type == 'session.finished':
                 logger.debug("Qwen TTS session finished")
                 self.complete_event.set()
-                
+
             elif msg_type == 'error':
                 self.error_message = response.get('message', 'Unknown error')
                 logger.error(f"Qwen TTS error: {self.error_message}")
@@ -124,7 +127,7 @@ class QwenTTSService:
     Qwen Text-to-Speech 服务
     使用阿里云 DashScope 的 Qwen TTS Realtime API
     """
-    
+
     # Qwen TTS 可用音色列表
     # voice 参数    说明                             适用
     # Cherry      阳光积极、亲切自然的女性音色         Realtime & Flash
@@ -143,7 +146,7 @@ class QwenTTSService:
         "Jada": {"description": "上海话风格女声", "type": "standard"},
         "Sunny": {"description": "四川话女声", "type": "standard"},
     }
-    
+
     # 情感映射
     EMOTION_MAP = {
         "happy": "（语气：开心、轻快、兴奋，语速稍快，语调上扬）",
@@ -153,10 +156,10 @@ class QwenTTSService:
         "angry": "（语气：生气，愤怒）",
         "crying": "（委屈，哭泣）",
     }
-    
+
     # WebSocket API URL
     DEFAULT_API_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
-    
+
     # 默认采样率
     SAMPLE_RATE = 24000
 
@@ -167,7 +170,7 @@ class QwenTTSService:
         self.api_key = getattr(settings, 'dashscope_api_key', None)
         self.api_url = getattr(settings, 'dashscope_api_url', self.DEFAULT_API_URL)
         self.model = getattr(settings, 'qwen_tts_model', 'qwen3-tts-flash-realtime')
-        
+
         # 从环境变量获取 API key（如果未在配置中设置）
         if not self.api_key and 'DASHSCOPE_API_KEY' in os.environ:
             self.api_key = os.environ['DASHSCOPE_API_KEY']
@@ -181,16 +184,16 @@ class QwenTTSService:
         """
         if not voice_id:
             return self.default_voice
-        
+
         # 检查是否是有效的 Qwen 音色
         if voice_id in self.AVAILABLE_VOICES:
             return voice_id
-        
+
         # 尝试匹配（忽略大小写）
         for v in self.AVAILABLE_VOICES:
             if v.lower() == voice_id.lower():
                 return v
-        
+
         logger.warning(f"Invalid Qwen voice_id '{voice_id}', using default: {self.default_voice}")
         return self.default_voice
 
@@ -215,11 +218,11 @@ class QwenTTSService:
         """
         logger.info(
             f"🔊 [TTS QWEN] generate_voice called: voice_id={voice_id}, text_length={len(text)}, user_id={user_id}")
-        
+
         if not DASHSCOPE_AVAILABLE:
             logger.error("🔊 [TTS QWEN] dashscope package not installed, cannot generate voice")
             return None
-        
+
         if not self.api_key:
             logger.error("🔊 [TTS QWEN] DashScope API key not configured, cannot generate voice")
             return None
@@ -251,8 +254,8 @@ class QwenTTSService:
             return None
 
     def _sync_generate_voice(
-            self, 
-            text: str, 
+            self,
+            text: str,
             voice_id: str,
             emotion: Optional[str] = None
     ) -> Optional[bytes]:
@@ -261,61 +264,63 @@ class QwenTTSService:
         """
         callback = QwenTTSCallback()
         qwen_tts_realtime = None
-        
+
         try:
+            if self.api_key:
+                dashscope.api_key = self.api_key
+
             # 创建 TTS 客户端，传入 API key
             qwen_tts_realtime = QwenTtsRealtime(
                 model=self.model,
                 callback=callback,
                 url=self.api_url,
-                api_key=self.api_key
             )
-            
+
             # 连接
             qwen_tts_realtime.connect()
-            
+
             # 更新会话配置
             qwen_tts_realtime.update_session(
                 voice=voice_id,
                 response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
                 mode='server_commit'
             )
-            
+
             # 如果有情感标签，添加情感描述前缀
             final_text = text
             if emotion and emotion in self.EMOTION_MAP:
                 emotion_prefix = self.EMOTION_MAP[emotion]
                 final_text = f"{emotion_prefix}{text}"
                 logger.debug(f"🔊 [TTS QWEN] Added emotion prefix: {emotion}")
-            
+
             # 发送文本
             qwen_tts_realtime.append_text(final_text)
-            
+
             # 完成发送
             qwen_tts_realtime.finish()
-            
+
             # 等待完成
             if not callback.wait_for_finished(timeout=60.0):
                 logger.error("🔊 [TTS QWEN] TTS generation timeout")
                 return None
-            
+
             # 检查是否有错误
             if callback.error_message:
                 logger.error(f"🔊 [TTS QWEN] TTS generation failed: {callback.error_message}")
                 return None
-            
+
             # 获取音频数据
             audio_data = callback.get_audio_bytes()
-            
+
             if not audio_data:
                 logger.warning("🔊 [TTS QWEN] No audio data received from Qwen TTS")
                 return None
-            
+
             logger.info(f"🔊 [TTS QWEN] Metrics - session: {callback.session_id}, "
-                       f"first_audio_delay: {callback.first_audio_delay:.3f}s" if callback.first_audio_delay else "")
-            
+                        f"first_audio_delay: {callback.first_audio_delay:.3f}s" if callback.first_audio_delay else "")
+
             return audio_data
-            
+
         except Exception as e:
             logger.error(f"🔊 [TTS QWEN] Error in sync voice generation: {e}", exc_info=True)
             return None
@@ -372,18 +377,59 @@ class QwenTTSService:
 
     def get_voice_as_buffer(self, audio_data: bytes) -> io.BytesIO:
         """
-        将音频数据转换为可用于 Telegram API 的字节流缓冲区
-        
+        将 PCM 音频数据转换为 Telegram 支持的 OGG/Opus 格式
+
         Args:
-            audio_data: 音频数据字节（PCM 格式）
-            
+            audio_data: PCM 格式的音频字节数据 (24kHz, 16-bit, mono)
+
         Returns:
-            BytesIO 缓冲区对象
+            BytesIO 缓冲区对象（OGG/Opus 格式）
         """
-        buffer = io.BytesIO(audio_data)
-        buffer.name = "voice.pcm"  # PCM 格式
-        buffer.seek(0)
-        return buffer
+        try:
+            # 使用 ffmpeg 将 PCM 转换为 OGG/Opus
+            with tempfile.NamedTemporaryFile(suffix='.pcm', delete=False) as pcm_file:
+                pcm_file.write(audio_data)
+                pcm_path = pcm_file.name
+
+            ogg_path = pcm_path.replace('.pcm', '.ogg')
+
+            # ffmpeg 命令：PCM (24kHz, 16-bit, mono) -> OGG/Opus
+            cmd = [
+                'ffmpeg', '-y',
+                '-f', 's16le',  # 输入格式：16-bit signed little-endian
+                '-ar', '24000',  # 采样率：24kHz
+                '-ac', '1',  # 单声道
+                '-i', pcm_path,  # 输入文件
+                '-c:a', 'libopus',  # 编码器：opus
+                '-b:a', '32k',  # 比特率
+                ogg_path  # 输出文件
+            ]
+
+            subprocess.run(cmd, check=True, capture_output=True)
+
+            # 读取转换后的文件
+            with open(ogg_path, 'rb') as f:
+                ogg_data = f.read()
+
+            # 清理临时文件
+            import os
+            os.unlink(pcm_path)
+            os.unlink(ogg_path)
+
+            buffer = io.BytesIO(ogg_data)
+            buffer.name = "voice.ogg"
+            buffer.seek(0)
+
+            logger.info(f"🔊 [TTS QWEN] Converted PCM to OGG/Opus: {len(audio_data)} -> {len(ogg_data)} bytes")
+            return buffer
+
+        except Exception as e:
+            logger.error(f"🔊 [TTS QWEN] Failed to convert PCM to OGG: {e}")
+            # 回退：返回原始 PCM（虽然 Telegram 不支持）
+            buffer = io.BytesIO(audio_data)
+            buffer.name = "voice.pcm"
+            buffer.seek(0)
+            return buffer
 
     @staticmethod
     def is_voice_id_valid(voice_id: str) -> bool:
@@ -398,10 +444,10 @@ class QwenTTSService:
         """
         if not voice_id:
             return False
-        
+
         # 检查是否在可用音色列表中（忽略大小写）
         return voice_id in QwenTTSService.AVAILABLE_VOICES or \
-               voice_id.lower() in [v.lower() for v in QwenTTSService.AVAILABLE_VOICES]
+            voice_id.lower() in [v.lower() for v in QwenTTSService.AVAILABLE_VOICES]
 
     @staticmethod
     def get_available_voices() -> dict:

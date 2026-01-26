@@ -172,11 +172,11 @@ ai:
   max_tokens: 800
   context_window: 4096
 
-# 语音配置 科大讯飞
+# 语音回复
 voice:
   enabled: True
-  voice_id: "x6_lingfeiyi_pro"
-
+  provider: "qwen"
+  voice_id: "Ethan"
 
 # 系统提示词配置
 prompt:

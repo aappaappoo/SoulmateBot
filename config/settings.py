@@ -65,19 +65,19 @@ class Settings(BaseSettings):
     # Voice/TTS Configuration
     openai_tts_model: str = "tts-1"  # OpenAI TTS模型：tts-1 或 tts-1-hd
     default_voice_id: str = "alloy"  # 默认语音音色：alloy, echo, fable, onyx, nova, shimmer
-    
+
     # iFlytek (科大讯飞) TTS Configuration
     iflytek_app_id: Optional[str] = None  # 讯飞应用ID
     iflytek_api_key: Optional[str] = None  # 讯飞API Key
     iflytek_api_secret: Optional[str] = None  # 讯飞API Secret
     default_iflytek_voice_id: str = "xiaoyan"  # 默认讯飞语音音色
-    
+
     # Qwen (通义千问) TTS Configuration - 阿里云 DashScope
     dashscope_api_key: Optional[str] = None  # DashScope API Key
     dashscope_api_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"  # DashScope WebSocket URL
     qwen_tts_model: str = "qwen3-tts-flash-realtime"  # Qwen TTS 模型
     default_qwen_voice_id: str = "Cherry"  # 默认 Qwen 语音音色: Cherry, Serena, Ethan, etc.
-    
+
     tts_provider: str = "qwen"  # TTS服务提供商：openai, iflytek 或 qwen
 
     class Config:

@@ -174,11 +174,11 @@ ai:
   max_tokens: 800
   context_window: 4096
 
-# 语音配置使用讯飞的
-# 启用后，Bot将使用TTS将文本回复转换为语音发送
+# 语音回复
 voice:
   enabled: True
-  voice_id: "x6_lingyuyan_pro"
+  provider: "qwen"
+  voice_id: "Serena"
 
 
 # 系统提示词配置
