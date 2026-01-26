@@ -254,14 +254,11 @@ class MultiBotLauncher:
         app.add_handler(CommandHandler("pay_premium", pay_premium_command))
         app.add_handler(CommandHandler("check_payment", check_payment_command))
 
-        # ===== 语音命令 (新增) =====
-        bot_username = bot_db.bot_username
-        voice_config = self.bot_voice_configs.get(bot_username, BotVoiceConfig())
-
-        if voice_config.enabled:
-            for handler in get_voice_handlers():
-                app.add_handler(handler)
-            logger.info(f"Voice handlers registered for @{bot_username}")
+        # ===== 语音命令 =====
+        # 始终注册语音命令处理器，让用户可以通过 /voice_on 和 /voice_off 控制语音回复
+        for handler in get_voice_handlers():
+            app.add_handler(handler)
+        logger.info(f"Voice handlers registered for @{bot_db.bot_username}")
 
 
         # ===== Bot 管理命令 =====
