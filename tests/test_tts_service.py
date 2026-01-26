@@ -104,7 +104,7 @@ class TestVoiceReplyIntegration:
     
     @pytest.mark.asyncio
     async def test_send_voice_or_text_reply_voice_disabled(self):
-        """测试Bot禁用语音时发送文本"""
+        """测试Bot禁用语音且用户未开启语音时发送文本"""
         from src.utils.voice_helper import send_voice_or_text_reply
         
         # 模拟Bot对象
@@ -116,16 +116,21 @@ class TestVoiceReplyIntegration:
         # 模拟消息对象
         mock_message = AsyncMock()
         
-        result = await send_voice_or_text_reply(
-            message=mock_message,
-            response="Hello!",
-            bot=mock_bot
-        )
-        
-        # 应该发送文本
-        assert result == "text"
-        mock_message.reply_text.assert_called_once_with("Hello!")
-        mock_message.reply_voice.assert_not_called()
+        # 模拟用户语音偏好服务（用户未开启语音）
+        with patch('src.utils.voice_helper.voice_preference_service') as mock_pref:
+            mock_pref.is_voice_enabled = MagicMock(return_value=False)
+            
+            result = await send_voice_or_text_reply(
+                message=mock_message,
+                response="Hello!",
+                bot=mock_bot,
+                user_id=12345
+            )
+            
+            # 应该发送文本
+            assert result == "text"
+            mock_message.reply_text.assert_called_once_with("Hello!")
+            mock_message.reply_voice.assert_not_called()
     
     @pytest.mark.asyncio
     async def test_send_voice_or_text_reply_voice_enabled(self):
@@ -141,20 +146,57 @@ class TestVoiceReplyIntegration:
         # 模拟消息对象
         mock_message = AsyncMock()
         
-        # 模拟TTS服务
-        with patch('src.utils.voice_helper.tts_service') as mock_tts:
+        # 模拟TTS服务和用户语音偏好
+        with patch('src.utils.voice_helper.tts_service') as mock_tts, \
+             patch('src.utils.voice_helper.voice_preference_service') as mock_pref:
             mock_tts.generate_voice = AsyncMock(return_value=b"fake audio")
             mock_tts.get_voice_as_buffer = MagicMock(return_value=io.BytesIO(b"fake audio"))
+            mock_pref.is_voice_enabled = MagicMock(return_value=False)
             
             result = await send_voice_or_text_reply(
                 message=mock_message,
                 response="Hello!",
-                bot=mock_bot
+                bot=mock_bot,
+                user_id=12345
             )
             
             # 应该发送语音
             assert result == "voice"
             mock_message.reply_voice.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_send_voice_or_text_reply_user_voice_enabled(self):
+        """测试用户通过/voice命令开启语音时发送语音"""
+        from src.utils.voice_helper import send_voice_or_text_reply
+        
+        # 模拟Bot对象（Bot没有启用语音，但用户开启了）
+        mock_bot = MagicMock()
+        mock_bot.voice_enabled = False
+        mock_bot.voice_id = "xiaoyan"
+        mock_bot.bot_username = "test_bot"
+        
+        # 模拟消息对象
+        mock_message = AsyncMock()
+        
+        # 模拟TTS服务和用户语音偏好（用户开启了语音）
+        with patch('src.utils.voice_helper.tts_service') as mock_tts, \
+             patch('src.utils.voice_helper.voice_preference_service') as mock_pref:
+            mock_tts.generate_voice = AsyncMock(return_value=b"fake audio")
+            mock_tts.get_voice_as_buffer = MagicMock(return_value=io.BytesIO(b"fake audio"))
+            mock_pref.is_voice_enabled = MagicMock(return_value=True)  # 用户开启了语音
+            
+            result = await send_voice_or_text_reply(
+                message=mock_message,
+                response="Hello!",
+                bot=mock_bot,
+                user_id=12345
+            )
+            
+            # 应该发送语音（因为用户开启了语音）
+            assert result == "voice"
+            mock_message.reply_voice.assert_called_once()
+            # 验证查询了用户语音偏好
+            mock_pref.is_voice_enabled.assert_called_once_with(12345, "test_bot")
     
     @pytest.mark.asyncio
     async def test_send_voice_or_text_reply_fallback_on_error(self):
@@ -170,14 +212,17 @@ class TestVoiceReplyIntegration:
         # 模拟消息对象
         mock_message = AsyncMock()
         
-        # 模拟TTS服务返回None（生成失败）
-        with patch('src.utils.voice_helper.tts_service') as mock_tts:
+        # 模拟TTS服务返回None（生成失败）和用户语音偏好
+        with patch('src.utils.voice_helper.tts_service') as mock_tts, \
+             patch('src.utils.voice_helper.voice_preference_service') as mock_pref:
             mock_tts.generate_voice = AsyncMock(return_value=None)
+            mock_pref.is_voice_enabled = MagicMock(return_value=False)
             
             result = await send_voice_or_text_reply(
                 message=mock_message,
                 response="Hello!",
-                bot=mock_bot
+                bot=mock_bot,
+                user_id=12345
             )
             
             # 应该回退到文本

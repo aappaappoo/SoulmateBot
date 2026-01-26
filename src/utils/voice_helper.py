@@ -5,14 +5,15 @@ Voice helper utilities for sending voice or text replies
 from loguru import logger
 
 from src.services.tts_service import tts_service
+from src.services.voice_preference_service import voice_preference_service
 
 
-async def send_voice_or_text_reply(message, response: str, bot, subscription_service=None, db_user=None):
+async def send_voice_or_text_reply(message, response: str, bot, subscription_service=None, db_user=None, user_id=None):
     """
     发送语音或文本回复
     
-    根据Bot的语音设置决定发送语音还是文本回复：
-    - 如果Bot启用了语音，则将文本转换为语音发送
+    根据用户的语音设置决定发送语音还是文本回复：
+    - 如果用户通过 /voice 命令开启了语音，则将文本转换为语音发送
     - 如果语音生成失败，回退到文本回复
     
     Args:
@@ -21,12 +22,18 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
         bot: 当前Bot数据库对象
         subscription_service: 订阅服务（可选，用于记录语音使用量）
         db_user: 数据库用户对象（可选）
+        user_id: 用户Telegram ID（可选，用于检查用户语音偏好）
         
     Returns:
         str: 发送的消息类型 ("voice" 或 "text")
     """
-    # 检查Bot是否启用语音
-    if not bot.voice_enabled:
+    # 检查用户是否通过 /voice 命令开启了语音回复
+    user_voice_enabled = False
+    if user_id and bot.bot_username:
+        user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot.bot_username)
+    
+    # 如果用户没有开启语音，且Bot也没有启用语音，则发送文本
+    if not user_voice_enabled and not bot.voice_enabled:
         await message.reply_text(response)
         return "text"
     
