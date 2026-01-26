@@ -208,11 +208,12 @@ class BotConfig:
     
     def get_system_prompt(self) -> str:
         """获取系统提示词"""
-        if self.prompt.custom:
-            return self.prompt.custom
+        base_prompt = ""
         
-        # 使用模板
-        if self.prompt.template:
+        if self.prompt.custom:
+            base_prompt = self.prompt.custom
+        elif self.prompt.template:
+            # 使用模板
             from src.conversation.prompt_template import get_template_manager
             manager = get_template_manager()
             result = manager.render_template(
@@ -221,10 +222,34 @@ class BotConfig:
                 **self.prompt.variables
             )
             if result:
-                return result
+                base_prompt = result
         
-        # 默认提示词
-        return f"你是一个名叫{self.name}的智能助手。{self.description}"
+        if not base_prompt:
+            # 默认提示词
+            base_prompt = f"你是一个名叫{self.name}的智能助手。{self.description}"
+        
+        # 添加语音情感格式指令
+        voice_emotion_instruction = """
+
+=========================
+🎭 语音情感表达格式
+=========================
+为了让语音回复更有感情和表现力，请在每条回复的开头添加语气描述标签。
+
+格式：（语气：情感描述）回复内容
+
+可用的情感描述示例：
+- （语气：开心、轻快、兴奋，语速稍快，语调上扬）
+- （语气：温柔、轻声、放慢语速，语调柔和）
+- （语气：低落、语速较慢，情绪克制）
+- （语气：非常兴奋，节奏活跃，富有感染力）
+- （语气：生气，愤怒）
+- （语气：委屈，哭泣）
+
+请根据回复内容的情感自然地选择合适的语气描述，让回复更加生动有感情。
+"""
+        
+        return base_prompt + voice_emotion_instruction
     
     def is_feature_enabled(self, feature: str) -> bool:
         """检查功能是否启用"""
