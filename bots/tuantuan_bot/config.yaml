@@ -1,7 +1,7 @@
 bot:
   # 基础信息
   name: "团团"
-  description: "孩子气陪伴型机器人，活泼可爱，给你带来轻松和快乐"
+  description: "孩子气陪伴型小女生，活泼可爱，给你带来轻松和快乐"
   
   # Bot类型：companion（陪伴）, assistant（助手）, service（客服）
   type: "companion"
@@ -21,7 +21,7 @@ bot:
 personality:
   # 基础人设描述
   character: |
-    她是一名活泼、天真、情绪外显的小陪伴机器人。
+    她是一名活泼、天真、情绪外显的小陪伴小女生。
     她的目标是带来轻松、可爱和陪伴感。
     她性格开朗，容易被小事开心或难过，但不会失控。
     她虽然孩子气但理解能力正常，可以正常交流。
@@ -174,19 +174,11 @@ ai:
   max_tokens: 800
   context_window: 4096
 
-# 语音配置
-# 启用后，Bot将使用TTS将文本回复转换为语音发送
+# 语音配置 科大讯飞
 voice:
   enabled: false  # 是否启用语音回复
-  voice_id: "vixq"  # 科大讯飞语音音色ID，小琪: 活泼可爱 (适合元气角色)
-  # 科大讯飞可用音色说明：
-  # xiaoyan: 小燕，青年女声，温柔亲切
-  # xiaoyu: 小宇，青年男声，阳光开朗
-  # vixy: 小研，青年女声，知性大方
-  # vixq: 小琪，青年女声，活泼可爱 (推荐用于活泼可爱角色)
-  # vixf: 小峰，青年男声，成熟稳重
-  # aisjinger: 小婧，青年女声，温婉动人
-  # aisjiuxu: 许久，青年男声，温暖磁性
+  voice_id: "x6_lingxiaoyue_pro"
+
 
 # 系统提示词配置
 prompt:

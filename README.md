@@ -33,28 +33,30 @@
 
 ### 🎯 核心功能
 
-| 功能 | 描述 |
-|------|------|
-| 💬 **智能对话** | 基于 GPT-4/Claude/vLLM 的智能对话系统 |
-| 🤖 **多Agent协作** | 情感支持、技术帮助、金融理财等专业Agent |
-| 🔀 **智能路由** | LLM + 规则双模式意图识别与Agent选择 |
-| 🎛️ **Skills系统** | Telegram按钮式技能选择，减少Token消耗 |
-| 🔧 **工具调用** | 支持天气查询、时间获取、计算等外部工具 |
-| 📊 **订阅管理** | 完整的订阅系统和使用限额管理 |
-| 💳 **支付集成** | 支持微信支付和 Stripe |
-| 🗄️ **记忆系统** | 用户记忆持久化，提供个性化服务 |
-| 🎤 **语音回复** | 支持TTS语音回复，每个Bot可配置不同音色 |
+
+| 功能               | 描述                                    |
+| ------------------ | --------------------------------------- |
+| 💬**智能对话**     | 基于 GPT-4/Claude/vLLM 的智能对话系统   |
+| 🤖**多Agent协作**  | 情感支持、技术帮助、金融理财等专业Agent |
+| 🔀**智能路由**     | LLM + 规则双模式意图识别与Agent选择     |
+| 🎛️**Skills系统** | Telegram按钮式技能选择，减少Token消耗   |
+| 🔧**工具调用**     | 支持天气查询、时间获取、计算等外部工具  |
+| 📊**订阅管理**     | 完整的订阅系统和使用限额管理            |
+| 💳**支付集成**     | 支持微信支付和 Stripe                   |
+| 🗄️**记忆系统**   | 用户记忆持久化，提供个性化服务          |
+| 🎤**语音回复**     | 支持TTS语音回复，每个Bot可配置不同音色  |
 
 ### 🧠 内置Agent
 
-| Agent | 功能领域 | 适用场景 |
-|-------|----------|----------|
+
+| Agent             | 功能领域 | 适用场景                     |
+| ----------------- | -------- | ---------------------------- |
 | 💝 EmotionalAgent | 情感支持 | 倾诉烦恼、情绪疏导、日常陪伴 |
-| 💻 TechAgent | 技术帮助 | 编程问题、代码调试、技术指导 |
-| 🔧 ToolAgent | 实用工具 | 天气查询、时间获取、翻译计算 |
-| 💰 FinanceAgent | 金融理财 | 投资咨询、理财规划、市场分析 |
-| 🏥 HealthAgent | 健康顾问 | 健康指导、运动饮食、睡眠改善 |
-| ⚖️ LegalAgent | 法律咨询 | 法律知识、权益保护、维权指导 |
+| 💻 TechAgent      | 技术帮助 | 编程问题、代码调试、技术指导 |
+| 🔧 ToolAgent      | 实用工具 | 天气查询、时间获取、翻译计算 |
+| 💰 FinanceAgent   | 金融理财 | 投资咨询、理财规划、市场分析 |
+| 🏥 HealthAgent    | 健康顾问 | 健康指导、运动饮食、睡眠改善 |
+| ⚖️ LegalAgent   | 法律咨询 | 法律知识、权益保护、维权指导 |
 | 📚 EducationAgent | 学习指导 | 学习方法、考试准备、知识问答 |
 
 ### 🔧 技术特性
@@ -138,15 +140,16 @@
 
 ### 技术栈
 
-| 层级 | 技术选型 |
-|------|----------|
-| **运行时** | Python 3.11+ |
-| **Bot框架** | python-telegram-bot 20.7 |
-| **AI集成** | OpenAI GPT-4 / Anthropic Claude / vLLM |
-| **数据库** | PostgreSQL + SQLAlchemy ORM |
-| **缓存** | Redis |
-| **支付** | 微信支付 / Stripe |
-| **容器化** | Docker + Docker Compose |
+
+| 层级        | 技术选型                               |
+| ----------- | -------------------------------------- |
+| **运行时**  | Python 3.11+                           |
+| **Bot框架** | python-telegram-bot 20.7               |
+| **AI集成**  | OpenAI GPT-4 / Anthropic Claude / vLLM |
+| **数据库**  | PostgreSQL + SQLAlchemy ORM            |
+| **缓存**    | Redis                                  |
+| **支付**    | 微信支付 / Stripe                      |
+| **容器化**  | Docker + Docker Compose                |
 
 ---
 
@@ -201,21 +204,23 @@
 系统采用**双模式意图识别**：
 
 1. **LLM推理模式** (`IntentSource.LLM_BASED`)
+
    - 当配置了LLM提供者时使用
    - 通过LLM分析用户意图，选择合适的Agent
    - 更智能，但消耗Token
-
 2. **规则匹配模式** (`IntentSource.RULE_BASED`)
+
    - 基于关键词匹配和置信度评分
    - 调用每个Agent的 `can_handle()` 方法
    - 选择置信度最高的Agent(s)
    - 快速，无额外Token消耗
-
 3. **回退机制** (`IntentSource.FALLBACK`)
+
    - LLM调用失败时自动回退到规则模式
    - 确保系统稳定性
 
 日志示例：
+
 ```
 🎯 Intent type: IntentType.SINGLE_AGENT | Source: llm_based
 📋 Selected agents: ['TechAgent']
@@ -330,7 +335,7 @@ DATABASE_URL=sqlite:///./soulmatebot.db
 ### 3. 初始化数据库
 
 ```bash
-python -m scripts.db_manager all
+span
 ```
 
 ### 4. 启动机器人
@@ -378,40 +383,40 @@ class MyAgent(BaseAgent):
         self._memory = memory_store or SQLiteMemoryStore()
         self._llm_provider = llm_provider
         self._keywords = ["关键词1", "关键词2"]
-    
+  
     @property
     def name(self) -> str:
         return self._name
-    
+  
     @property
     def description(self) -> str:
         return self._description
-    
+  
     def can_handle(self, message: Message, context: ChatContext) -> float:
         """返回处理置信度 (0.0-1.0)"""
         content = message.content.lower()
         matches = sum(1 for kw in self._keywords if kw in content)
-        
+      
         if matches >= 2:
             return 0.9
         elif matches == 1:
             return 0.6
         return 0.0
-    
+  
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """生成响应"""
         response_text = "这是我的回复"
-        
+      
         return AgentResponse(
             content=response_text,
             agent_name=self.name,
             confidence=0.85,
             should_continue=False
         )
-    
+  
     def memory_read(self, user_id: str) -> Dict[str, Any]:
         return self._memory.read(self.name, user_id)
-    
+  
     def memory_write(self, user_id: str, data: Dict[str, Any]) -> None:
         self._memory.write(self.name, user_id, data)
 ```
@@ -474,17 +479,18 @@ SoulmateBot 支持为每个 Bot 配置独立的语音回复功能。当启用时
 
 ### 科大讯飞可用音色（推荐）
 
-| 音色ID | 名称 | 性别 | 特点 | 适用场景 |
-|--------|------|------|------|----------|
-| `xiaoyan` | 小燕 | 女 | 温柔亲切 | 通用女声 |
-| `xiaoyu` | 小宇 | 男 | 阳光开朗 | 幽默/活泼男性角色 |
-| `vixy` | 小研 | 女 | 知性大方 | 专业顾问 |
-| `vixq` | 小琪 | 女 | 活泼可爱 | 活泼可爱角色 |
-| `vixf` | 小峰 | 男 | 成熟稳重 | 专业/成熟男性角色 |
-| `aisjinger` | 小婧 | 女 | 温婉动人 | 温柔陪伴型角色 |
-| `aisjiuxu` | 许久 | 男 | 温暖磁性 | 深沉有力角色 |
-| `vinn` | 楠楠 | 女 | 可爱甜美 | 童声角色 |
-| `aisxping` | 小萍 | 女 | 甜美清新 | 年轻女性角色 |
+
+| 音色ID      | 名称 | 性别 | 特点     | 适用场景          |
+| ----------- | ---- | ---- | -------- | ----------------- |
+| `xiaoyan`   | 小燕 | 女   | 温柔亲切 | 通用女声          |
+| `xiaoyu`    | 小宇 | 男   | 阳光开朗 | 幽默/活泼男性角色 |
+| `vixy`      | 小研 | 女   | 知性大方 | 专业顾问          |
+| `vixq`      | 小琪 | 女   | 活泼可爱 | 活泼可爱角色      |
+| `vixf`      | 小峰 | 男   | 成熟稳重 | 专业/成熟男性角色 |
+| `aisjinger` | 小婧 | 女   | 温婉动人 | 温柔陪伴型角色    |
+| `aisjiuxu`  | 许久 | 男   | 温暖磁性 | 深沉有力角色      |
+| `vinn`      | 楠楠 | 女   | 可爱甜美 | 童声角色          |
+| `aisxping`  | 小萍 | 女   | 甜美清新 | 年轻女性角色      |
 
 ### 配置方式
 
@@ -512,12 +518,13 @@ voice:
 
 根据 Bot 角色特点选择合适的音色：
 
-| Bot类型 | 推荐音色 |
-|---------|----------|
-| 幽默男性角色 | `xiaoyu` (小宇，阳光开朗) |
-| 温柔女性角色 | `aisjinger` (小婧，温婉动人) |
-| 活泼可爱角色 | `vixq` (小琪，活泼可爱) |
-| 专业顾问 | `vixy` (小研，知性大方) 或 `vixf` (小峰) |
+
+| Bot类型      | 推荐音色                                 |
+| ------------ | ---------------------------------------- |
+| 幽默男性角色 | `xiaoyu` (小宇，阳光开朗)                |
+| 温柔女性角色 | `aisjinger` (小婧，温婉动人)             |
+| 活泼可爱角色 | `vixq` (小琪，活泼可爱)                  |
+| 专业顾问     | `vixy` (小研，知性大方) 或 `vixf` (小峰) |
 
 ---
 
@@ -525,32 +532,35 @@ voice:
 
 ### 必要配置
 
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | `123456:ABC...` |
-| AI配置（任选一个） | | |
-| `OPENAI_API_KEY` | OpenAI API密钥 | `sk-...` |
-| `ANTHROPIC_API_KEY` | Anthropic API密钥 | `sk-ant-...` |
-| `VLLM_API_URL` | vLLM服务地址 | `http://localhost:8000` |
+
+| 变量                 | 说明               | 示例                    |
+| -------------------- | ------------------ | ----------------------- |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | `123456:ABC...`         |
+| AI配置（任选一个）   |                    |                         |
+| `OPENAI_API_KEY`     | OpenAI API密钥     | `sk-...`                |
+| `ANTHROPIC_API_KEY`  | Anthropic API密钥  | `sk-ant-...`            |
+| `VLLM_API_URL`       | vLLM服务地址       | `http://localhost:8000` |
 
 ### TTS 语音配置
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `TTS_PROVIDER` | TTS服务提供商 | `iflytek` |
-| `IFLYTEK_APP_ID` | 讯飞应用ID | - |
-| `IFLYTEK_API_KEY` | 讯飞API Key | - |
-| `IFLYTEK_API_SECRET` | 讯飞API Secret | - |
-| `DEFAULT_IFLYTEK_VOICE_ID` | 默认讯飞音色 | `xiaoyan` |
+
+| 变量                       | 说明           | 默认值    |
+| -------------------------- | -------------- | --------- |
+| `TTS_PROVIDER`             | TTS服务提供商  | `iflytek` |
+| `IFLYTEK_APP_ID`           | 讯飞应用ID     | -         |
+| `IFLYTEK_API_KEY`          | 讯飞API Key    | -         |
+| `IFLYTEK_API_SECRET`       | 讯飞API Secret | -         |
+| `DEFAULT_IFLYTEK_VOICE_ID` | 默认讯飞音色   | `xiaoyan` |
 
 ### 其他可选配置
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `DATABASE_URL` | 数据库连接 | `sqlite:///./soulmatebot.db` |
-| `FREE_PLAN_DAILY_LIMIT` | 免费版日限额 | 10 |
-| `BASIC_PLAN_DAILY_LIMIT` | 基础版日限额 | 100 |
-| `PREMIUM_PLAN_DAILY_LIMIT` | 高级版日限额 | 1000 |
+
+| 变量                       | 说明         | 默认值                       |
+| -------------------------- | ------------ | ---------------------------- |
+| `DATABASE_URL`             | 数据库连接   | `sqlite:///./soulmatebot.db` |
+| `FREE_PLAN_DAILY_LIMIT`    | 免费版日限额 | 10                           |
+| `BASIC_PLAN_DAILY_LIMIT`   | 基础版日限额 | 100                          |
+| `PREMIUM_PLAN_DAILY_LIMIT` | 高级版日限额 | 1000                         |
 
 ---
 
@@ -697,6 +707,7 @@ python migrations/migrate_to_multibot.py
 ### Q: 如何切换AI提供商？
 
 配置相应的环境变量即可，系统按以下优先级选择：
+
 1. vLLM（如果配置了 `VLLM_API_URL`）
 2. OpenAI（如果配置了 `OPENAI_API_KEY`）
 3. Anthropic（如果配置了 `ANTHROPIC_API_KEY`）
@@ -708,6 +719,7 @@ python migrations/migrate_to_multibot.py
 ### Q: 意图识别是用规则还是LLM？
 
 取决于是否配置了LLM提供者：
+
 - 有LLM：使用LLM推理（更智能）
 - 无LLM：使用规则匹配（更快速）
 - LLM失败时自动回退到规则
@@ -715,6 +727,7 @@ python migrations/migrate_to_multibot.py
 ### Q: 如何查看意图识别来源？
 
 查看日志中的 `Source` 字段：
+
 ```
 🎯 Intent type: IntentType.SINGLE_AGENT | Source: llm_based
 ```
@@ -724,29 +737,34 @@ python migrations/migrate_to_multibot.py
 ## 📝 更新日志
 
 ### v0.5.0 (当前)
+
 - ✅ 语音合成切换到科大讯飞 (iFlytek) TTS
 - ✅ 支持多种中文音色（小燕、小宇、小琪、小婧等）
 - ✅ 根据Bot角色自动推荐合适的音色
 - ✅ 兼容OpenAI音色ID（自动映射到讯飞音色）
 
 ### v0.4.0
+
 - ✅ 新增语音回复功能，支持TTS将文本转语音
 - ✅ 每个Bot可配置独立的音色
 - ✅ 新增语音配置字段（voice_enabled, voice_id）
 - ✅ 语音生成失败时自动回退到文本回复
 
 ### v0.3.0
+
 - ✅ 新增意图识别来源追踪（规则/LLM/回退）
 - ✅ 新增商业价值Agent：金融、健康、法律、教育
 - ✅ 完善Skills技能系统
 - ✅ 优化Agent响应内容
 
 ### v0.2.0
+
 - ✅ 多Agent编排系统
 - ✅ LLM Gateway统一网关
 - ✅ 支付集成
 
 ### v0.1.0
+
 - ✅ 基础Bot框架
 - ✅ AI对话集成
 - ✅ 订阅系统

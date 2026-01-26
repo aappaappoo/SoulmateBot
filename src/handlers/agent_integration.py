@@ -10,6 +10,8 @@ Integrated Message Handler with Agent Orchestrator
 4. 与现有消息处理流程无缝集成
 5. 支持语音回复功能（当Bot启用语音时）
 """
+from src.services.voice_preference_service import voice_preference_service
+from src.services.tts_service import tts_service
 from typing import Optional, Dict, Any, List
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
@@ -405,3 +407,68 @@ async def handle_skills_command(update: Update, context: ContextTypes.DEFAULT_TY
 def get_skill_callback_handler() -> CallbackQueryHandler:
     """获取技能回调处理器，用于注册到Bot"""
     return CallbackQueryHandler(handle_skill_callback, pattern=r"^skill:")
+
+
+async def send_response_with_voice(
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        response_text: str,
+        bot_username: str,
+        voice_config: dict
+):
+    """
+    发送回复（根据用户偏好决定是��使用语音）
+
+    Args:
+        update: Telegram Update
+        context: Bot Context
+        response_text: AI 回复文本
+        bot_username: Bot 用户名
+        voice_config: Bot 的语音配置
+    """
+    user_id = update.effective_user.id
+
+    # 检查 Bot 是否支持语音 且 用户是否开启了语音
+    bot_voice_enabled = voice_config.get("enabled", False)
+    user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
+
+    if bot_voice_enabled and user_voice_enabled:
+        # 用户开启了语音，尝试生成语音回复
+        try:
+            voice_id = voice_config.get("voice_id", "xiaoyan")
+
+            logger.info(f"Generating voice response for user {user_id}, voice_id={voice_id}")
+
+            # 生成语音
+            audio_data = await tts_service.generate_voice(
+                text=response_text,
+                voice_id=voice_id,
+                user_id=user_id
+            )
+
+            if audio_data:
+                # 发送语音消息
+                audio_buffer = tts_service.get_voice_as_buffer(audio_data)
+                await update.message.reply_voice(
+                    voice=audio_buffer,
+                    caption=response_text[:1024] if len(response_text) > 200 else None
+                )
+                logger.info(f"Voice response sent to user {user_id}")
+                return
+            else:
+                logger.warning(f"Voice generation failed, falling back to text")
+
+        except Exception as e:
+            logger.error(f"Voice response error: {e}")
+
+    # 获取语音配置 (需要从某处获取，可以存在 context.bot_data 中)
+    voice_config = context.bot_data.get("voice_config", {})
+    bot_username = context.bot.username
+
+    await send_response_with_voice(
+        update=update,
+        context=context,
+        response_text=response,
+        bot_username=bot_username,
+        voice_config=voice_config
+    )

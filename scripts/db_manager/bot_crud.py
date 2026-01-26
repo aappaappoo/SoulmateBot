@@ -560,173 +560,481 @@ class BotCRUD:
 
     @staticmethod
     def create_from_template_interactive() -> Optional[Bot]:
-        """交互式从模板创建Bot"""
+        """
+        从已有的 YAML 配置创建 Bot（简化版）
+
+        只需要：
+        1. 选择 bots/ 目录下的配置
+        2. 输入 Token
+        """
         import yaml
         from pathlib import Path
 
         print("\n" + "=" * 60)
-        print("🤖 从模板创建Bot")
+        print("🤖 导入 Bot")
         print("=" * 60)
 
         db = get_db_session()
         try:
-            # 选择创建者
+            # ========== 1. 检查用户 ==========
             users = db.query(User).all()
             if not users:
                 print("\n❌ 数据库中没有用户，需要先创建用户")
-                print("   运行:  python -m scripts.db_manager user create")
+                print("   运行: python -m scripts.db_manager user create")
                 return None
 
-            print("\n👤 选择创建者:")
-            for u in users:
-                print(f"   [{u.id}] {u.first_name or u.username} (Telegram ID: {u.telegram_id})")
+            # 如果只有一个用户，自动选择
+            if len(users) == 1:
+                created_by = users[0].id
+                print(f"\n👤 创建者: {users[0].username or users[0].first_name}")
+            else:
+                print("\n👤 选择创建者:")
+                for u in users:
+                    display = u.username or u.first_name or f"User {u.id}"
+                    print(f"   [{u.id}] {display}")
+                try:
+                    user_id = int(input("\n请选择 [序号]: ").strip())
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if not user:
+                        print(f"❌ 用户不存在")
+                        return None
+                    created_by = user.id
+                except ValueError:
+                    print("❌ 请输入数字")
+                    return None
+        finally:
+            db.close()
+
+        # ========== 2. 扫描 bots/ 目录 ==========
+        bots_dir = Path("bots")
+        if not bots_dir.exists():
+            print(f"\n❌ bots 目录不存在")
+            return None
+
+        available_configs = []
+        for bot_dir in sorted(bots_dir.iterdir()):
+            if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
+                config_file = bot_dir / "config.yaml"
+                if config_file.exists():
+                    try:
+                        with open(config_file, 'r', encoding='utf-8') as f:
+                            data = yaml.safe_load(f)
+                        bot_data = data.get("bot", {})
+                        available_configs.append({
+                            "dir_name": bot_dir.name,
+                            "name": bot_data.get("name", bot_dir.name),
+                            "description": bot_data.get("description", "")[:40],
+                            "data": data
+                        })
+                    except Exception as e:
+                        print(f"   ⚠️ 读取 {bot_dir.name} 失败: {e}")
+
+        if not available_configs:
+            print("\n❌ bots 目录下没有找到配置文件")
+            return None
+
+        # ========== 3. 选择配置 ==========
+        print("\n📁 可用的 Bot 配置:\n")
+        for i, cfg in enumerate(available_configs, 1):
+            print(f"   [{i}] {cfg['dir_name']}/")
+            print(f"       名称: {cfg['name']}")
+            if cfg['description']:
+                print(f"       描述: {cfg['description']}...")
+
+        print()
+
+        try:
+            choice = int(input("请选择配置 [序号]: ").strip())
+            if choice < 1 or choice > len(available_configs):
+                print("❌ 无效的选择")
+                return None
+            selected = available_configs[choice - 1]
+        except ValueError:
+            print("❌ 请输入数字")
+            return None
+        except KeyboardInterrupt:
+            print("\n❌ 已取消")
+            return None
+
+        # ========== 4. 读取配置 ==========
+        config_dir_name = selected["dir_name"]
+        data = selected["data"]
+
+        bot_data = data.get("bot", {})
+        personality_data = data.get("personality", {})
+        ai_data = data.get("ai", {})
+
+        bot_name = bot_data.get("name", config_dir_name)
+        description = bot_data.get("description", "")
+
+        # 构建 system_prompt
+        character = personality_data.get("character", "")
+        traits = personality_data.get("traits", [])
+        if character:
+            system_prompt = f"你是{bot_name}。\n\n{character}"
+            if traits:
+                system_prompt += f"\n\n你的性格特点: {', '.join(traits)}"
+        else:
+            system_prompt = f"你是一个名叫{bot_name}的智能助手。{description}"
+
+        ai_provider = ai_data.get("provider", "openai")
+        ai_model = ai_data.get("model", "gpt-4")
+
+        print(f"\n✅ 已选择: {config_dir_name}/ ({bot_name})")
+
+        # ========== 5. 输入 Token ==========
+        print("\n" + "-" * 60)
+        print("🔑 请输入 Bot Token (从 @BotFather 获取)")
+        print("-" * 60)
+
+        try:
+            bot_token = input("\nToken: ").strip()
+        except KeyboardInterrupt:
+            print("\n❌ 已取消")
+            return None
+
+        if not bot_token:
+            print("❌ Token 不能为空")
+            return None
+
+        # ========== 6. 验证 Token ==========
+        print("\n🔍 验证 Token...")
+
+        bot_username = None
+        try:
+            import requests
+            response = requests.get(
+                f"https://api.telegram.org/bot{bot_token}/getMe",
+                timeout=10
+            )
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("ok"):
+                    bot_info = result.get("result", {})
+                    bot_username = bot_info.get("username", "")
+                    print(f"   ✅ Token 有效!")
+                    print(f"   Bot: @{bot_username}")
+                else:
+                    print(f"   ⚠️ 验证失败: {result.get('description')}")
+            else:
+                print(f"   ⚠️ 验证失败 (HTTP {response.status_code})")
+        except Exception as e:
+            print(f"   ⚠️ 无法验证: {e}")
+
+        if not bot_username:
+            bot_username = input("\n请输入 Bot 用户名 (不含@): ").strip()
+            if not bot_username:
+                print("❌ 用户名不能为空")
+                return None
+
+        # ========== 7. 创建 Bot ==========
+        bot = BotCRUD.create(
+            bot_token=bot_token,
+            bot_username=bot_username,
+            bot_name=bot_name,
+            description=description,
+            personality=character,
+            system_prompt=system_prompt,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            created_by=created_by,
+            is_public=True
+        )
+
+        if bot:
+            print("\n" + "=" * 60)
+            print("🎉 Bot 导入成功!")
+            print("=" * 60)
+            print(f"""
+📋 信息:
+   ID: {bot.id}
+   用户名: @{bot.bot_username}
+   名称: {bot.bot_name}
+   配置: bots/{config_dir_name}/
+
+⚠️  请在 main.py 中添加映射:
+
+   BOT_CONFIG_MAPPING = {{
+       "{bot_username}": "{config_dir_name}",
+   }}
+
+💡 下一步:
+   1. python -m scripts.db_manager bind  (绑定Channel)
+   2. python main.py  (启动Bot)
+""")
+
+        return bot
+
+    @staticmethod
+    def sync_from_yaml_interactive() -> Optional[Bot]:
+        """
+        从 YAML 配置同步更新已注册的 Bot
+
+        将 bots/ 目录下的配置同步到数据库中已存在的 Bot
+        """
+        import yaml
+        from pathlib import Path
+
+        print("\n" + "=" * 60)
+        print("🔄 同步 Bot 配置")
+        print("=" * 60)
+
+        db = get_db_session()
+        try:
+            # ========== 1. 获取已注册的 Bot ==========
+            bots = db.query(Bot).all()
+            if not bots:
+                print("\n❌ 数据库中没有已注册的 Bot")
+                return None
+
+            print("\n🤖 已注册的 Bot:")
+            for b in bots:
+                print(f"   [{b.id}] @{b.bot_username} - {b.bot_name}")
 
             try:
-                user_id = int(input("\n请选择用户ID: ").strip())
-                user = db.query(User).filter(User.id == user_id).first()
-                if not user:
-                    print(f"❌ 用户不存在: ID={user_id}")
-                    return None
-                created_by = user.id
+                bot_id = int(input("\n请选择要同步的 Bot [序号]: ").strip())
             except ValueError:
-                print("❌ 无效的用户ID")
+                print("❌ 请输入数字")
                 return None
 
-            # ========== 先输入 Token 并验证 ==========
-            print("\n" + "-" * 60)
-            print("📝 请输入从 @BotFather 获取的 Token")
-            print("   格式: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz")
-            print("-" * 60)
-
-            try:
-                bot_token = input("\nBot Token: ").strip()
-            except KeyboardInterrupt:
-                print("\n❌ 已取消")
+            bot = db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                print(f"❌ Bot 不存在: ID={bot_id}")
                 return None
 
-            if not bot_token:
-                print("❌ Token不能为空")
-                return None
+            print(f"\n已选择: @{bot.bot_username} ({bot.bot_name})")
 
-            # 自动获取 Bot 信息
-            print()
-            bot_info = BotCRUD.get_bot_info_from_token(bot_token)
-
-            if not bot_info:
-                print("\n⚠️  无法从 Telegram 获取 Bot 信息")
-                if input("是否继续?  (y/n): ").lower() != 'y':
-                    return None
-                bot_info = None
-            # ==========================================
-
-            # 列出可用模板
+            # ========== 2. 扫描可用的配置 ==========
             bots_dir = Path("bots")
             if not bots_dir.exists():
-                print(f"❌ bots目录不存在: {bots_dir}")
+                print("\n❌ bots 目录不存在")
                 return None
 
-            templates = []
+            available_configs = []
+            for bot_dir in sorted(bots_dir.iterdir()):
+                if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
+                    config_file = bot_dir / "config.yaml"
+                    if config_file.exists():
+                        try:
+                            with open(config_file, 'r', encoding='utf-8') as f:
+                                data = yaml.safe_load(f)
+                            bot_data = data.get("bot", {})
+                            available_configs.append({
+                                "dir_name": bot_dir.name,
+                                "name": bot_data.get("name", bot_dir.name),
+                                "data": data,
+                                "path": config_file
+                            })
+                        except Exception as e:
+                            print(f"   ⚠️ 读取 {bot_dir.name} 失败: {e}")
 
-            print("\n📁 可用的Bot模板 (选择人设配置):\n")
-            idx = 0
-            for d in sorted(bots_dir.iterdir()):
-                if d.is_dir() and (d / "config.yaml").exists():
-                    idx += 1
-                    try:
-                        with open(d / "config.yaml", 'r', encoding='utf-8') as f:
-                            config = yaml.safe_load(f)
-                        bot_cfg = config.get('bot', {})
-                        personality_cfg = config.get('personality', {})
-                        name = bot_cfg.get('name', d.name)
-                        desc = bot_cfg.get('description', '无描述')
-                        if len(desc) > 35:
-                            desc = desc[: 35] + "..."
-                        traits = personality_cfg.get('traits', [])[:3]
-
-                        print(f"   [{idx}] {d.name}")
-                        print(f"       描述: {desc}")
-                        if traits:
-                            print(f"       性格:  {', '.join(traits)}")
-                        print()
-                        templates.append(d.name)
-                    except Exception as e:
-                        print(f"   [{idx}] {d.name} (配置读取失败)")
-                        templates.append(d.name)
-
-            if not templates:
-                print("   ❌ 没有可用的模板")
+            if not available_configs:
+                print("\n❌ 没有找到配置文件")
                 return None
 
-            # 选择模板
+            # ========== 3. 选择配置文件 ==========
+            print("\n📁 可用的配置文件:")
+            for i, cfg in enumerate(available_configs, 1):
+                print(f"   [{i}] {cfg['dir_name']}/  ({cfg['name']})")
+
             try:
-                choice = input("请选择模板序号: ").strip()
-                try:
-                    idx = int(choice) - 1
-                    if idx < 0 or idx >= len(templates):
-                        print(f"❌ 无效的选择")
-                        return None
-                    template_name = templates[idx]
-                except ValueError:
-                    if choice in templates:
-                        template_name = choice
-                    else:
-                        print(f"❌ 无效的输入")
-                        return None
-            except KeyboardInterrupt:
-                print("\n❌ 已取消")
+                choice = int(input("\n请选择配置 [序号]: ").strip())
+                if choice < 1 or choice > len(available_configs):
+                    print("❌ 无效选择")
+                    return None
+                selected = available_configs[choice - 1]
+            except ValueError:
+                print("❌ 请输入数字")
                 return None
 
-            print(f"\n✅ 已选择模板: {template_name}")
+            # ========== 4. 读取配置 ==========
+            config_dir_name = selected["dir_name"]
+            data = selected["data"]
 
-            # 显示即将创建的 Bot 信息
-            print("\n" + "-" * 60)
-            print("📋 即将创建的 Bot:")
-            print("-" * 60)
-            if bot_info:
-                print(f"   用户名: @{bot_info['username']} (来自 Telegram)")
-                print(f"   名称: {bot_info['first_name']} (来自 Telegram)")
+            bot_data = data.get("bot", {})
+            personality_data = data.get("personality", {})
+            ai_data = data.get("ai", {})
+
+            new_name = bot_data.get("name", config_dir_name)
+            new_description = bot_data.get("description", "")
+            new_character = personality_data.get("character", "")
+            new_traits = personality_data.get("traits", [])
+
+            # 构建新的 system_prompt
+            if new_character:
+                new_system_prompt = f"你是{new_name}。\n\n{new_character}"
+                if new_traits:
+                    new_system_prompt += f"\n\n你的性格特点: {', '.join(new_traits)}"
             else:
-                print(f"   用户名: (将从模板读取)")
-                print(f"   名称: (将从模板读取)")
-            print(f"   人设模板: {template_name}")
-            print(f"   创建者: {user.first_name or user.username}")
+                new_system_prompt = f"你是一个名叫{new_name}的智能助手。{new_description}"
+
+            new_ai_provider = ai_data.get("provider", "openai")
+            new_ai_model = ai_data.get("model", "gpt-4")
+
+            # ========== 5. 显示变更对比 ==========
+            print("\n" + "-" * 60)
+            print("📋 配置变更预览:")
             print("-" * 60)
 
-            if input("\n确认创建?  (y/n): ").lower() != 'y':
+            changes = []
+
+            if bot.bot_name != new_name:
+                print(f"   名称: {bot.bot_name} -> {new_name}")
+                changes.append(("bot_name", new_name))
+
+            if bot.description != new_description:
+                old_desc = (bot.description or "")[:30]
+                new_desc = new_description[:30]
+                print(f"   描述: {old_desc}... -> {new_desc}...")
+                changes.append(("description", new_description))
+
+            if bot.personality != new_character:
+                print(f"   人设: (已更新)")
+                changes.append(("personality", new_character))
+
+            if bot.system_prompt != new_system_prompt:
+                print(f"   系统提示词: (已更新)")
+                changes.append(("system_prompt", new_system_prompt))
+
+            if bot.ai_provider != new_ai_provider:
+                print(f"   AI提供商: {bot.ai_provider} -> {new_ai_provider}")
+                changes.append(("ai_provider", new_ai_provider))
+
+            if bot.ai_model != new_ai_model:
+                print(f"   AI模型: {bot.ai_model} -> {new_ai_model}")
+                changes.append(("ai_model", new_ai_model))
+
+            if not changes:
+                print("\n   ✅ 配置已是最新，无需更新")
+                return bot
+
+            # ========== 6. 确认并执行更新 ==========
+            print()
+            confirm = input("确认更新? (yes/no): ").strip().lower()
+            if confirm != "yes":
                 print("❌ 已取消")
                 return None
 
-            db.close()
+            # 执行更新
+            for field, value in changes:
+                setattr(bot, field, value)
 
-            # 创建Bot
-            print("\n正在创建Bot...")
-            bot = BotCRUD.create_from_template(
-                template_name=template_name,
-                bot_token=bot_token,
-                created_by=created_by,
-                bot_info=bot_info  # 传入从 API 获取的信息
-            )
+            db.commit()
+            db.refresh(bot)
 
-            if bot:
-                print("\n" + "=" * 60)
-                print("✅ Bot创建成功!")
-                print("=" * 60)
-                print(f"   Bot ID: {bot.id}")
-                print(f"   用户名: @{bot.bot_username}")
-                print(f"   名称: {bot.bot_name}")
-                print(f"   人设模板: {template_name}")
-                print(f"   AI模型: {bot.ai_model}")
-                print(f"   创建者: {user.first_name or user.username}")
-                print("\n📌 下一步:")
-                print("   1. 运行 'python -m scripts.db_manager bind' 绑定到Channel")
-                print("   2. 运行 'python main.py' 启动Bot")
+            print("\n" + "=" * 60)
+            print("✅ 配置同步成功!")
+            print("=" * 60)
+            print(f"""
+📋 已更新:
+   Bot: @{bot.bot_username}
+   名称: {bot.bot_name}
+   配置来源: bots/{config_dir_name}/
 
+⚠️  确保 main.py 中有映射:
+   "{bot.bot_username}": "{config_dir_name}",
+
+🔄 重启 Bot 使配置生效:
+   python main.py
+""")
             return bot
 
+        except KeyboardInterrupt:
+            print("\n\n❌ 已取消")
+            return None
         except Exception as e:
-            print(f"❌ 发生错误: {e}")
+            db.rollback()
+            print(f"\n❌ 同步失败: {e}")
             import traceback
             traceback.print_exc()
             return None
+        finally:
+            db.close()
+
+    @staticmethod
+    def sync_all_from_yaml() -> int:
+        """
+        批量同步所有 Bot 的配置（根据 main.py 中的映射）
+
+        Returns:
+            int: 成功同步的数量
+        """
+        import yaml
+        from pathlib import Path
+
+        # 从 main.py 读取映射（或者硬编码）
+        BOT_CONFIG_MAPPING = {
+            "pp_2025_bot": "pangpang_bot",
+            "qq_2025_bot": "qiqi_bot",
+            "tuantuan_2025_bot": "tuantuan_bot",
+        }
+
+        print("\n" + "=" * 60)
+        print("🔄 批量同步所有 Bot 配置")
+        print("=" * 60)
+
+        db = get_db_session()
+        bots_dir = Path("bots")
+        synced_count = 0
+
+        try:
+            bots = db.query(Bot).all()
+            if not bots:
+                print("\n❌ 没有已注册的 Bot")
+                return 0
+
+            for bot in bots:
+                config_dir = BOT_CONFIG_MAPPING.get(bot.bot_username)
+                if not config_dir:
+                    print(f"\n⚠️  @{bot.bot_username}: 没有配置映射，跳过")
+                    continue
+
+                config_path = bots_dir / config_dir / "config.yaml"
+                if not config_path.exists():
+                    print(f"\n⚠️  @{bot.bot_username}: 配置文件不存在 ({config_path})，跳过")
+                    continue
+
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        data = yaml.safe_load(f)
+
+                    bot_data = data.get("bot", {})
+                    personality_data = data.get("personality", {})
+                    ai_data = data.get("ai", {})
+
+                    # 更新字段
+                    bot.bot_name = bot_data.get("name", bot.bot_name)
+                    bot.description = bot_data.get("description", "")
+
+                    character = personality_data.get("character", "")
+                    traits = personality_data.get("traits", [])
+                    bot.personality = character
+
+                    if character:
+                        bot.system_prompt = f"你是{bot.bot_name}。\n\n{character}"
+                        if traits:
+                            bot.system_prompt += f"\n\n你的性格特点: {', '.join(traits)}"
+
+                    bot.ai_provider = ai_data.get("provider", "openai")
+                    bot.ai_model = ai_data.get("model", "gpt-4")
+
+                    print(f"\n✅ @{bot.bot_username}: 已从 bots/{config_dir}/ 同步")
+                    synced_count += 1
+
+                except Exception as e:
+                    print(f"\n❌ @{bot.bot_username}: 同步失败 - {e}")
+
+            db.commit()
+
+            print("\n" + "=" * 60)
+            print(f"🎉 批量同步完成! 成功: {synced_count}/{len(bots)}")
+            print("=" * 60)
+
+            return synced_count
+
+        except Exception as e:
+            db.rollback()
+            print(f"\n❌ 批量同步失败: {e}")
+            return 0
         finally:
             db.close()

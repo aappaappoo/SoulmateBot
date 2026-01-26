@@ -58,92 +58,229 @@ from .token_manager import TokenManager
 
 
 def init_test_data() -> bool:
-    """初始化测试数据"""
+    """
+    初始化数据 - 简化版
+
+    步骤：
+    1. 创建用户（只需 Telegram ID 和 Username）
+    2. 从 bots/ 目录选择配置创建 Bot
+    3. 自动绑定
+    """
+    import yaml
+    from pathlib import Path
+
     print("\n" + "=" * 60)
-    print("📦 初始化测试数据")
+    print("📦 初始化数据")
     print("=" * 60)
-    
-    # 尝试导入配置
+
     try:
-        from config import settings
-    except Exception as e:
-        print(f"❌ 无法加载配置: {e}")
-        print("   请确保已配置 .env 文件")
-        return False
-    
-    try:
-        # 创建用户
-        telegram_user_id = int(input("\n请输入你的 Telegram User ID: "))
-        username = input("请输入你的 Telegram 用户名 (不含@): ").strip()
-        first_name = input("请输入你的名字: ").strip()
-        last_name = input("请输入你的姓氏 (可选): ").strip() or None
-        bot_username = input("请输入 Bot 用户名 (不含@): ").strip()
-        
-        # 创建用户
+        # ========== 1. 创建用户 ==========
+        print("\n" + "-" * 60)
+        print("👤 步骤 1/3: 创建用户")
+        print("-" * 60)
+
+        while True:
+            telegram_id_str = input("\nTelegram User ID (数字): ").strip()
+            if not telegram_id_str:
+                print("   ❌ ID 不能为空")
+                continue
+            try:
+                telegram_id = int(telegram_id_str)
+                break
+            except ValueError:
+                print("   ❌ 请输入有效的数字ID")
+
+        while True:
+            username = input("Username (不含@): ").strip().lstrip('@')
+            if username:
+                break
+            print("   ❌ Username 不能为空")
+
         user = UserCRUD.create(
-            telegram_id=telegram_user_id,
+            telegram_id=telegram_id,
             username=username,
-            first_name=first_name,
-            last_name=last_name
+            first_name=username
         )
-        
+
         if not user:
+            print("❌ 创建用户失败")
             return False
-        
-        # 创建Bot
+
+        # ========== 2. 选择配置并创建 Bot ==========
+        print("\n" + "-" * 60)
+        print("🤖 步骤 2/3: 创建 Bot")
+        print("-" * 60)
+
+        # 扫描 bots/ 目录
+        bots_dir = Path("bots")
+        if not bots_dir.exists():
+            print(f"❌ bots 目录不存在: {bots_dir}")
+            return False
+
+        available_configs = []
+        for bot_dir in sorted(bots_dir.iterdir()):
+            if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
+                config_file = bot_dir / "config.yaml"
+                if config_file.exists():
+                    try:
+                        with open(config_file, 'r', encoding='utf-8') as f:
+                            data = yaml.safe_load(f)
+                        bot_data = data.get("bot", {})
+                        available_configs.append({
+                            "dir_name": bot_dir.name,
+                            "name": bot_data.get("name", bot_dir.name),
+                            "description": bot_data.get("description", "")[:40],
+                            "data": data
+                        })
+                    except:
+                        pass
+
+        if not available_configs:
+            print("❌ bots 目录下没有找到配置文件")
+            return False
+
+        print("\n📁 可用的 Bot 配置:")
+        for i, cfg in enumerate(available_configs, 1):
+            print(f"   [{i}] {cfg['dir_name']}/  -  {cfg['name']}")
+
+        try:
+            choice = int(input("\n请选择配置 [序号]: ").strip())
+            if choice < 1 or choice > len(available_configs):
+                print("❌ 无效的选择")
+                return False
+            selected = available_configs[choice - 1]
+        except ValueError:
+            print("❌ 请输入数字")
+            return False
+
+        config_dir_name = selected["dir_name"]
+        data = selected["data"]
+        bot_data = data.get("bot", {})
+        personality_data = data.get("personality", {})
+        ai_data = data.get("ai", {})
+
+        bot_name = bot_data.get("name", config_dir_name)
+        description = bot_data.get("description", "")
+
+        # 构建 system_prompt
+        character = personality_data.get("character", "")
+        traits = personality_data.get("traits", [])
+        if character:
+            system_prompt = f"你是{bot_name}。\n\n{character}"
+            if traits:
+                system_prompt += f"\n\n你的性格特点: {', '.join(traits)}"
+        else:
+            system_prompt = f"你是一个名叫{bot_name}的智能助手。{description}"
+
+        ai_provider = ai_data.get("provider", "openai")
+        ai_model = ai_data.get("model", "gpt-4")
+
+        print(f"\n已选择: {config_dir_name}/ ({bot_name})")
+
+        # 输入 Token
+        print("\n🔑 请输入 Bot Token (从 @BotFather 获取):")
+        bot_token = input("Token: ").strip()
+        if not bot_token:
+            print("❌ Token 不能为空")
+            return False
+
+        # 验证 Token 并获取用户名
+        print("\n🔍 验证 Token...")
+        bot_username = None
+        try:
+            import requests
+            response = requests.get(
+                f"https://api.telegram.org/bot{bot_token}/getMe",
+                timeout=10
+            )
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("ok"):
+                    bot_info = result.get("result", {})
+                    bot_username = bot_info.get("username", "")
+                    print(f"   ✅ Token 有效! Bot: @{bot_username}")
+        except:
+            pass
+
+        if not bot_username:
+            bot_username = input("请手动输入 Bot 用户名 (不含@): ").strip()
+            if not bot_username:
+                print("❌ Bot 用户名不能为空")
+                return False
+
+        # 创建 Bot
         bot = BotCRUD.create(
-            bot_token=settings.telegram_bot_token,
+            bot_token=bot_token,
             bot_username=bot_username,
-            bot_name=bot_username,
-            description="智能情感陪伴助手",
-            ai_provider="openai" if settings.openai_api_key else "vllm",
-            ai_model=settings.openai_model if settings.openai_api_key else settings.vllm_model,
-            created_by=user.id
+            bot_name=bot_name,
+            description=description,
+            personality=character,
+            system_prompt=system_prompt,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            created_by=user.id,
+            is_public=True
         )
-        
+
         if not bot:
+            print("❌ 创建 Bot 失败")
             return False
-        
-        # 创建私聊Channel
+
+        # ========== 3. 创建 Channel 并绑定 ==========
+        print("\n" + "-" * 60)
+        print("🔗 步骤 3/3: 创建 Channel 并绑定")
+        print("-" * 60)
+
+        # 使用用户的 Telegram ID 作为私聊 Channel
         channel = ChannelCRUD.create(
-            telegram_chat_id=telegram_user_id,
+            telegram_chat_id=telegram_id,
             chat_type="private",
-            title=f"{first_name}的私聊",
+            title=f"{username} 的私聊",
             owner_id=user.id
         )
-        
+
         if not channel:
+            print("❌ 创建 Channel 失败")
             return False
-        
-        # 绑定Bot到Channel
+
+        # 绑定 Bot 到 Channel（私聊默认 auto 模式）
         mapping = MappingCRUD.bind(
             channel_id=channel.id,
             bot_id=bot.id,
             routing_mode="auto"
         )
-        
+
         if not mapping:
+            print("❌ 绑定失败")
             return False
-        
+
+        # ========== 完成 ==========
         print("\n" + "=" * 60)
         print("🎉 初始化完成!")
         print("=" * 60)
         print(f"""
 📋 创建的数据:
-   👤 用户: @{username} (ID: {user.id})
-   🤖 Bot: @{bot_username} (ID: {bot.id})
-   💬 Channel: 私聊 (ID: {channel.id})
-   🔗 绑定: 自动回复模式
+   👤 用户: @{username} (Telegram ID: {telegram_id})
+   🤖 Bot: @{bot_username} ({bot_name})
+   💬 Channel: 私聊 (自动回复模式)
+   📁 配置目录: bots/{config_dir_name}/
 
-🚀 现在可以在Telegram中与@{bot_username}对话了!
+⚠️  重要：请在 main.py 中添加配置映射:
+
+   BOT_CONFIG_MAPPING = {{
+       "{bot_username}": "{config_dir_name}",
+   }}
+
+🚀 启动 Bot:
+   python main.py
 """)
         return True
-        
-    except ValueError as e:
-        print(f"❌ 输入错误: {e}")
+
+    except KeyboardInterrupt:
+        print("\n\n❌ 已取消")
         return False
     except Exception as e:
-        print(f"❌ 初始化失败: {e}")
+        print(f"\n❌ 初始化失败: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -163,34 +300,34 @@ def print_help():
 def main():
     """主入口函数"""
     manager = DatabaseManager()
-    
+
     if len(sys.argv) < 2:
         print_help()
         sys.exit(0)
-    
+
     command = sys.argv[1].lower()
     subcommand = sys.argv[2].lower() if len(sys.argv) > 2 else None
-    
+
     # 基础命令
     if command == 'rebuild':
         manager.rebuild()
-    
+
     elif command == 'status':
         manager.status()
-    
+
     elif command == 'fix':
         manager.fix_schema()
-    
+
     elif command == 'clear':
         manager.clear_data()
-    
+
     elif command == 'init':
         init_test_data()
-    
+
     elif command == 'all':
         if manager.rebuild(confirm=False):
             init_test_data()
-    
+
     # 用户命令
     elif command == 'user':
         if subcommand == 'list':
@@ -209,11 +346,15 @@ def main():
         if subcommand == 'list':
             BotCRUD.list_print()
         elif subcommand == 'create':
-            BotCRUD. create_interactive()
+            BotCRUD.create_interactive()
         elif subcommand == 'create-from-template' or subcommand == 'template':
             BotCRUD.create_from_template_interactive()
         elif subcommand == 'update':
             BotCRUD.update_interactive()
+        elif subcommand == 'sync':
+            BotCRUD.sync_from_yaml_interactive()
+        elif subcommand == 'sync-all':
+            BotCRUD.sync_all_from_yaml()
         elif subcommand == 'delete':
             BotCRUD.delete_interactive()
         else:
@@ -246,7 +387,7 @@ def main():
     # 绑定命令
     elif command == 'bind':
         MappingCRUD.bind_interactive()
-    
+
     elif command == 'bind-quick':
         if len(sys.argv) >= 4:
             chat_id = int(sys.argv[2])
@@ -255,7 +396,7 @@ def main():
             MappingCRUD.bind_quick(chat_id, bot_id, mode)
         else:
             print("用法: python -m scripts.db_manager bind-quick <chat_id> <bot_id> [mode]")
-    
+
     elif command == 'unbind':
         MappingCRUD.unbind_interactive()
 
@@ -270,7 +411,7 @@ def main():
     # Token命令
     elif command == 'token':
         TokenManager.manage_interactive()
-    
+
     elif command == 'token-set':
         if len(sys.argv) >= 4:
             bot_id = int(sys.argv[2])
@@ -278,17 +419,17 @@ def main():
             TokenManager.set_token(bot_id, token)
         else:
             print("用法: python -m scripts.db_manager token-set <bot_id> <token>")
-    
+
     elif command == 'token-list':
         TokenManager.list_tokens()
-    
+
     elif command == 'token-validate':
         TokenManager.validate_token()
-    
+
     # 帮助
     elif command in ['help', '-h', '--help']:
         print_help()
-    
+
     else:
         print(f"❌ 未知命令: {command}")
         print_help()

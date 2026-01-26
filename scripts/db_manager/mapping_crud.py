@@ -13,7 +13,7 @@ from typing import Optional, List
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.database import get_db_session
-from src.models.database import Channel, Bot, ChannelBotMapping, SubscriptionTier
+from src.models.database import Channel, Bot, ChannelBotMapping, SubscriptionTier, User
 
 
 class MappingCRUD:
@@ -138,90 +138,184 @@ class MappingCRUD:
 
         db = get_db_session()
         try:
-            # 显示可用的Bot
+            # ========== 1. 选择 Bot ==========
             bots = db.query(Bot).all()
             if not bots:
                 print("\n❌ 没有可用的Bot")
+                print("   请先运行: python -m scripts.db_manager bot template")
                 return None
 
             print("\n🤖 可用的Bot:")
             for b in bots:
                 print(f"   [{b.id}] @{b.bot_username} - {b.bot_name}")
 
-            bot_id = int(input("\n请输入Bot ID: "))
+            try:
+                bot_id = int(input("\n请选择Bot [序号]: ").strip())
+            except ValueError:
+                print("❌ 请输入数字")
+                return None
+
             bot = db.query(Bot).filter(Bot.id == bot_id).first()
             if not bot:
                 print(f"❌ Bot不存在: ID={bot_id}")
                 return None
 
-            # 显示已有的Channel
+            # ========== 2. 获取 Channel 列表 ==========
             channels = db.query(Channel).all()
-            print("\n💬 已有的Channel:")
-            if channels:
-                for c in channels:
-                    # 检查是否已绑定
-                    is_bound = db.query(ChannelBotMapping).filter(
-                        ChannelBotMapping.channel_id == c.id,
-                        ChannelBotMapping.bot_id == bot_id
-                    ).first()
-                    bound_mark = " ✓ (已绑定)" if is_bound else ""
-                    print(f"   [{c.id}] {c.chat_type}:  {c.title or c.telegram_chat_id}{bound_mark}")
-            else:
-                print("   (无)")
 
-            # 获取Channel
+            # 分类：已绑定和未绑定
+            bound_channels = []
+            unbound_channels = []
+
+            for c in channels:
+                is_bound = db.query(ChannelBotMapping).filter(
+                    ChannelBotMapping.channel_id == c.id,
+                    ChannelBotMapping.bot_id == bot_id
+                ).first()
+
+                # 获取所有者信息
+                owner_info = "-"
+                if c.owner_id:
+                    owner = db.query(User).filter(User.id == c.owner_id).first()
+                    if owner:
+                        owner_info = owner.username or owner.first_name or f"User{owner.id}"
+
+                channel_info = {
+                    "channel": c,
+                    "owner": owner_info,
+                    "display_name": c.title or str(c.telegram_chat_id)
+                }
+
+                if is_bound:
+                    bound_channels.append(channel_info)
+                else:
+                    unbound_channels.append(channel_info)
+
+            # ========== 3. 显示 Channel 状态 ==========
+            print("\n💬 Channel 状态:")
+
+            if bound_channels:
+                print(f"\n   ✓ 已绑定 @{bot.bot_username} 的Channel:")
+                for info in bound_channels:
+                    c = info["channel"]
+                    print(f"      [{c.id}] {c.chat_type}: {info['display_name']} ({info['owner']})")
+
+            if unbound_channels:
+                print(f"\n   ○ 可绑定的Channel:")
+                for info in unbound_channels:
+                    c = info["channel"]
+                    print(f"      [{c.id}] {c.chat_type}: {info['display_name']} ({info['owner']})")
+
+            if not channels:
+                print("   (无任何Channel)")
+
+            # ========== 4. 选择操作 ==========
             print("\n选择操作:")
-            print("   [1] 绑定到已有Channel")
+            if unbound_channels:
+                print("   [1] 绑定到已有Channel")
             print("   [2] 创建新Channel并绑定")
-            choice = input("\n请选择 (1/2): ").strip()
+
+            choice = input("\n请选择: ").strip()
+
+            channel_id = None
 
             if choice == "1":
-                if not channels:
-                    print("❌ 没有已有的Channel")
+                # ===== 绑定到已有 Channel =====
+                if not unbound_channels:
+                    print("\n❌ 没有可绑定的Channel")
+                    print("   所有Channel都已绑定此Bot，请选择 [2] 创建新Channel")
                     return None
-                channel_id = int(input("请输入Channel ID: "))
-            else:
-                # 创建新Channel
-                telegram_chat_id = int(input("请输入Telegram Chat ID: "))
 
+                # 显示可选列表（带序号方便选择）
+                print("\n📋 请选择要绑定的Channel:\n")
+
+                for i, info in enumerate(unbound_channels, 1):
+                    c = info["channel"]
+                    print(f"   [{i}] {c.chat_type}: {info['display_name']} (所有者: {info['owner']})")
+
+                print()
+
+                try:
+                    select_idx = int(input("请选择 [序号]: ").strip())
+                    if select_idx < 1 or select_idx > len(unbound_channels):
+                        print(f"❌ 无效的选择，请输入 1-{len(unbound_channels)}")
+                        return None
+
+                    selected = unbound_channels[select_idx - 1]
+                    channel_id = selected["channel"].id
+                    print(f"\n   已选择: {selected['display_name']}")
+
+                except ValueError:
+                    print("❌ 请输入数字")
+                    return None
+
+            elif choice == "2":
+                # ===== 创建新 Channel =====
+                print("\n📝 创建新Channel:")
+
+                try:
+                    telegram_chat_id = int(input("Telegram Chat ID: ").strip())
+                except ValueError:
+                    print("❌ 请输入数字")
+                    return None
+
+                # 检查是否已存在
                 existing = db.query(Channel).filter(Channel.telegram_chat_id == telegram_chat_id).first()
                 if existing:
-                    print(f"   ℹ️  Channel已存在 (ID:  {existing.id})")
+                    print(f"\n   ℹ️ Channel已存在 (ID: {existing.id})")
                     channel_id = existing.id
                 else:
                     print("\n选择Chat类型:")
-                    print("   [1] private - 私聊 (推荐)")
-                    print("   [2] group - 普通群组")
+                    print("   [1] private - 私聊")
+                    print("   [2] group - 群组")
                     print("   [3] supergroup - 超级群组")
                     print("   [4] channel - 频道")
-                    type_choice = input("请选择 (1/2/3/4, 默认1): ").strip() or "1"
+                    type_choice = input("请选择 (默认1): ").strip() or "1"
                     type_map = {"1": "private", "2": "group", "3": "supergroup", "4": "channel"}
                     chat_type = type_map.get(type_choice, "private")
 
-                    # title 改为可选
-                    title = input("名称 (可选，直接回车跳过): ").strip() or None
+                    title = input("名称 (可选): ").strip() or None
+
+                    # 选择所有者
+                    users = db.query(User).all()
+                    owner_id = None
+                    if users:
+                        print("\n👤 选择所有者:")
+                        for u in users:
+                            display = u.username or u.first_name or f"User{u.id}"
+                            print(f"   [{u.id}] {display}")
+                        owner_input = input("用户ID (可选，直接回车跳过): ").strip()
+                        if owner_input:
+                            try:
+                                owner_id = int(owner_input)
+                            except ValueError:
+                                pass
 
                     channel = Channel(
                         telegram_chat_id=telegram_chat_id,
                         chat_type=chat_type,
-                        title=title,  # 可以为 None
+                        title=title,
+                        owner_id=owner_id,
                         subscription_tier=SubscriptionTier.FREE.value,
                         is_active=True
                     )
                     db.add(channel)
                     db.commit()
                     db.refresh(channel)
-                    print(f"   ✅ Channel已创建: ID={channel.id}")
+                    print(f"\n   ✅ Channel已创建: ID={channel.id}")
                     channel_id = channel.id
+            else:
+                print("❌ 无效的选择")
+                return None
 
-            # 设置路由模式
+            # ========== 5. 选择路由模式 ==========
             print("\n📌 选择路由模式:")
-            print("   [1] mention - 需要@机器人才响应 (推荐用于群组/频道)")
-            print("   [2] auto - 自动响应所有消息 (推荐用于私聊)")
+            print("   [1] auto - 自动响应所有消息 (推荐私聊)")
+            print("   [2] mention - 需要@机器人才响应 (推荐群组)")
             print("   [3] keyword - 根据关键词触发")
-            mode_choice = input("\n请选择 (1/2/3, 默认1): ").strip() or "1"
-            mode_map = {"1": "mention", "2": "auto", "3": "keyword"}
-            routing_mode = mode_map.get(mode_choice, "mention")
+            mode_choice = input("\n请选择 (默认1): ").strip() or "1"
+            mode_map = {"1": "auto", "2": "mention", "3": "keyword"}
+            routing_mode = mode_map.get(mode_choice, "auto")
 
             # 关键词
             keywords = []
@@ -229,25 +323,27 @@ class MappingCRUD:
                 kw_input = input("请输入关键词 (逗号分隔): ").strip()
                 keywords = [k.strip() for k in kw_input.split(",") if k.strip()]
 
-            # 优先级
-            priority = int(input("优先级 (默认0): ").strip() or "0")
-
             db.close()
 
+            # ========== 6. 执行绑定 ==========
             return MappingCRUD.bind(
                 channel_id=channel_id,
                 bot_id=bot_id,
                 routing_mode=routing_mode,
-                priority=priority,
+                priority=0,
                 keywords=keywords
             )
-        except ValueError as e:
-            print(f"❌ 输入错误: {e}")
+
+        except KeyboardInterrupt:
+            print("\n\n❌ 已取消")
+            return None
+        except Exception as e:
+            print(f"\n❌ 绑定失败: {e}")
+            import traceback
+            traceback.print_exc()
             return None
         finally:
             db.close()
-
-    # ==================== UNBIND (DELETE) ====================
 
     @staticmethod
     def unbind(channel_id: int, bot_id: int, confirm: bool = False) -> bool:

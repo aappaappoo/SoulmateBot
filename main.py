@@ -11,7 +11,8 @@ Multi-Bot Launcher - 多机器人并行启动器
 """
 import asyncio
 import signal
-import sys
+import yaml
+from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ from loguru import logger
 from sqlalchemy import select
 
 from src.database import get_async_db_context, init_async_db
+from src.handlers.voice_handler import get_voice_handlers
 from src.models.database import Bot as BotModel
 from src.bot.config_loader import BotConfigLoader, BotConfig
 from src.llm_gateway import get_llm_gateway
@@ -35,6 +37,13 @@ from src.handlers import (
 from src.handlers.agent_integration import (
     handle_message_with_agents, handle_skills_command, get_skill_callback_handler
 )
+
+@dataclass
+class BotVoiceConfig:
+    """Bot 语音配置"""
+    enabled: bool = False
+    provider: str = "iflytek"
+    voice_id: str = "xiaoyan"
 
 
 @dataclass
@@ -56,6 +65,17 @@ class MultiBotLauncher:
     负责从数据库加载所有活跃的 Bot 配置和 Token，
     然后并行启动它们各自的轮询循环。
     """
+    """
+    多 Bot 启动器
+    """
+
+    # Bot 用户名到配置目录的映射
+    BOT_CONFIG_MAPPING = {
+        "pp_2025_bot": "pangpang_bot",
+        "qq_2025_bot": "qiqi_bot",
+        "tuantuan_2025_bot": "tuantuan_bot",
+        # 添加更多映射...
+    }
 
     def __init__(self, bots_dir: str = "bots"):
         self.bots_dir = bots_dir
@@ -64,8 +84,141 @@ class MultiBotLauncher:
         self._shutdown_event = asyncio.Event()
         self._llm_gateway = None
         self._session_manager = None
-
+        self.bot_voice_configs: Dict[str, BotVoiceConfig] = {}
         logger.info("MultiBotLauncher initialized")
+
+    def load_voice_config(self, bot_username: str, config_dir: str) -> BotVoiceConfig:
+        """
+        从 YAML 配置加载 Bot 的语音设置
+        """
+        config_path = Path(self.bots_dir) / config_dir / "config.yaml"
+
+        if not config_path.exists():
+            logger.debug(f"No config file for voice: {config_path}")
+            return BotVoiceConfig()
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+
+            voice_data = data.get("voice", {})
+
+            config = BotVoiceConfig(
+                enabled=voice_data.get("enabled", False),
+                provider=voice_data.get("provider", "iflytek"),
+                voice_id=voice_data.get("voice_id", "xiaoyan")
+            )
+
+            logger.info(
+                f"Loaded voice config for @{bot_username}: enabled={config.enabled}, voice_id={config.voice_id}")
+            return config
+
+        except Exception as e:
+            logger.error(f"Failed to load voice config: {e}")
+            return BotVoiceConfig()
+
+    def find_bot_config(self, bot_username: str) -> Optional[BotConfig]:
+        """
+        查找 Bot 的 YAML 配置
+
+        优先使用 BOT_CONFIG_MAPPING 映射，避免产生无用的警告日志
+        """
+        # 1. 首先检查映射表
+        if bot_username in self.BOT_CONFIG_MAPPING:
+            config_dir = self.BOT_CONFIG_MAPPING[bot_username]
+            # 直接检查文件是否存在，避免 config_loader 产生警告
+            config_path = Path(self.bots_dir) / config_dir / "config.yaml"
+            if config_path.exists():
+                config = self.config_loader.load_config(config_dir)
+                if config:
+                    logger.info(f"Loaded config: bots/{config_dir}/ -> @{bot_username}")
+                    voice_config = self.load_voice_config(bot_username, config_dir)
+                    self.bot_voice_configs[bot_username] = voice_config
+                    return config
+            else:
+                logger.warning(f"Mapped config not found: {config_path}")
+                return None
+
+        # 2. 如果没有映射，尝试直接匹配（静默检查，不产生警告）
+        possible_names = [
+            bot_username,
+            bot_username.replace("_2025_bot", "_bot"),
+            bot_username.replace("_2025", ""),
+        ]
+
+        for name in possible_names:
+            config_path = Path(self.bots_dir) / name / "config.yaml"
+            if config_path.exists():
+                config = self.config_loader.load_config(name)
+                if config:
+                    logger.info(f"Loaded config: bots/{name}/ -> @{bot_username}")
+                    voice_config = self.load_voice_config(bot_username, name)
+                    self.bot_voice_configs[bot_username] = voice_config
+                    return config
+
+        # 3. 没有找到任何配置
+        logger.info(f"No YAML config for @{bot_username}, using database config")
+        return None
+
+    async def run_single_bot(self, bot_db: BotModel) -> None:
+        """运行单个 Bot 的轮询循环"""
+        bot_id = bot_db.id
+        bot_username = bot_db.bot_username
+        token = bot_db.bot_token
+
+        logger.info(f"Starting bot: @{bot_username} (ID: {bot_id})")
+
+        try:
+            # 使用智能查找配置（不会产生多余警告）
+            bot_config = self.find_bot_config(bot_username)
+
+            # 获取语音配置
+            voice_config = self.bot_voice_configs.get(bot_username, BotVoiceConfig())
+
+            # 创建 Application
+            app = Application.builder().token(token).build()
+
+            # 存储语音配置到 bot_data，供 handler 使用
+            app.bot_data["voice_config"] = {
+                "enabled": voice_config.enabled,
+                "provider": voice_config.provider,
+                "voice_id": voice_config.voice_id,
+            }
+            app.bot_data["bot_username"] = bot_username
+
+            # 设置处理器
+            self.setup_handlers(app, bot_db, bot_config)
+
+            # 记录运行状态
+            self.running_bots[bot_id] = RunningBot(
+                bot_id=bot_id,
+                bot_username=bot_username,
+                application=app,
+                started_at=datetime.now(timezone.utc)
+            )
+
+            # 初始化并启动
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+
+            logger.info(f"✅ Bot @{bot_username} is now polling for updates")
+
+            # 保持运行
+            while not self._shutdown_event.is_set():
+                await asyncio.sleep(1)
+
+        except asyncio.CancelledError:
+            logger.info(f"Bot @{bot_username} received cancel signal")
+        except Exception as e:
+            logger.error(f"❌ Error running bot @{bot_username}: {e}", exc_info=True)
+            if bot_id in self.running_bots:
+                self.running_bots[bot_id].error_count += 1
+        finally:
+            await self.stop_bot(bot_id)
 
     async def load_bots_from_db(self) -> List[BotModel]:
         """从数据库加载所有活跃的 Bot"""
@@ -101,18 +254,39 @@ class MultiBotLauncher:
         app.add_handler(CommandHandler("pay_premium", pay_premium_command))
         app.add_handler(CommandHandler("check_payment", check_payment_command))
 
+        # ===== 语音命令 (新增) =====
+        bot_username = bot_db.bot_username
+        voice_config = self.bot_voice_configs.get(bot_username, BotVoiceConfig())
+
+        if voice_config.enabled:
+            for handler in get_voice_handlers():
+                app.add_handler(handler)
+            logger.info(f"Voice handlers registered for @{bot_username}")
+
+
         # ===== Bot 管理命令 =====
+        # app.add_handler(CommandHandler("list_bots", list_bots_command))
+        # app.add_handler(CommandHandler("add_bot", add_bot_command))
+        # app.add_handler(CommandHandler("remove_bot", remove_bot_command))
+        # app.add_handler(CommandHandler("my_bots", my_bots_command))
+        # app.add_handler(CommandHandler("config_bot", config_bot_command))
+        # app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
+        # app.add_handler(CommandHandler("my_feedback", my_feedback_command))
+        # app.add_handler(CommandHandler("skills", handle_skills_command))
+        # app.add_handler(get_skill_callback_handler())
+
+        app.add_handler(CommandHandler("subscribe", subscribe_command))
+        app.add_handler(CommandHandler("image", image_command))
+        app.add_handler(CommandHandler("pay_basic", pay_basic_command))
+        app.add_handler(CommandHandler("pay_premium", pay_premium_command))
+        app.add_handler(CommandHandler("check_payment", check_payment_command))
         app.add_handler(CommandHandler("list_bots", list_bots_command))
         app.add_handler(CommandHandler("add_bot", add_bot_command))
         app.add_handler(CommandHandler("remove_bot", remove_bot_command))
         app.add_handler(CommandHandler("my_bots", my_bots_command))
         app.add_handler(CommandHandler("config_bot", config_bot_command))
-
-        # ===== 反馈命令 =====
         app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
         app.add_handler(CommandHandler("my_feedback", my_feedback_command))
-
-        # ===== Agent 技能命令 =====
         app.add_handler(CommandHandler("skills", handle_skills_command))
         app.add_handler(get_skill_callback_handler())
 
@@ -128,64 +302,6 @@ class MultiBotLauncher:
         app.add_error_handler(error_handler)
 
         logger.info(f"Handlers registered for bot: @{bot_db.bot_username}")
-
-    async def run_single_bot(self, bot_db: BotModel) -> None:
-        """
-        运行单个 Bot 的轮询循环
-
-        Args:
-            bot_db: 数据库中的 Bot 记录
-        """
-        bot_id = bot_db.id
-        bot_username = bot_db.bot_username
-        token = bot_db.bot_token
-
-        logger.info(f"Starting bot: @{bot_username} (ID: {bot_id})")
-
-        try:
-            # 尝试加载 YAML 配置（如果存在）
-            bot_config = self.config_loader.get_config(f"{bot_username}_bot")
-            if not bot_config:
-                # 尝试其他命名格式
-                bot_config = self.config_loader.get_config(bot_username)
-
-            # 创建 Application
-            app = Application.builder().token(token).build()
-
-            # 设置处理器
-            self.setup_handlers(app, bot_db, bot_config)
-
-            # 记录运行状态
-            self.running_bots[bot_id] = RunningBot(
-                bot_id=bot_id,
-                bot_username=bot_username,
-                application=app,
-                started_at=datetime.now(timezone.utc)
-            )
-
-            # 初始化并启动
-            await app.initialize()
-            await app.start()
-            await app.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
-
-            logger.info(f"✅ Bot @{bot_username} is now polling for updates")
-
-            # 保持运行直到收到停止信号
-            while not self._shutdown_event.is_set():
-                await asyncio.sleep(1)
-
-        except asyncio.CancelledError:
-            logger.info(f"Bot @{bot_username} received cancel signal")
-        except Exception as e:
-            logger.error(f"❌ Error running bot @{bot_username}: {e}", exc_info=True)
-            if bot_id in self.running_bots:
-                self.running_bots[bot_id].error_count += 1
-        finally:
-            # 清理
-            await self.stop_bot(bot_id)
 
     async def stop_bot(self, bot_id: int) -> None:
         """停止指定的 Bot"""

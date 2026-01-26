@@ -84,29 +84,51 @@ class UserCRUD:
 
     @staticmethod
     def create_interactive() -> Optional[User]:
-        """交互式创建用户"""
+        """
+        交互式创建用户（简化版）
+
+        只需要输入 Telegram ID 和 Username
+        """
         print("\n" + "=" * 60)
         print("👤 创建新用户")
         print("=" * 60)
-        
+
         try:
-            telegram_id = int(input("\n请输入 Telegram User ID: "))
-            username = input("请输入用户名 (不含@): ").strip()
-            first_name = input("请输入名字: ").strip()
-            last_name = input("请输入姓氏 (可选): ").strip() or None
-            
+            # ===== 必填: Telegram User ID =====
+            while True:
+                telegram_id_str = input("\nTelegram User ID: ").strip()
+                if not telegram_id_str:
+                    print("   ❌ ID 不能为空")
+                    continue
+                try:
+                    telegram_id = int(telegram_id_str)
+                    break
+                except ValueError:
+                    print("   ❌ 请输入有效的数字ID")
+
+            # ===== 必填: Username =====
+            while True:
+                username = input("Username (带@的名称): ").strip()
+                # 移除 @ 符号（如果用户输入了）
+                username = username.lstrip('@')
+                if username:
+                    break
+                print("   ❌ Username 不能为空")
+
+            # 直接创建用户
             return UserCRUD.create(
                 telegram_id=telegram_id,
                 username=username,
-                first_name=first_name,
-                last_name=last_name
+                first_name=username
             )
-        except ValueError as e:
-            print(f"❌ 输入错误: {e}")
+
+        except KeyboardInterrupt:
+            print("\n\n❌ 已取消")
+            return None
+        except Exception as e:
+            print(f"\n❌ 创建失败: {e}")
             return None
 
-    # ==================== READ ====================
-    
     @staticmethod
     def get(user_id: int = None, telegram_id: int = None, username: str = None) -> Optional[User]:
         """
