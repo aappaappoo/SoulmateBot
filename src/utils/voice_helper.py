@@ -13,7 +13,8 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     发送语音或文本回复
     
     根据用户的语音设置决定发送语音还是文本回复：
-    - 如果用户通过 /voice 命令开启了语音，则将文本转换为语音发送
+    - 如果用户通过 /voice_on 命令开启了语音，则将文本转换为语音发送
+    - 如果用户通过 /voice_off 命令关闭了语音，则发送文本回复
     - 如果语音生成失败，回退到文本回复
     
     Args:
