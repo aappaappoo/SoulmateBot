@@ -1,51 +1,56 @@
 """
 用户语音偏好服务
 管理用户是否开启语音回复的设置
+使用 Redis 存储，支持高并发场景
 """
-from typing import Dict, Optional
+from typing import Optional
 from loguru import logger
-import json
-from pathlib import Path
+import redis
+from redis import Redis
+
+from config import settings
 
 
 class VoicePreferenceService:
     """
     用户语音偏好管理
 
-    存储每个用户对每个 Bot 的语音偏好设置
+    使用 Redis 存储每个用户对每个 Bot 的语音偏好设置
+    支持高并发和多实例部署
     """
+    
+    # Redis key 前缀
+    KEY_PREFIX = "voice_pref"
+    # 默认过期时间（秒），0 表示永不过期
+    DEFAULT_TTL = 0
 
     def __init__(self):
-        self.data_dir = Path("data")
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.preferences_file = self.data_dir / "voice_preferences.json"
-        self._preferences: Dict[str, bool] = {}
-        self._load()
+        self._redis: Optional[Redis] = None
+        self._fallback_preferences: dict = {}  # Redis 不可用时的降级方案
+        self._init_redis()
 
-    def _load(self):
-        """从文件加载偏好设置"""
-        if self.preferences_file.exists():
+    def _init_redis(self):
+        """初始化 Redis 连接"""
+        if settings.redis_url:
             try:
-                with open(self.preferences_file, 'r', encoding='utf-8') as f:
-                    self._preferences = json.load(f)
-                logger.info(f"Loaded {len(self._preferences)} voice preferences")
+                self._redis = redis.from_url(
+                    settings.redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5
+                )
+                # 测试连接
+                self._redis.ping()
+                logger.info(f"VoicePreferenceService: Redis connected successfully")
             except Exception as e:
-                logger.error(f"Failed to load voice preferences: {e}")
-                self._preferences = {}
+                logger.warning(f"VoicePreferenceService: Redis connection failed: {e}, using fallback mode")
+                self._redis = None
         else:
-            self._preferences = {}
-
-    def _save(self):
-        """保存偏好设置到文件"""
-        try:
-            with open(self.preferences_file, 'w', encoding='utf-8') as f:
-                json.dump(self._preferences, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save voice preferences: {e}")
+            logger.warning("VoicePreferenceService: redis_url not configured, using fallback mode")
 
     def _get_key(self, user_id: int, bot_username: str) -> str:
-        """生成存储键"""
-        return f"{user_id}:{bot_username}"
+        """生成 Redis 存储键"""
+        return f"{self.KEY_PREFIX}:{user_id}:{bot_username}"
 
     def is_voice_enabled(self, user_id: int, bot_username: str) -> bool:
         """
@@ -59,8 +64,17 @@ class VoicePreferenceService:
             bool: 是否开启语音
         """
         key = self._get_key(user_id, bot_username)
-        # 默认关闭语音
-        return self._preferences.get(key, False)
+        
+        if self._redis:
+            try:
+                value = self._redis.get(key)
+                return value == "1"
+            except Exception as e:
+                logger.error(f"Redis get error: {e}")
+                # 降级到内存存储
+                return self._fallback_preferences.get(key, False)
+        else:
+            return self._fallback_preferences.get(key, False)
 
     def set_voice_enabled(self, user_id: int, bot_username: str, enabled: bool):
         """
@@ -72,9 +86,23 @@ class VoicePreferenceService:
             enabled: 是否开启
         """
         key = self._get_key(user_id, bot_username)
-        self._preferences[key] = enabled
-        self._save()
-        logger.info(f"Voice preference set: user={user_id}, bot={bot_username}, enabled={enabled}")
+        value = "1" if enabled else "0"
+        
+        if self._redis:
+            try:
+                if self.DEFAULT_TTL > 0:
+                    self._redis.setex(key, self.DEFAULT_TTL, value)
+                else:
+                    self._redis.set(key, value)
+                logger.info(f"Voice preference set (Redis): user={user_id}, bot={bot_username}, enabled={enabled}")
+            except Exception as e:
+                logger.error(f"Redis set error: {e}")
+                # 降级到内存存储
+                self._fallback_preferences[key] = enabled
+                logger.info(f"Voice preference set (fallback): user={user_id}, bot={bot_username}, enabled={enabled}")
+        else:
+            self._fallback_preferences[key] = enabled
+            logger.info(f"Voice preference set (fallback): user={user_id}, bot={bot_username}, enabled={enabled}")
 
     def toggle_voice(self, user_id: int, bot_username: str) -> bool:
         """
@@ -87,6 +115,84 @@ class VoicePreferenceService:
         new_state = not current
         self.set_voice_enabled(user_id, bot_username, new_state)
         return new_state
+    
+    def get_all_preferences_for_user(self, user_id: int) -> dict:
+        """
+        获取用户对所有 Bot 的语音偏好设置
+        
+        Args:
+            user_id: 用户 Telegram ID
+            
+        Returns:
+            dict: {bot_username: enabled} 格式的字典
+        """
+        pattern = f"{self.KEY_PREFIX}:{user_id}:*"
+        preferences = {}
+        
+        if self._redis:
+            try:
+                keys = self._redis.keys(pattern)
+                for key in keys:
+                    # 从 key 中提取 bot_username
+                    parts = key.split(":")
+                    if len(parts) >= 3:
+                        bot_username = parts[2]
+                        value = self._redis.get(key)
+                        preferences[bot_username] = value == "1"
+            except Exception as e:
+                logger.error(f"Redis keys error: {e}")
+        
+        return preferences
+    
+    def delete_preference(self, user_id: int, bot_username: str) -> bool:
+        """
+        删除用户的语音偏好设置
+        
+        Args:
+            user_id: 用户 Telegram ID
+            bot_username: Bot 用户名
+            
+        Returns:
+            bool: 是否删除成功
+        """
+        key = self._get_key(user_id, bot_username)
+        
+        if self._redis:
+            try:
+                result = self._redis.delete(key)
+                logger.info(f"Voice preference deleted: user={user_id}, bot={bot_username}")
+                return result > 0
+            except Exception as e:
+                logger.error(f"Redis delete error: {e}")
+                return False
+        else:
+            if key in self._fallback_preferences:
+                del self._fallback_preferences[key]
+                return True
+            return False
+    
+    def health_check(self) -> dict:
+        """
+        健康检查
+        
+        Returns:
+            dict: 包含 Redis 连接状态的信息
+        """
+        status = {
+            "redis_available": False,
+            "mode": "fallback",
+            "fallback_count": len(self._fallback_preferences)
+        }
+        
+        if self._redis:
+            try:
+                self._redis.ping()
+                status["redis_available"] = True
+                status["mode"] = "redis"
+            except Exception as e:
+                status["error"] = str(e)
+        
+        return status
 
 
 # 全局实例
