@@ -28,7 +28,7 @@ def get_async_database_url(url: str) -> str:
 async_engine = create_async_engine(
     get_async_database_url(settings.database_url),
     poolclass=NullPool,  # 异步场景推荐
-    echo=settings.debug,
+    echo=settings.sql_echo,  # Controlled by SQL_ECHO env var, defaults to False
 )
 
 # 创建异步Session工厂

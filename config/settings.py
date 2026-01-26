@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     app_env: Environment = Environment.DEVELOPMENT
     debug: bool = True
     log_level: str = "INFO"
+    sql_echo: bool = False  # Enable to show SQLAlchemy SQL statements in logs
 
     # Subscription Configuration
     stripe_api_key: Optional[str] = None
