@@ -220,11 +220,11 @@ class TestVoicePreferenceService:
             
             service = VoicePreferenceService()
             
-            # 模拟Redis keys返回
-            mock_redis.keys.return_value = [
+            # 模拟Redis scan_iter返回
+            mock_redis.scan_iter.return_value = iter([
                 "voice_pref:123456:Bot1",
                 "voice_pref:123456:Bot2"
-            ]
+            ])
             
             # 模拟Redis get返回
             def get_side_effect(key):
@@ -239,6 +239,8 @@ class TestVoicePreferenceService:
             preferences = service.get_all_preferences_for_user(123456)
             
             assert preferences == {"Bot1": True, "Bot2": False}
+            # 验证使用了scan_iter而不是keys
+            mock_redis.scan_iter.assert_called_once_with(match="voice_pref:123456:*")
     
     def test_delete_preference_fallback(self):
         """测试fallback模式下删除偏好"""
@@ -378,3 +380,32 @@ class TestVoicePreferenceService:
             
             # 恢复原值
             service.DEFAULT_TTL = original_ttl
+    
+    def test_bot_username_with_colons(self):
+        """测试bot用户名包含冒号的情况"""
+        with patch('voice_preference_service.settings') as mock_settings, \
+             patch('voice_preference_service.redis.from_url') as mock_from_url:
+            
+            mock_settings.redis_url = "redis://localhost:6379/0"
+            mock_redis = MagicMock()
+            mock_redis.ping.return_value = True
+            mock_from_url.return_value = mock_redis
+            
+            service = VoicePreferenceService()
+            
+            # 测试包含冒号的bot用户名
+            bot_with_colons = "namespace:bot:v1"
+            user_id = 123456
+            
+            # 设置偏好
+            service.set_voice_enabled(user_id, bot_with_colons, True)
+            expected_key = f"voice_pref:{user_id}:{bot_with_colons}"
+            mock_redis.set.assert_called_with(expected_key, "1")
+            
+            # 模拟scan_iter返回包含冒号的key
+            mock_redis.scan_iter.return_value = iter([expected_key])
+            mock_redis.get.return_value = "1"
+            
+            # 获取所有偏好，确保bot用户名正确解析
+            preferences = service.get_all_preferences_for_user(user_id)
+            assert preferences == {bot_with_colons: True}

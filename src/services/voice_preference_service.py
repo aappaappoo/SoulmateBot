@@ -39,7 +39,7 @@ class VoicePreferenceService:
                     socket_connect_timeout=5,
                     socket_timeout=5
                 )
-                # 测试连接
+                # 测试连接（5秒超时，失败时自动降级到 fallback 模式）
                 self._redis.ping()
                 logger.info(f"VoicePreferenceService: Redis connected successfully")
             except Exception as e:
@@ -131,16 +131,18 @@ class VoicePreferenceService:
         
         if self._redis:
             try:
-                keys = self._redis.keys(pattern)
-                for key in keys:
+                # 使用 scan_iter 而不是 keys，避免阻塞 Redis 服务器
+                for key in self._redis.scan_iter(match=pattern):
                     # 从 key 中提取 bot_username
-                    parts = key.split(":")
-                    if len(parts) >= 3:
+                    # 格式: voice_pref:user_id:bot_username
+                    parts = key.split(":", 2)  # 最多分割成3部分
+                    if len(parts) == 3:
+                        # 支持 bot_username 中包含冒号的情况
                         bot_username = parts[2]
                         value = self._redis.get(key)
                         preferences[bot_username] = value == "1"
             except Exception as e:
-                logger.error(f"Redis keys error: {e}")
+                logger.error(f"Redis scan error: {e}")
         
         return preferences
     
