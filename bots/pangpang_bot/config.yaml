@@ -174,7 +174,7 @@ ai:
 
 # 语音配置 科大讯飞
 voice:
-  enabled: false  # 是否启用语音回复
+  enabled: True
   voice_id: "x6_lingfeiyi_pro"
 
 

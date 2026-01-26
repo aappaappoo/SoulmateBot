@@ -177,7 +177,7 @@ ai:
 # 语音配置使用讯飞的
 # 启用后，Bot将使用TTS将文本回复转换为语音发送
 voice:
-  enabled: false  # 是否启用语音回复
+  enabled: True
   voice_id: "x6_lingyuyan_pro"
 
 
