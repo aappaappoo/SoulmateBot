@@ -17,9 +17,13 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bot_username = context.bot.username
 
+    logger.info(f"🎤 [VOICE CMD] /voice command received from user_id={user_id}, bot=@{bot_username}")
+
     # 获取当前状态
     is_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
     status = "✅ 已开启" if is_enabled else "❌ 已关闭"
+    
+    logger.info(f"🎤 [VOICE CMD] Current voice status for user_id={user_id}: enabled={is_enabled}")
 
     # 创建按钮
     keyboard = [
@@ -39,6 +43,7 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
+    logger.info(f"🎤 [VOICE CMD] Voice settings menu sent to user_id={user_id}")
 
 
 async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -51,9 +56,12 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bot_username = context.bot.username
 
+    logger.info(f"🎤 [VOICE CALLBACK] Voice toggle callback received from user_id={user_id}, bot=@{bot_username}")
+
     if query.data == "voice_toggle":
         # 切换状态
         new_state = voice_preference_service.toggle_voice(user_id, bot_username)
+        logger.info(f"🎤 [VOICE CALLBACK] Voice preference toggled for user_id={user_id}: new_state={new_state}")
 
         if new_state:
             status = "✅ 已开启"
@@ -75,6 +83,7 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+        logger.info(f"🎤 [VOICE CALLBACK] Voice settings updated for user_id={user_id}")
 
 
 async def voice_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -84,13 +93,17 @@ async def voice_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bot_username = context.bot.username
 
+    logger.info(f"🎤 [VOICE ON] /voice_on command received from user_id={user_id}, bot=@{bot_username}")
+
     voice_preference_service.set_voice_enabled(user_id, bot_username, True)
+    logger.info(f"🎤 [VOICE ON] Voice preference set to enabled for user_id={user_id}")
     
     # 用语音回复确认消息
     confirmation_text = "🎤 语音回复已开启！我会用声音回复你~"
     
     try:
         # 生成语音
+        logger.info(f"🎤 [VOICE ON] Generating voice confirmation for user_id={user_id}")
         audio_data = await tts_service.generate_voice(
             text=confirmation_text,
             voice_id=None,  # 使用默认音色
@@ -98,6 +111,7 @@ async def voice_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         if audio_data:
+            logger.info(f"🎤 [VOICE ON] Voice generated successfully, audio_size={len(audio_data)} bytes")
             # 将音频数据转换为可发送的缓冲区
             audio_buffer = tts_service.get_voice_as_buffer(audio_data)
             
@@ -106,14 +120,14 @@ async def voice_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 voice=audio_buffer,
                 caption=confirmation_text
             )
-            logger.info(f"✅ Voice confirmation sent for /voice_on command, user={user_id}")
+            logger.info(f"🎤 [VOICE ON] Voice confirmation sent for user_id={user_id}")
         else:
             # 语音生成失败，回退到文本
-            logger.warning(f"⚠️ Voice generation failed for /voice_on, falling back to text")
+            logger.warning(f"⚠️ [VOICE ON] Voice generation failed for user_id={user_id}, falling back to text")
             await update.message.reply_text(confirmation_text)
     except Exception as e:
         # 语音发送失败，回退到文本
-        logger.error(f"❌ Voice response failed for /voice_on: {e}, falling back to text")
+        logger.error(f"❌ [VOICE ON] Voice response failed for user_id={user_id}: {e}, falling back to text")
         await update.message.reply_text(confirmation_text)
 
 
@@ -124,12 +138,15 @@ async def voice_off_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bot_username = context.bot.username
     
+    logger.info(f"🎤 [VOICE OFF] /voice_off command received from user_id={user_id}, bot=@{bot_username}")
+    
     # 用语音回复确认消息（作为最后一条语音消息，之后就关闭了）
     confirmation_text = "📝 语音回复已关闭，我会用文字回复你"
     
     # 先发送语音确认（在关闭之前）
     try:
         # 生成语音
+        logger.info(f"🎤 [VOICE OFF] Generating final voice confirmation for user_id={user_id}")
         audio_data = await tts_service.generate_voice(
             text=confirmation_text,
             voice_id=None,  # 使用默认音色
@@ -137,6 +154,7 @@ async def voice_off_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         if audio_data:
+            logger.info(f"🎤 [VOICE OFF] Voice generated successfully, audio_size={len(audio_data)} bytes")
             # 将音频数据转换为可发送的缓冲区
             audio_buffer = tts_service.get_voice_as_buffer(audio_data)
             
@@ -145,18 +163,19 @@ async def voice_off_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 voice=audio_buffer,
                 caption=confirmation_text
             )
-            logger.info(f"✅ Voice confirmation sent for /voice_off command, user={user_id}")
+            logger.info(f"🎤 [VOICE OFF] Voice confirmation sent for user_id={user_id}")
         else:
             # 语音生成失败，回退到文本
-            logger.warning(f"⚠️ Voice generation failed for /voice_off, falling back to text")
+            logger.warning(f"⚠️ [VOICE OFF] Voice generation failed for user_id={user_id}, falling back to text")
             await update.message.reply_text(confirmation_text)
     except Exception as e:
         # 语音发送失败，回退到文本
-        logger.error(f"❌ Voice response failed for /voice_off: {e}, falling back to text")
+        logger.error(f"❌ [VOICE OFF] Voice response failed for user_id={user_id}: {e}, falling back to text")
         await update.message.reply_text(confirmation_text)
     
     # 然后关闭语音设置
     voice_preference_service.set_voice_enabled(user_id, bot_username, False)
+    logger.info(f"🎤 [VOICE OFF] Voice preference set to disabled for user_id={user_id}")
 
 
 def get_voice_handlers():
