@@ -13,7 +13,8 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     发送语音或文本回复
     
     根据用户的语音设置决定发送语音还是文本回复：
-    - 如果用户通过 /voice 命令开启了语音，则将文本转换为语音发送
+    - 如果用户通过 /voice_on 命令开启了语音，则将文本转换为语音发送
+    - 如果用户通过 /voice_off 命令关闭了语音，则发送文本回复
     - 如果语音生成失败，回退到文本回复
     
     Args:
@@ -27,18 +28,17 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     Returns:
         str: 发送的消息类型 ("voice" 或 "text")
     """
-    # 检查用户是否通过 /voice 命令开启了语音回复
+    # 检查用户是否通过 /voice_on 命令开启了语音回复
+    # 用户的语音偏好设置优先级最高
     # 默认为 False，仅当 user_id 和 bot_username 都有效时才检查
     user_voice_enabled = False
     bot_username = getattr(bot, 'bot_username', None)
     if user_id is not None and bot_username:
         user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
     
-    # 检查Bot是否启用语音
-    bot_voice_enabled = getattr(bot, 'voice_enabled', False)
-    
-    # 如果用户没有开启语音，且Bot也没有启用语音，则发送文本
-    if not user_voice_enabled and not bot_voice_enabled:
+    # 如果用户没有开启语音，则发送文本
+    # 用户通过 /voice_on 和 /voice_off 命令控制是否使用语音回复
+    if not user_voice_enabled:
         await message.reply_text(response)
         return "text"
     
