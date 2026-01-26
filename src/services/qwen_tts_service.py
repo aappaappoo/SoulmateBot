@@ -170,6 +170,7 @@ class QwenTTSService:
         self.api_key = getattr(settings, 'dashscope_api_key', None)
         self.api_url = getattr(settings, 'dashscope_api_url', self.DEFAULT_API_URL)
         self.model = getattr(settings, 'qwen_tts_model', 'qwen3-tts-flash-realtime')
+        self.speed = getattr(settings, 'qwen_tts_speed', 1.0)
 
         # 从环境变量获取 API key（如果未在配置中设置）
         if not self.api_key and 'DASHSCOPE_API_KEY' in os.environ:
@@ -278,12 +279,12 @@ class QwenTTSService:
 
             # 连接
             qwen_tts_realtime.connect()
-
             # 更新会话配置
             qwen_tts_realtime.update_session(
                 voice=voice_id,
                 response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
-                mode='server_commit'
+                mode='server_commit',
+                speed=self.speed
             )
 
             # 如果有情感标签，添加情感描述前缀
