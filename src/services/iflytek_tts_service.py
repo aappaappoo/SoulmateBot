@@ -192,8 +192,8 @@ class IflytekTTSService:
                     "app_id": self.app_id
                 },
                 "business": {
-                    "aue": "raw",  # raw: pcm格式
-                    "auf": "audio/L16;rate=16000",  # 16k采样率
+                    "aue": "lame",  # raw: pcm格式
+                    "auf": "1",   # 开启流式返回（mp3需要）
                     "vcn": voice_id,  # 发音人
                     "tte": "UTF8",  # 文本编码
                     "speed": 50,  # 语速，范围0-100
@@ -283,7 +283,7 @@ class IflytekTTSService:
             BytesIO 缓冲区对象
         """
         buffer = io.BytesIO(audio_data)
-        buffer.name = "voice.pcm"  # PCM格式
+        buffer.name = "voice.mp3"  # PCM格式
         buffer.seek(0)
         return buffer
 

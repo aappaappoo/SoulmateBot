@@ -1,4 +1,4 @@
-<div align="center">
+span
 
 # 🤖 SoulmateBot - 智能多Agent对话机器人平台
 
@@ -396,7 +396,7 @@ class MyAgent(BaseAgent):
         """返回处理置信度 (0.0-1.0)"""
         content = message.content.lower()
         matches = sum(1 for kw in self._keywords if kw in content)
-      
+    
         if matches >= 2:
             return 0.9
         elif matches == 1:
@@ -406,7 +406,7 @@ class MyAgent(BaseAgent):
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """生成响应"""
         response_text = "这是我的回复"
-      
+    
         return AgentResponse(
             content=response_text,
             agent_name=self.name,

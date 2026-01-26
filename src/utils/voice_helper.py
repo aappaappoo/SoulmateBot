@@ -38,7 +38,7 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     
     if user_id is not None and bot_username:
         user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
-    
+
     logger.info(f"🎤 [VOICE FLOW 1/5] PREFERENCE_CHECK: voice_enabled={user_voice_enabled}")
     
     # 如果用户没有开启语音，则发送文本

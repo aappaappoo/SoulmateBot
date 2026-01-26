@@ -71,7 +71,7 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message = "📝 语音回复功能已关闭，后续的对话将使用文本进行回复"
             button_text = "🎤 开启语音"
 
-        # ���新按钮
+        # 新按钮
         keyboard = [[InlineKeyboardButton(button_text, callback_data="voice_toggle")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
