@@ -28,12 +28,17 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
         str: 发送的消息类型 ("voice" 或 "text")
     """
     # 检查用户是否通过 /voice 命令开启了语音回复
+    # 默认为 False，仅当 user_id 和 bot_username 都有效时才检查
     user_voice_enabled = False
-    if user_id and bot.bot_username:
-        user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot.bot_username)
+    bot_username = getattr(bot, 'bot_username', None)
+    if user_id is not None and bot_username:
+        user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
+    
+    # 检查Bot是否启用语音
+    bot_voice_enabled = getattr(bot, 'voice_enabled', False)
     
     # 如果用户没有开启语音，且Bot也没有启用语音，则发送文本
-    if not user_voice_enabled and not bot.voice_enabled:
+    if not user_voice_enabled and not bot_voice_enabled:
         await message.reply_text(response)
         return "text"
     
