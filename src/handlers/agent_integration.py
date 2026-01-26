@@ -428,11 +428,11 @@ async def send_response_with_voice(
     """
     user_id = update.effective_user.id
 
-    # 检查 Bot 是否支持语音 且 用户是否开启了语音
-    bot_voice_enabled = voice_config.get("enabled", False)
+    # 检查用户是否通过 /voice_on 开启了语音回复
+    # 用户的语音偏好设置优先级最高
     user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
 
-    if bot_voice_enabled and user_voice_enabled:
+    if user_voice_enabled:
         # 用户开启了语音，尝试生成语音回复
         try:
             voice_id = voice_config.get("voice_id", "xiaoyan")
