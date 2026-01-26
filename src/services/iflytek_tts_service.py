@@ -157,15 +157,18 @@ class IflytekTTSService:
         Returns:
             语音数据的字节流，如果失败返回None
         """
+        logger.info(f"🔊 [TTS IFLYTEK] generate_voice called: voice_id={voice_id}, text_length={len(text)}, user_id={user_id}")
+        
         if not self.app_id or not self.api_key or not self.api_secret:
-            logger.error("iFlytek TTS credentials not configured, cannot generate voice")
+            logger.error("🔊 [TTS IFLYTEK] iFlytek TTS credentials not configured, cannot generate voice")
             return None
         
         # 获取讯飞音色ID
         iflytek_voice = self._get_iflytek_voice_id(voice_id)
+        logger.info(f"🔊 [TTS IFLYTEK] Resolved voice_id: input={voice_id} -> iflytek_voice={iflytek_voice}")
         
         try:
-            logger.info(f"Generating voice with iFlytek TTS, voice={iflytek_voice}, text_length={len(text)}")
+            logger.info(f"🔊 [TTS IFLYTEK] Starting WebSocket connection to iFlytek TTS API")
             
             # 使用同步WebSocket并在线程池中运行
             audio_data = await asyncio.get_event_loop().run_in_executor(
@@ -176,12 +179,14 @@ class IflytekTTSService:
             )
             
             if audio_data:
-                logger.info(f"Voice generated successfully, size={len(audio_data)} bytes")
+                logger.info(f"🔊 [TTS IFLYTEK] Voice generated successfully: audio_size={len(audio_data)} bytes")
+            else:
+                logger.warning(f"🔊 [TTS IFLYTEK] Voice generation returned no data")
             
             return audio_data
             
         except Exception as e:
-            logger.error(f"iFlytek TTS generation error: {str(e)}", exc_info=True)
+            logger.error(f"🔊 [TTS IFLYTEK] TTS generation error: {str(e)}", exc_info=True)
             return None
     
     def _sync_generate_voice(self, text: str, voice_id: str) -> Optional[bytes]:

@@ -88,6 +88,7 @@ class TTSService:
         Returns:
             语音数据的字节流，如果失败返回None
         """
+        logger.info(f"🔊 [TTS] generate_voice called: provider={self.provider}, voice_id={voice_id}, text_length={len(text)}, user_id={user_id}")
         if self.provider == "iflytek":
             return await self._generate_voice_iflytek(text, voice_id, user_id)
         else:
@@ -103,7 +104,7 @@ class TTSService:
         使用 OpenAI TTS 生成语音
         """
         if not settings.openai_api_key or not settings.openai_api_key.strip():
-            logger.error("OpenAI API key not configured, cannot generate voice")
+            logger.error("🔊 [TTS OPENAI] OpenAI API key not configured, cannot generate voice")
             return None
         
         # 验证音色是否有效
@@ -112,7 +113,7 @@ class TTSService:
         try:
             client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
             
-            logger.info(f"Generating voice with OpenAI TTS, voice_id={voice}, text_length={len(text)}")
+            logger.info(f"🔊 [TTS OPENAI] Calling OpenAI TTS API: model={self.model}, voice={voice}, text_length={len(text)}")
             
             # 调用 OpenAI TTS API
             response = await client.audio.speech.create(
@@ -125,11 +126,11 @@ class TTSService:
             # 获取音频数据
             audio_data = response.content
             
-            logger.info(f"Voice generated successfully, size={len(audio_data)} bytes")
+            logger.info(f"🔊 [TTS OPENAI] Voice generated successfully: audio_size={len(audio_data)} bytes")
             return audio_data
             
         except Exception as e:
-            logger.error(f"OpenAI TTS generation error: {str(e)}", exc_info=True)
+            logger.error(f"🔊 [TTS OPENAI] TTS generation error: {str(e)}", exc_info=True)
             return None
     
     async def _generate_voice_iflytek(
@@ -141,6 +142,7 @@ class TTSService:
         """
         使用科大讯飞 TTS 生成语音
         """
+        logger.info(f"🔊 [TTS IFLYTEK] Delegating to iFlytek TTS service: voice_id={voice_id}, text_length={len(text)}")
         if self._iflytek_service is None:
             from .iflytek_tts_service import iflytek_tts_service
             self._iflytek_service = iflytek_tts_service

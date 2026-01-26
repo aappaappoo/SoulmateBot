@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 import openai
 import anthropic
 import aiohttp
+from loguru import logger
 
 from config import settings
 
@@ -176,7 +177,12 @@ class ConversationService:
         if len(messages) > 20:
             messages = messages[-20:]
         
+        provider_name = type(self.provider).__name__
+        logger.info(f"🧠 [AI] Calling AI provider: provider={provider_name}, message_count={len(messages)}, user_message_length={len(user_message)}")
+        
         response = await self.provider.generate_response(messages, context)
+        
+        logger.info(f"🧠 [AI] AI response received: provider={provider_name}, response_length={len(response)}")
         return response
 
 

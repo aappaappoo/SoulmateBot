@@ -33,21 +33,29 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     # 默认为 False，仅当 user_id 和 bot_username 都有效时才检查
     user_voice_enabled = False
     bot_username = getattr(bot, 'bot_username', None)
+    
+    logger.info(f"🎤 [VOICE FLOW 1/5] PREFERENCE_CHECK: Checking voice preference for user_id={user_id}, bot=@{bot_username}")
+    
     if user_id is not None and bot_username:
         user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
+    
+    logger.info(f"🎤 [VOICE FLOW 1/5] PREFERENCE_CHECK: voice_enabled={user_voice_enabled}")
     
     # 如果用户没有开启语音，则发送文本
     # 用户通过 /voice_on 和 /voice_off 命令控制是否使用语音回复
     if not user_voice_enabled:
+        logger.info(f"📝 [VOICE FLOW 2/5] TEXT_REPLY: Sending text reply (voice disabled), response_length={len(response)}")
         await message.reply_text(response)
+        logger.info(f"📝 [VOICE FLOW 2/5] TEXT_REPLY: Text reply sent successfully")
         return "text"
     
     # 获取Bot的音色ID
     voice_id = bot.voice_id
+    logger.info(f"🎤 [VOICE FLOW 2/5] VOICE_CONFIG: Using voice_id={voice_id} for bot @{bot.bot_username}")
     
     try:
         # 生成语音
-        logger.info(f"🎤 Generating voice response for bot @{bot.bot_username} with voice_id={voice_id}")
+        logger.info(f"🎤 [VOICE FLOW 3/5] TTS_REQUEST: Requesting TTS service, text_length={len(response)}, voice_id={voice_id}")
         audio_data = await tts_service.generate_voice(
             text=response,
             voice_id=voice_id,
@@ -55,11 +63,15 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
         )
         
         if audio_data:
+            logger.info(f"🎤 [VOICE FLOW 3/5] TTS_RESPONSE: TTS generated successfully, audio_size={len(audio_data)} bytes")
+            
             # 将音频数据转换为可发送的缓冲区
+            logger.info(f"🎤 [VOICE FLOW 4/5] BUFFER_CREATE: Creating audio buffer for Telegram")
             audio_buffer = tts_service.get_voice_as_buffer(audio_data)
             
             # 发送语音消息（同时附带文本作为caption）
             # 注意：Telegram语音消息的caption有限制，如果文本太长需要分开发送
+            logger.info(f"🎤 [VOICE FLOW 5/5] VOICE_SEND: Sending voice message to Telegram")
             if len(response) <= 1024:
                 await message.reply_voice(
                     voice=audio_buffer,
@@ -73,17 +85,18 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
             # 记录语音使用量
             if subscription_service and db_user:
                 await subscription_service.record_usage(db_user, action_type="voice")
+                logger.info(f"🎤 [VOICE FLOW 5/5] USAGE_RECORD: Voice usage recorded for db_user_id={db_user.id}")
             
-            logger.info(f"✅ Voice response sent successfully for bot @{bot.bot_username}")
+            logger.info(f"🎤 [VOICE FLOW 5/5] VOICE_SEND: Voice response sent successfully for bot @{bot.bot_username}")
             return "voice"
         else:
             # 语音生成失败，回退到文本
-            logger.warning(f"⚠️ Voice generation returned None, falling back to text")
+            logger.warning(f"⚠️ [VOICE FLOW 3/5] TTS_FAILED: Voice generation returned None, falling back to text")
             await message.reply_text(response)
             return "text"
             
     except Exception as e:
         # 语音发送失败，回退到文本
-        logger.error(f"❌ Voice response failed: {e}, falling back to text")
+        logger.error(f"❌ [VOICE FLOW] ERROR: Voice response failed: {e}, falling back to text")
         await message.reply_text(response)
         return "text"
