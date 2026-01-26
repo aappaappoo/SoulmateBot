@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     dashscope_api_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"  # DashScope WebSocket URL
     qwen_tts_model: str = "qwen3-tts-flash-realtime"  # Qwen TTS 模型
     default_qwen_voice_id: str = "Cherry"  # 默认 Qwen 语音音色: Cherry, Serena, Ethan, etc.
-    qwen_tts_speed: float = 0.2
+    qwen_tts_speed: float = 0.8
     tts_provider: str = "qwen"  # TTS服务提供商：openai, iflytek 或 qwen
 
     class Config:

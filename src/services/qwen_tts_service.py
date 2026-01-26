@@ -284,7 +284,6 @@ class QwenTTSService:
                 voice=voice_id,
                 response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
                 mode='server_commit',
-                speed=self.speed
             )
 
             # 如果有情感标签，添加情感描述前缀
@@ -393,17 +392,18 @@ class QwenTTSService:
                 pcm_path = pcm_file.name
 
             ogg_path = pcm_path.replace('.pcm', '.ogg')
-
-            # ffmpeg 命令：PCM (24kHz, 16-bit, mono) -> OGG/Opus
+            tempo_value = max(0.5, min(2.0, self.speed))  # 限制在有效范围内
+            logger.info(f"🔊 [TTS QWEN] update_session with speed={self.speed}")
             cmd = [
                 'ffmpeg', '-y',
-                '-f', 's16le',  # 输入格式：16-bit signed little-endian
-                '-ar', '24000',  # 采样率：24kHz
-                '-ac', '1',  # 单声道
-                '-i', pcm_path,  # 输入文件
-                '-c:a', 'libopus',  # 编码器：opus
-                '-b:a', '32k',  # 比特率
-                ogg_path  # 输出文件
+                '-f', 's16le',
+                '-ar', '24000',
+                '-ac', '1',
+                '-i', pcm_path,
+                '-af', f'atempo={tempo_value}',  # 添加语速调整
+                '-c:a', 'libopus',
+                '-b:a', '32k',
+                ogg_path
             ]
 
             subprocess.run(cmd, check=True, capture_output=True)
@@ -416,7 +416,6 @@ class QwenTTSService:
             import os
             os.unlink(pcm_path)
             os.unlink(ogg_path)
-
             buffer = io.BytesIO(ogg_data)
             buffer.name = "voice.ogg"
             buffer.seek(0)
