@@ -237,14 +237,14 @@ class TTSService:
         
         对于不同的TTS提供商，会进行不同的处理：
         - OpenAI: 直接返回opus格式
-        - iFlytek: 将PCM转换为OGG/Opus（如果有转换逻辑）
+        - iFlytek: 返回MP3格式（使用aue="lame"配置）
         - Qwen: 将PCM转换为OGG/Opus（必须转换，否则Telegram无法播放）
         
         Args:
             audio_data: 音频数据字节
             
         Returns:
-            BytesIO 缓冲区对象（OGG/Opus格式，Telegram支持）
+            BytesIO 缓冲区对象（Telegram支持的音频格式）
         """
         if self.provider == "qwen":
             # Qwen TTS 返回 PCM 格式，需要转换为 OGG/Opus
@@ -253,7 +253,7 @@ class TTSService:
                 self._qwen_service = qwen_tts_service
             return self._qwen_service.get_voice_as_buffer(audio_data)
         elif self.provider == "iflytek":
-            # iFlytek TTS 返回 PCM 格式，需要转换为 OGG/Opus
+            # iFlytek TTS 返回 MP3 格式 (aue="lame")，直接使用
             if self._iflytek_service is None:
                 from .iflytek_tts_service import iflytek_tts_service
                 self._iflytek_service = iflytek_tts_service
