@@ -165,13 +165,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     conversation_history=history
                 )
 
-                # 发送响应（根据Bot设置决定是语音还是文本）
+                # 发送响应（根据用户语音设置决定是语音还是文本）
                 message_type = await send_voice_or_text_reply(
                     message=message,
                     response=response,
                     bot=selected_bot,
                     subscription_service=subscription_service,
-                    db_user=db_user
+                    db_user=db_user,
+                    user_id=user.id
                 )
                 logger.info(f"✅ Successfully replied to user {user.id} with bot @{selected_bot.bot_username} (type: {message_type})")
 
