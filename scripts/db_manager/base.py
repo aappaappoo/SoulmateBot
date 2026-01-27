@@ -44,6 +44,8 @@ class DatabaseManager:
             bool: 是否成功添加注释
         """
         try:
+            from sqlalchemy import inspect as sqla_inspect
+            
             # 获取所有模型类
             table_comments = {}
             column_comments = {}
@@ -68,16 +70,44 @@ class DatabaseManager:
             
             # 生成并执行 SQL 注释语句
             with self.engine.connect() as conn:
+                # 验证表名存在于数据库中（防止SQL注入）
+                inspector = sqla_inspect(self.engine)
+                valid_tables = set(inspector.get_table_names())
+                
+                # 获取数据库方言，用于正确引用标识符
+                dialect = self.engine.dialect
+                
                 # 添加表级注释
                 for table_name, comment in table_comments.items():
-                    sql = text(f"COMMENT ON TABLE {table_name} IS :comment")
+                    # 验证表名是有效的数据库表
+                    if table_name not in valid_tables:
+                        print(f"   ⚠️  跳过无效表名: {table_name}")
+                        continue
+                    
+                    # 使用方言的标识符引用功能确保安全
+                    quoted_table = dialect.identifier_preparer.quote_identifier(table_name)
+                    sql = text(f"COMMENT ON TABLE {quoted_table} IS :comment")
                     conn.execute(sql, {"comment": comment})
                     print(f"   ✅ 已添加表注释: {table_name}")
                 
                 # 添加列级注释
                 for table_name, columns in column_comments.items():
+                    # 验证表名
+                    if table_name not in valid_tables:
+                        continue
+                    
+                    # 获取表的有效列名
+                    valid_columns = set(col['name'] for col in inspector.get_columns(table_name))
+                    quoted_table = dialect.identifier_preparer.quote_identifier(table_name)
+                    
                     for column_name, comment in columns.items():
-                        sql = text(f"COMMENT ON COLUMN {table_name}.{column_name} IS :comment")
+                        # 验证列名
+                        if column_name not in valid_columns:
+                            continue
+                        
+                        # 使用方言的标识符引用功能确保安全
+                        quoted_column = dialect.identifier_preparer.quote_identifier(column_name)
+                        sql = text(f"COMMENT ON COLUMN {quoted_table}.{quoted_column} IS :comment")
                         conn.execute(sql, {"comment": comment})
                 
                 conn.commit()
