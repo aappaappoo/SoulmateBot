@@ -242,14 +242,18 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         chat_id=str(chat_id)
                     ))
             
+            # 🧠 创建记忆服务实例（在整个请求中复用）
+            memory_service = None
+            if db_user:
+                memory_service = get_conversation_memory_service(
+                    db=db,
+                    llm_provider=conversation_service.provider
+                )
+            
             # 🧠 检索用户的相关记忆
             memory_context = ""
-            if db_user:
+            if db_user and memory_service:
                 try:
-                    memory_service = get_conversation_memory_service(
-                        db=db,
-                        llm_provider=conversation_service.provider
-                    )
                     memories = await memory_service.retrieve_memories(
                         user_id=db_user.id,
                         bot_id=selected_bot.id if selected_bot else None,
@@ -342,22 +346,19 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     await subscription_service.record_usage(db_user, action_type="message")
                     await db.commit()
                     
-                    # 🧠 提取并保存重要对话事件到长期记忆
-                    try:
-                        memory_service = get_conversation_memory_service(
-                            db=db,
-                            llm_provider=conversation_service.provider
-                        )
-                        saved_memory = await memory_service.extract_and_save_important_events(
-                            user_id=db_user.id,
-                            bot_id=selected_bot.id if selected_bot else None,
-                            user_message=message_text,
-                            bot_response=response
-                        )
-                        if saved_memory:
-                            logger.info(f"🧠 Saved important memory: {saved_memory.event_summary[:50]}...")
-                    except Exception as e:
-                        logger.warning(f"Error saving memory: {e}")
+                    # 🧠 提取并保存重要对话事件到长期记忆（复用已创建的memory_service）
+                    if memory_service:
+                        try:
+                            saved_memory = await memory_service.extract_and_save_important_events(
+                                user_id=db_user.id,
+                                bot_id=selected_bot.id if selected_bot else None,
+                                user_message=message_text,
+                                bot_response=response
+                            )
+                            if saved_memory:
+                                logger.info(f"🧠 Saved important memory: {saved_memory.event_summary[:50]}...")
+                        except Exception as e:
+                            logger.warning(f"Error saving memory: {e}")
             
             # 记录处理信息
             if result.agent_responses:

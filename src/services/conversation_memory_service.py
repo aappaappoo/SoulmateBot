@@ -309,7 +309,7 @@ AI回复: {bot_response}
             query = query.where(
                 or_(
                     UserMemory.bot_id == bot_id,
-                    UserMemory.bot_id == None  # 也包括通用记忆
+                    UserMemory.bot_id.is_(None)  # 也包括通用记忆
                 )
             )
         
