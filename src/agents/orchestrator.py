@@ -88,6 +88,9 @@ class AgentOrchestrator:
     4. 使用最终决策Agent整合所有响应
     5. 返回最终结果给用户
     """
+    # 支持的情感标签
+    SUPPORTED_EMOTIONS = ["happy", "gentle", "sad", "excited", "angry", "crying"]
+    
     UNIFIED_PROMPT_TEMPLATE = """你是一个智能助手，需要同时完成三项任务：
 
     ## 任务1：意图识别
@@ -102,6 +105,21 @@ class AgentOrchestrator:
     ## 任务2：生成回复（仅当 intent 为 direct_response 时）
     根据以下人设直接回复用户：
     {system_prompt}
+    
+    **重要：回复必须以情感前缀开头，格式为：（语气：情感描述）回复内容**
+    
+    可用的情感标签及使用场景：
+    - 开心、轻快 → 用于表达高兴、愉快的情绪（happy）
+    - 兴奋、活跃 → 用于表达激动、热情的情绪（excited）
+    - 温柔、轻声、柔和 → 用于表达温暖、关怀的情绪（gentle）
+    - 低落、伤感、难过 → 用于表达悲伤、失落的情绪（sad）
+    - 生气、愤怒 → 用于表达愤怒的情绪（angry）
+    - 委屈、哭泣 → 用于表达委屈的情绪（crying）
+    
+    示例格式：
+    - （语气：开心、轻快，语速稍快，语调上扬）你好啊！今天天气真好！
+    - （语气：温柔、轻声，语调柔和）我理解你的感受，慢慢来没关系的
+    - （语气：兴奋、活跃，富有感染力）太棒了！恭喜你！
 
     ## 任务3：记忆分析
     判断对话是否包含值得记住的重要信息（个人信息、偏好、目标、重要事件等）。
@@ -117,6 +135,7 @@ class AgentOrchestrator:
         "agents": [],
         "reasoning": "判断理由",
         "direct_reply": "回复内容或null",
+        "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
         "memory": {{
             "is_important": false,
             "importance_level": "low" | "medium" | "high" | null,
@@ -211,6 +230,14 @@ class AgentOrchestrator:
             metadata = {"reasoning": data.get("reasoning", "")}
             direct_reply = data.get("direct_reply")
 
+            # 提取情感标签并添加DEBUG日志
+            emotion = data.get("emotion")
+            if emotion and emotion in self.SUPPORTED_EMOTIONS:
+                logger.debug(f"🎭 [EMOTION EXTRACT] Extracted emotion from LLM response: emotion={emotion}")
+                metadata["emotion"] = emotion
+            else:
+                logger.debug(f"🎭 [EMOTION EXTRACT] No valid emotion extracted from LLM response: raw_emotion={emotion}")
+
             memory_data = data.get("memory", {})
             memory_analysis = MemoryAnalysis(
                 is_important=memory_data.get("is_important", False),
@@ -222,7 +249,7 @@ class AgentOrchestrator:
                 raw_date_expression=memory_data.get("raw_date_expression"),
             )
 
-            logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important}")
+            logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important} | emotion={emotion}")
             return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis
 
         except Exception as e:
@@ -458,7 +485,20 @@ class AgentOrchestrator:
 1. 整合各专家的观点
 2. 保持语气一致和自然
 3. 不要提及"专家"或"分析结果"
-4. 直接回答用户的问题"""
+4. 直接回答用户的问题
+5. **回复必须以情感前缀开头，格式为：（语气：情感描述）回复内容**
+
+可用的情感标签及使用场景：
+- 开心、轻快 → 用于表达高兴、愉快的情绪（happy）
+- 兴奋、活跃 → 用于表达激动、热情的情绪（excited）
+- 温柔、轻声、柔和 → 用于表达温暖、关怀的情绪（gentle）
+- 低落、伤感、难过 → 用于表达悲伤、失落的情绪（sad）
+- 生气、愤怒 → 用于表达愤怒的情绪（angry）
+- 委屈、哭泣 → 用于表达委屈的情绪（crying）
+
+示例格式：
+- （语气：开心、轻快，语速稍快，语调上扬）你好啊！今天天气真好！
+- （语气：温柔、轻声，语调柔和）我理解你的感受，慢慢来没关系的"""
 
             final_response = await self.llm_provider.generate_response(
                 [{"role": "user", "content": synthesis_prompt}],
