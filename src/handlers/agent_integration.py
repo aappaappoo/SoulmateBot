@@ -261,7 +261,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     memories = await memory_service.retrieve_memories(
                         user_id=db_user.id,
                         bot_id=selected_bot.id if selected_bot else None,
-                        current_message=message_text
+                        current_message=message_text,
+                        skip_llm_analysis=True  # 避免额外 LLM 调用
                     )
                     if memories:
                         memory_context = await memory_service.format_memories_for_context(memories)
@@ -351,55 +352,60 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     await db.commit()
                     
                     # 🧠 保存记忆（优先使用统一分析结果，无需额外 LLM）
-                    if result.memory_analysis and result.memory_analysis.is_important:
-                        try:
-                            # 检查重要性级别
-                            importance_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-                            level = result.memory_analysis.importance_level or "low"
-                            if importance_order.get(level, 0) >= importance_order.get("medium", 1):
-                                # 解析日期
-                                event_date = None
-                                if result.memory_analysis.event_date:
-                                    try:
-                                        event_date = datetime.strptime(result.memory_analysis.event_date, "%Y-%m-%d")
-                                    except ValueError:
-                                        pass
-                                if not event_date and result.memory_analysis.raw_date_expression:
-                                    event_date = DateParser().parse(result.memory_analysis.raw_date_expression)
-                                if not event_date:
-                                    event_date = DateParser().parse_from_message(message_text)
+                    if result.memory_analysis is not None:
+                        # 统一模式已返回记忆分析结果，直接使用（无论是否重要）
+                        if result.memory_analysis.is_important:
+                            try:
+                                # 检查重要性级别
+                                importance_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+                                level = result.memory_analysis.importance_level or "low"
+                                if importance_order.get(level, 0) >= importance_order.get("medium", 1):
+                                    # 解析日期
+                                    event_date = None
+                                    if result.memory_analysis.event_date:
+                                        try:
+                                            event_date = datetime.strptime(result.memory_analysis.event_date, "%Y-%m-%d")
+                                        except ValueError:
+                                            pass
+                                    if not event_date and result.memory_analysis.raw_date_expression:
+                                        event_date = DateParser().parse(result.memory_analysis.raw_date_expression)
+                                    if not event_date:
+                                        event_date = DateParser().parse_from_message(message_text)
 
-                                # 生成 Embedding
-                                embedding, embedding_model = None, None
-                                if memory_service and memory_service.embedding_service:
-                                    try:
-                                        embed_result = await memory_service.embedding_service.embed_text(
-                                            result.memory_analysis.event_summary or message_text[:200]
-                                        )
-                                        embedding, embedding_model = embed_result.embedding, embed_result.model
-                                    except Exception as e:
-                                        logger.warning(f"Embedding error: {e}")
+                                    # 生成 Embedding
+                                    embedding, embedding_model = None, None
+                                    if memory_service and memory_service.embedding_service:
+                                        try:
+                                            embed_result = await memory_service.embedding_service.embed_text(
+                                                result.memory_analysis.event_summary or message_text[:200]
+                                            )
+                                            embedding, embedding_model = embed_result.embedding, embed_result.model
+                                        except Exception as e:
+                                            logger.warning(f"Embedding error: {e}")
 
-                                # 保存记忆
-                                memory = UserMemory(
-                                    user_id=db_user.id,
-                                    bot_id=selected_bot.id if selected_bot else None,
-                                    event_summary=result.memory_analysis.event_summary or message_text[:200],
-                                    user_message=message_text,
-                                    bot_response=response,
-                                    importance=result.memory_analysis.importance_level or "medium",
-                                    event_type=result.memory_analysis.event_type,
-                                    keywords=result.memory_analysis.keywords or [],
-                                    event_date=event_date,
-                                    embedding=embedding,
-                                    embedding_model=embedding_model
-                                )
-                                db.add(memory)
-                                logger.info(f"🧠 Saved memory from unified analysis (0 extra LLM calls)")
-                        except Exception as e:
-                            logger.warning(f"Error saving memory: {e}")
+                                    # 保存记忆
+                                    memory = UserMemory(
+                                        user_id=db_user.id,
+                                        bot_id=selected_bot.id if selected_bot else None,
+                                        event_summary=result.memory_analysis.event_summary or message_text[:200],
+                                        user_message=message_text,
+                                        bot_response=response,
+                                        importance=result.memory_analysis.importance_level or "medium",
+                                        event_type=result.memory_analysis.event_type,
+                                        keywords=result.memory_analysis.keywords or [],
+                                        event_date=event_date,
+                                        embedding=embedding,
+                                        embedding_model=embedding_model
+                                    )
+                                    db.add(memory)
+                                    logger.info(f"🧠 Saved memory from unified analysis (0 extra LLM calls)")
+                            except Exception as e:
+                                logger.warning(f"Error saving memory: {e}")
+                        else:
+                            # 统一模式判断不重要，直接跳过，不再回退调用
+                            logger.debug(f"🧠 Skipping memory save - unified analysis determined not important")
                     elif memory_service:
-                        # 回退到原有方式（非统一模式时）
+                        # 只有在非统一模式（result.memory_analysis is None）时才回退
                         try:
                             saved_memory = await memory_service.extract_and_save_important_events(
                                 user_id=db_user.id,

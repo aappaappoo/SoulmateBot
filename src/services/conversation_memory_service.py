@@ -1055,7 +1055,8 @@ AI回复: {bot_response}
             current_message: Optional[str] = None,
             event_types: Optional[List[str]] = None,
             limit: Optional[int] = None,
-            use_vector_search: bool = True
+            use_vector_search: bool = True,
+            skip_llm_analysis: bool = False
     ) -> List[UserMemory]:
         """
         检索用户的相关记忆
@@ -1070,6 +1071,7 @@ AI回复: {bot_response}
             event_types: 事件类型过滤列表
             limit: 返回数量限制
             use_vector_search: 是否使用向量相似度搜索
+            skip_llm_analysis: 是否跳过LLM分析（避免额外的LLM调用）
 
         Returns:
             相关记忆列表（按相似度/重要性排序）
@@ -1145,6 +1147,7 @@ AI回复: {bot_response}
             current_message=current_message,
             event_types=event_types,
             limit=limit,
+            skip_llm_analysis=skip_llm_analysis,
             trace_id=trace_id
         )
 
@@ -1284,6 +1287,7 @@ AI回复: {bot_response}
             current_message: Optional[str],
             event_types: Optional[List[str]],
             limit: int,
+            skip_llm_analysis: bool = False,
             trace_id: str = ""
     ) -> List[UserMemory]:
         """
@@ -1315,8 +1319,8 @@ AI回复: {bot_response}
             query = query.where(UserMemory.event_type.in_(event_types))
             logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Filtering by event_types: {event_types}")
 
-        # 如果有当前消息且有LLM，尝试智能匹配
-        if current_message and self.llm_provider:
+        # 如果有当前消息且有LLM，且未设置跳过标志，尝试智能匹配
+        if current_message and self.llm_provider and not skip_llm_analysis:
             try:
                 logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Analyzing retrieval needs with LLM...")
                 retrieval_analysis = await self._analyze_retrieval_needs(current_message, trace_id)
@@ -1334,6 +1338,8 @@ AI回复: {bot_response}
                 logger.warning(
                     f"⚠️ [Memory-MetadataSearch][{trace_id}] Error in retrieval analysis | error={e}"
                 )
+        elif skip_llm_analysis:
+            logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Skipping LLM analysis (skip_llm_analysis=True)")
 
         # 按重要性和访问时间排序
         query = query.order_by(
