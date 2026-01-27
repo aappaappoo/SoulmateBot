@@ -1,8 +1,5 @@
 """
-Qwen Text-to-Speech (TTS) service for voice response generation
-通义千问文本转语音服务 - 用于生成语音回复
-
-使用阿里云 DashScope 的 Qwen TTS Realtime API
+Text-to-Speech (TTS) service for voice response generation
 """
 import io
 import os
@@ -16,6 +13,10 @@ from pathlib import Path
 from loguru import logger
 import subprocess
 import tempfile
+import re
+import numpy as np
+from config import settings
+
 
 try:
     import dashscope
@@ -26,9 +27,16 @@ except ImportError:
     DASHSCOPE_AVAILABLE = False
     logger.warning("dashscope package not installed. Qwen TTS will not be available.")
 
-import numpy as np
 
-from config import settings
+# 在 qwen_tts_service.py 顶部添加
+_EMOTION_PATTERN = re.compile(r'^（语气：([^）]+)）')
+
+
+def extract_emotion_and_text(text: str) -> str | None:
+    """简单提取情感前缀用于日志（避免循环导入）"""
+    match = _EMOTION_PATTERN.match(text)
+    return match.group(1) if match else None
+
 
 
 class QwenTTSCallback(QwenTtsRealtimeCallback):
@@ -287,14 +295,15 @@ class QwenTTSService:
             )
 
             # 如果有情感标签，添加情感描述前缀
-            final_text = text
-            if emotion and emotion in self.EMOTION_MAP:
-                emotion_prefix = self.EMOTION_MAP[emotion]
-                final_text = f"{emotion_prefix}{text}"
-                logger.debug(f"🔊 [TTS QWEN] Added emotion prefix: {emotion}")
+            extracted_emotion = extract_emotion_and_text(text)
+            if extracted_emotion:
+                logger.debug(f"🔊 [TTS QWEN] Text contains emotion prefix: {extracted_emotion}")
+            else:
+                logger.debug(f"🔊 [TTS QWEN] Text contains emotion prefix: None")
 
-            # 发送文本
-            qwen_tts_realtime.append_text(final_text)
+            # 这个部分暂时先删除后续增加情感部分
+            text = re.compile(r'^（语气：[^）]+）').sub('', text)
+            qwen_tts_realtime.append_text(text)
 
             # 完成发送
             qwen_tts_realtime.finish()
