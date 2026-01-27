@@ -2,8 +2,13 @@
 Test for database manager comment functionality
 """
 import pytest
+import sys
+import os
 from unittest.mock import Mock, MagicMock, patch, call
 from sqlalchemy import text
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class TestDatabaseManagerComments:
@@ -11,11 +16,6 @@ class TestDatabaseManagerComments:
     
     def test_add_table_comments_extracts_model_info(self):
         """Test that add_table_comments correctly extracts table and column comments"""
-        # Import here to avoid issues with module loading
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
         from scripts.db_manager.base import DatabaseManager
         from src.models.database import Base
         
@@ -58,10 +58,6 @@ class TestDatabaseManagerComments:
     
     def test_add_table_comments_handles_exceptions(self):
         """Test that add_table_comments handles exceptions gracefully"""
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
         from scripts.db_manager.base import DatabaseManager
         
         # Create a mock engine that raises an exception
@@ -80,10 +76,6 @@ class TestDatabaseManagerComments:
     
     def test_comment_extraction_from_models(self):
         """Test that comments are correctly extracted from model definitions"""
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
         from src.models.database import Base, User, Payment, Bot
         
         # Verify that models have docstrings
