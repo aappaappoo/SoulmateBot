@@ -36,6 +36,89 @@ class DatabaseManager:
         """初始化数据库管理器"""
         self.engine = engine
 
+    def add_table_comments(self) -> bool:
+        """
+        为所有表和列添加注释
+        
+        Returns:
+            bool: 是否成功添加注释
+        """
+        try:
+            from sqlalchemy import inspect as sqla_inspect
+            
+            # 获取所有模型类
+            table_comments = {}
+            column_comments = {}
+            
+            # 遍历所有模型
+            for mapper in Base.registry.mappers:
+                model_class = mapper.class_
+                table_name = mapper.mapped_table.name
+                
+                # 获取表级注释（从文档字符串）
+                if model_class.__doc__:
+                    # 提取第一行作为简短描述
+                    doc_lines = model_class.__doc__.strip().split('\n')
+                    table_comment = doc_lines[0].strip()
+                    table_comments[table_name] = table_comment
+                
+                # 获取列级注释
+                column_comments[table_name] = {}
+                for column in mapper.mapped_table.columns:
+                    if column.comment:
+                        column_comments[table_name][column.name] = column.comment
+            
+            # 生成并执行 SQL 注释语句
+            with self.engine.connect() as conn:
+                # 验证表名存在于数据库中（防止SQL注入）
+                inspector = sqla_inspect(self.engine)
+                valid_tables = set(inspector.get_table_names())
+                
+                # 获取数据库方言，用于正确引用标识符
+                dialect = self.engine.dialect
+                
+                # 添加表级注释
+                for table_name, comment in table_comments.items():
+                    # 验证表名是有效的数据库表
+                    if table_name not in valid_tables:
+                        print(f"   ⚠️  跳过无效表名: {table_name}")
+                        continue
+                    
+                    # 使用方言的标识符引用功能确保安全
+                    quoted_table = dialect.identifier_preparer.quote_identifier(table_name)
+                    sql = text(f"COMMENT ON TABLE {quoted_table} IS :comment")
+                    conn.execute(sql, {"comment": comment})
+                    print(f"   ✅ 已添加表注释: {table_name}")
+                
+                # 添加列级注释
+                for table_name, columns in column_comments.items():
+                    # 验证表名
+                    if table_name not in valid_tables:
+                        continue
+                    
+                    # 获取表的有效列名
+                    valid_columns = set(col['name'] for col in inspector.get_columns(table_name))
+                    quoted_table = dialect.identifier_preparer.quote_identifier(table_name)
+                    
+                    for column_name, comment in columns.items():
+                        # 验证列名
+                        if column_name not in valid_columns:
+                            continue
+                        
+                        # 使用方言的标识符引用功能确保安全
+                        quoted_column = dialect.identifier_preparer.quote_identifier(column_name)
+                        sql = text(f"COMMENT ON COLUMN {quoted_table}.{quoted_column} IS :comment")
+                        conn.execute(sql, {"comment": comment})
+                
+                conn.commit()
+            
+            print(f"\n✅ 已为 {len(table_comments)} 个表添加注释")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 添加注释失败: {e}")
+            return False
+
     def rebuild(self, confirm: bool = False) -> bool:
         """
         重建数据库：删除所有表并重新创建
@@ -79,6 +162,13 @@ class DatabaseManager:
             Base.metadata.create_all(bind=self.engine)
             elapsed = time.time() - start_time
             show_progress(f"🔨 所有表已创建 ({elapsed:.2f}s)", done=True)
+            
+            # 添加注释
+            show_progress("📝 正在添加表和列注释...")
+            start_time = time.time()
+            self.add_table_comments()
+            elapsed = time.time() - start_time
+            show_progress(f"📝 注释已添加 ({elapsed:.2f}s)", done=True)
             
             print()
             self.show_tables()
