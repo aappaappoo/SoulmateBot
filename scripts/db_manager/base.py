@@ -36,6 +36,59 @@ class DatabaseManager:
         """初始化数据库管理器"""
         self.engine = engine
 
+    def add_table_comments(self) -> bool:
+        """
+        为所有表和列添加注释
+        
+        Returns:
+            bool: 是否成功添加注释
+        """
+        try:
+            # 获取所有模型类
+            table_comments = {}
+            column_comments = {}
+            
+            # 遍历所有模型
+            for mapper in Base.registry.mappers:
+                model_class = mapper.class_
+                table_name = mapper.mapped_table.name
+                
+                # 获取表级注释（从文档字符串）
+                if model_class.__doc__:
+                    # 提取第一行作为简短描述
+                    doc_lines = model_class.__doc__.strip().split('\n')
+                    table_comment = doc_lines[0].strip()
+                    table_comments[table_name] = table_comment
+                
+                # 获取列级注释
+                column_comments[table_name] = {}
+                for column in mapper.mapped_table.columns:
+                    if column.comment:
+                        column_comments[table_name][column.name] = column.comment
+            
+            # 生成并执行 SQL 注释语句
+            with self.engine.connect() as conn:
+                # 添加表级注释
+                for table_name, comment in table_comments.items():
+                    sql = text(f"COMMENT ON TABLE {table_name} IS :comment")
+                    conn.execute(sql, {"comment": comment})
+                    print(f"   ✅ 已添加表注释: {table_name}")
+                
+                # 添加列级注释
+                for table_name, columns in column_comments.items():
+                    for column_name, comment in columns.items():
+                        sql = text(f"COMMENT ON COLUMN {table_name}.{column_name} IS :comment")
+                        conn.execute(sql, {"comment": comment})
+                
+                conn.commit()
+            
+            print(f"\n✅ 已为 {len(table_comments)} 个表添加注释")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 添加注释失败: {e}")
+            return False
+
     def rebuild(self, confirm: bool = False) -> bool:
         """
         重建数据库：删除所有表并重新创建
@@ -79,6 +132,13 @@ class DatabaseManager:
             Base.metadata.create_all(bind=self.engine)
             elapsed = time.time() - start_time
             show_progress(f"🔨 所有表已创建 ({elapsed:.2f}s)", done=True)
+            
+            # 添加注释
+            show_progress("📝 正在添加表和列注释...")
+            start_time = time.time()
+            self.add_table_comments()
+            elapsed = time.time() - start_time
+            show_progress(f"📝 注释已添加 ({elapsed:.2f}s)", done=True)
             
             print()
             self.show_tables()
