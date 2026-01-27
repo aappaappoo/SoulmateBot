@@ -611,3 +611,76 @@ class FeedbackSummary(Base):
     
     def __repr__(self):
         return f"<FeedbackSummary(id={self.id}, bot_id={self.bot_id}, period={self.period_type}, start={self.period_start})>"
+
+
+class MemoryImportance(str, enum.Enum):
+    """
+    记忆重要性级别枚举
+    Memory importance level enumeration
+    """
+    LOW = "low"          # 低重要性（日常寒暄等，通常不记录）
+    MEDIUM = "medium"    # 中等重要性（一般事件）
+    HIGH = "high"        # 高重要性（重要事件，如生日、重要决定等）
+    CRITICAL = "critical"  # 关键重要性（非常重要的事件）
+
+
+class UserMemory(Base):
+    """
+    用户长期记忆模型 - 存储用户与Bot的重要对话事件
+    User long-term memory model for storing important conversation events
+    
+    设计说明：
+    - 使用RAG技术存储和检索重要对话事件
+    - 只记录重要事件，过滤日常寒暄
+    - 支持按用户和Bot检索相关记忆
+    - 用于提供个性化的对话体验
+    
+    并发控制说明：
+    - 使用复合索引优化按用户和Bot查询的性能
+    """
+    __tablename__ = "user_memories"
+
+    # 主键和标识符
+    id = Column(Integer, primary_key=True, index=True, comment="内部自增主键")
+    uuid = Column(String(36), unique=True, index=True, default=generate_uuid, nullable=False, comment="外部引用UUID")
+    
+    # 关联关系
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="关联的用户ID")
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="SET NULL"), nullable=True, index=True, comment="关联的机器人ID")
+    
+    # 记忆内容
+    event_summary = Column(Text, nullable=False, comment="事件摘要，用于快速检索")
+    user_message = Column(Text, nullable=True, comment="用户原始消息")
+    bot_response = Column(Text, nullable=True, comment="机器人回复")
+    
+    # 记忆分类和重要性
+    importance = Column(String(20), default=MemoryImportance.MEDIUM.value, comment="重要性级别：low/medium/high/critical")
+    event_type = Column(String(50), nullable=True, comment="事件类型：birthday, preference, goal, emotion, life_event等")
+    keywords = Column(JSON, default=[], comment="关键词列表，用于检索匹配")
+    
+    # 时间信息
+    event_date = Column(DateTime, nullable=True, comment="事件发生的日期（如果提及）")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="记忆创建时间")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="最后更新时间")
+    
+    # 记忆状态
+    is_active = Column(Boolean, default=True, comment="记忆是否有效")
+    access_count = Column(Integer, default=0, comment="记忆被访问次数，用于优化检索")
+    last_accessed_at = Column(DateTime, nullable=True, comment="最后访问时间")
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    bot = relationship("Bot", foreign_keys=[bot_id])
+    
+    # 索引和约束
+    __table_args__ = (
+        # 复合索引：优化按用户和Bot查询记忆
+        Index('idx_user_bot_memory', 'user_id', 'bot_id', 'is_active'),
+        # 复合索引：优化按重要性查询
+        Index('idx_memory_importance', 'user_id', 'importance', 'created_at'),
+        # 复合索引：优化按事件类型查询
+        Index('idx_memory_event_type', 'user_id', 'event_type', 'is_active'),
+    )
+    
+    def __repr__(self):
+        return f"<UserMemory(id={self.id}, user_id={self.user_id}, importance={self.importance}, summary={self.event_summary[:50]}...)>"

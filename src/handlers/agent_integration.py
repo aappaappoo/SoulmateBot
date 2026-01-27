@@ -9,6 +9,7 @@ Integrated Message Handler with Agent Orchestrator
 3. 处理技能回调
 4. 与现有消息处理流程无缝集成
 5. 支持语音回复功能（当Bot启用语音时）
+6. 对话记忆功能：保存重要事件，检索历史记忆
 """
 from src.services.voice_preference_service import voice_preference_service
 from src.services.tts_service import tts_service
@@ -22,6 +23,7 @@ from src.database import get_async_db_context
 from src.subscription.async_service import AsyncSubscriptionService
 from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
+from src.services.conversation_memory_service import get_conversation_memory_service
 from src.utils.voice_helper import send_voice_or_text_reply
 from src.models.database import Conversation
 from src.ai import conversation_service
@@ -240,6 +242,30 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         chat_id=str(chat_id)
                     ))
             
+            # 🧠 检索用户的相关记忆
+            memory_context = ""
+            if db_user:
+                try:
+                    memory_service = get_conversation_memory_service(
+                        db=db,
+                        llm_provider=conversation_service.provider
+                    )
+                    memories = await memory_service.retrieve_memories(
+                        user_id=db_user.id,
+                        bot_id=selected_bot.id if selected_bot else None,
+                        current_message=message_text
+                    )
+                    if memories:
+                        memory_context = await memory_service.format_memories_for_context(memories)
+                        logger.info(f"🧠 Retrieved {len(memories)} memories for context injection")
+                except Exception as e:
+                    logger.warning(f"Error retrieving memories: {e}")
+            
+            # 将记忆注入到system prompt中
+            enhanced_system_prompt = system_prompt or ""
+            if memory_context:
+                enhanced_system_prompt = f"{enhanced_system_prompt}\n\n{memory_context}"
+            
             # 创建Agent消息和上下文
             agent_message = AgentMessage(
                 content=message_text,
@@ -251,7 +277,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             chat_context = ChatContext(
                 chat_id=str(chat_id),
                 conversation_history=history_messages,
-                system_prompt=system_prompt
+                system_prompt=enhanced_system_prompt
             )
             
             # 使用编排器处理消息
@@ -315,6 +341,23 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     # 记录使用量
                     await subscription_service.record_usage(db_user, action_type="message")
                     await db.commit()
+                    
+                    # 🧠 提取并保存重要对话事件到长期记忆
+                    try:
+                        memory_service = get_conversation_memory_service(
+                            db=db,
+                            llm_provider=conversation_service.provider
+                        )
+                        saved_memory = await memory_service.extract_and_save_important_events(
+                            user_id=db_user.id,
+                            bot_id=selected_bot.id if selected_bot else None,
+                            user_message=message_text,
+                            bot_response=response
+                        )
+                        if saved_memory:
+                            logger.info(f"🧠 Saved important memory: {saved_memory.event_summary[:50]}...")
+                    except Exception as e:
+                        logger.warning(f"Error saving memory: {e}")
             
             # 记录处理信息
             if result.agent_responses:
