@@ -419,15 +419,16 @@ class EmbeddingService:
         if texts_to_embed:
             new_results = await self.provider.embed_batch(texts_to_embed)
             
-            for i, result in zip(indices_to_embed, new_results):
-                results[i] = result
+            # Use enumerate to avoid inefficient index lookup
+            for idx, (original_idx, result) in enumerate(zip(indices_to_embed, new_results)):
+                results[original_idx] = result
                 
                 # 缓存结果
                 if use_cache and self.enable_cache:
                     if len(self._cache) >= self._cache_size:
                         oldest_key = next(iter(self._cache))
                         del self._cache[oldest_key]
-                    self._cache[texts_to_embed[indices_to_embed.index(i)]] = result
+                    self._cache[texts_to_embed[idx]] = result
         
         return results
     

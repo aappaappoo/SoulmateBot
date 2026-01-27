@@ -753,7 +753,7 @@ def get_conversation_memory_service(
     # 如果没有传入embedding_service，尝试自动获取
     if embedding_service is None:
         try:
-            from src.services.embedding_service import get_embedding_service
+            from .embedding_service import get_embedding_service
             embedding_service = get_embedding_service()
         except Exception as e:
             logger.warning(f"Could not auto-configure embedding service: {e}")

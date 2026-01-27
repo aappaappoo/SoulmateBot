@@ -368,9 +368,11 @@ class VectorStoreService:
         if len(texts) != len(doc_ids):
             raise ValueError("texts and doc_ids must have the same length")
         
-        metadata_list = metadata_list or [{}] * len(texts)
-        if len(metadata_list) != len(texts):
+        # Validate metadata_list before setting default
+        if metadata_list is not None and len(metadata_list) != len(texts):
             raise ValueError("metadata_list must have the same length as texts")
+        
+        metadata_list = metadata_list or [{}] * len(texts)
         
         # 批量生成向量
         results = await self.embedding_service.embed_batch(texts)
