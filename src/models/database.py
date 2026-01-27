@@ -658,6 +658,10 @@ class UserMemory(Base):
     event_type = Column(String(50), nullable=True, comment="事件类型：birthday, preference, goal, emotion, life_event等")
     keywords = Column(JSON, default=[], comment="关键词列表，用于检索匹配")
     
+    # 向量嵌入（用于RAG检索）
+    embedding = Column(JSON, nullable=True, comment="事件摘要的向量嵌入，用于语义相似度检索")
+    embedding_model = Column(String(50), nullable=True, comment="生成嵌入向量使用的模型名称")
+    
     # 时间信息
     event_date = Column(DateTime, nullable=True, comment="事件发生的日期（如果提及）")
     created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="记忆创建时间")

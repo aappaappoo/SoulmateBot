@@ -3,16 +3,22 @@ Conversation Memory Service - 对话记忆服务
 
 提供RAG技术驱动的对话记忆功能：
 1. 分析对话，判断是否包含重要事件（过滤日常寒暄）
-2. 提取并保存重要事件到数据库
-3. 检索与当前对话相关的历史记忆
+2. 提取并保存重要事件到数据库（支持向量嵌入）
+3. 使用向量相似度检索与当前对话相关的历史记忆
 4. 用于增强Bot的个性化对话能力
+
+向量检索说明：
+- 使用Embedding向量化存储记忆摘要
+- 支持语义相似度检索，提升检索精度
+- 向后兼容：对于没有embedding的记忆，回退到关键词匹配
+- 支持混合检索：向量相似度 + 元数据过滤
 
 使用方法：
     from src.services.conversation_memory_service import ConversationMemoryService
     
-    service = ConversationMemoryService(db_session, llm_provider)
+    service = ConversationMemoryService(db_session, llm_provider, embedding_service)
     
-    # 保存重要对话事件
+    # 保存重要对话事件（自动生成向量嵌入）
     await service.extract_and_save_important_events(
         user_id=123,
         bot_id=456,
@@ -20,7 +26,7 @@ Conversation Memory Service - 对话记忆服务
         bot_response="太棒了！我记住了，下个月15号是你的生日..."
     )
     
-    # 检索相关记忆
+    # 检索相关记忆（使用向量相似度）
     memories = await service.retrieve_memories(
         user_id=123,
         bot_id=456,
@@ -28,11 +34,12 @@ Conversation Memory Service - 对话记忆服务
     )
 """
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, or_, func
 from loguru import logger
+import numpy as np
 
 from src.models.database import UserMemory, MemoryImportance
 
@@ -94,22 +101,28 @@ class ConversationMemoryService:
         self,
         db: AsyncSession,
         llm_provider=None,
+        embedding_service=None,
         max_memories_per_query: int = 5,
-        importance_threshold: str = "medium"
+        importance_threshold: str = "medium",
+        similarity_threshold: float = 0.5
     ):
         """
         初始化对话记忆服务
         
         Args:
             db: 异步数据库会话
-            llm_provider: LLM提供者（用于重要性分析和记忆检索）
+            llm_provider: LLM提供者（用于重要性分析）
+            embedding_service: 向量嵌入服务（用于生成和检索向量）
             max_memories_per_query: 每次检索返回的最大记忆数量
             importance_threshold: 保存记忆的最低重要性阈值
+            similarity_threshold: 向量相似度检索的最低阈值
         """
         self.db = db
         self.llm_provider = llm_provider
+        self.embedding_service = embedding_service
         self.max_memories_per_query = max_memories_per_query
         self.importance_threshold = importance_threshold
+        self.similarity_threshold = similarity_threshold
         
         # 重要性级别排序
         self._importance_order = {
@@ -119,7 +132,7 @@ class ConversationMemoryService:
             MemoryImportance.CRITICAL.value: 3
         }
         
-        logger.info("ConversationMemoryService initialized")
+        logger.info(f"ConversationMemoryService initialized (embedding_enabled={embedding_service is not None})")
     
     async def analyze_importance(
         self,
@@ -220,6 +233,7 @@ AI回复: {bot_response}
         提取并保存重要对话事件
         
         分析对话内容，如果包含重要事件则保存到数据库。
+        如果配置了embedding_service，会自动生成向量嵌入。
         
         Args:
             user_id: 用户ID
@@ -251,17 +265,34 @@ AI回复: {bot_response}
             except (ValueError, TypeError):
                 pass
         
+        # 获取事件摘要
+        event_summary = analysis.get("event_summary", user_message[:200])
+        
+        # 生成向量嵌入（如果embedding service可用）
+        embedding = None
+        embedding_model = None
+        if self.embedding_service and self.embedding_service.provider:
+            try:
+                result = await self.embedding_service.embed_text(event_summary)
+                embedding = result.embedding
+                embedding_model = result.model
+                logger.debug(f"Generated embedding for memory: dim={len(embedding)}, model={embedding_model}")
+            except Exception as e:
+                logger.warning(f"Failed to generate embedding for memory: {e}")
+        
         # 创建记忆对象
         memory = UserMemory(
             user_id=user_id,
             bot_id=bot_id,
-            event_summary=analysis.get("event_summary", user_message[:200]),
+            event_summary=event_summary,
             user_message=user_message,
             bot_response=bot_response,
             importance=importance_level,
             event_type=analysis.get("event_type"),
             keywords=analysis.get("keywords", []),
-            event_date=event_date
+            event_date=event_date,
+            embedding=embedding,
+            embedding_model=embedding_model
         )
         
         self.db.add(memory)
@@ -277,25 +308,146 @@ AI回复: {bot_response}
         bot_id: Optional[int] = None,
         current_message: Optional[str] = None,
         event_types: Optional[List[str]] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        use_vector_search: bool = True
     ) -> List[UserMemory]:
         """
         检索用户的相关记忆
         
-        根据当前消息内容或指定条件检索用户的历史记忆。
+        使用向量相似度检索与当前消息最相关的历史记忆。
+        如果没有embedding或current_message为空，则回退到传统的基于规则的检索。
         
         Args:
             user_id: 用户ID
             bot_id: Bot ID（可选，指定则只检索该Bot相关的记忆）
-            current_message: 当前消息（用于智能匹配相关记忆）
+            current_message: 当前消息（用于向量相似度匹配）
             event_types: 事件类型过滤列表
             limit: 返回数量限制
+            use_vector_search: 是否使用向量相似度搜索
             
         Returns:
-            相关记忆列表
+            相关记忆列表（按相似度/重要性排序）
         """
         limit = limit or self.max_memories_per_query
         
+        # 尝试使用向量相似度检索
+        if (use_vector_search and 
+            current_message and 
+            self.embedding_service and 
+            self.embedding_service.provider):
+            try:
+                memories = await self._retrieve_by_vector_similarity(
+                    user_id=user_id,
+                    bot_id=bot_id,
+                    current_message=current_message,
+                    event_types=event_types,
+                    limit=limit
+                )
+                if memories:
+                    logger.info(f"Retrieved {len(memories)} memories via vector search for user {user_id}")
+                    return memories
+            except Exception as e:
+                logger.warning(f"Vector search failed, falling back to traditional retrieval: {e}")
+        
+        # 回退到传统检索
+        return await self._retrieve_by_metadata(
+            user_id=user_id,
+            bot_id=bot_id,
+            current_message=current_message,
+            event_types=event_types,
+            limit=limit
+        )
+    
+    async def _retrieve_by_vector_similarity(
+        self,
+        user_id: int,
+        bot_id: Optional[int],
+        current_message: str,
+        event_types: Optional[List[str]],
+        limit: int
+    ) -> List[UserMemory]:
+        """
+        使用向量相似度检索记忆
+        
+        1. 生成查询消息的向量嵌入
+        2. 从数据库获取用户的所有有embedding的记忆
+        3. 计算相似度并排序
+        4. 返回最相关的记忆
+        """
+        # 生成查询向量
+        query_result = await self.embedding_service.embed_text(current_message)
+        query_embedding = np.array(query_result.embedding, dtype=np.float32)
+        
+        # 构建基础查询 - 获取所有有embedding的记忆
+        query = select(UserMemory).where(
+            and_(
+                UserMemory.user_id == user_id,
+                UserMemory.is_active == True,
+                UserMemory.embedding.isnot(None)
+            )
+        )
+        
+        # 如果指定了Bot ID，添加过滤
+        if bot_id is not None:
+            query = query.where(
+                or_(
+                    UserMemory.bot_id == bot_id,
+                    UserMemory.bot_id.is_(None)
+                )
+            )
+        
+        # 如果指定了事件类型，添加过滤
+        if event_types:
+            query = query.where(UserMemory.event_type.in_(event_types))
+        
+        result = await self.db.execute(query)
+        memories = list(result.scalars().all())
+        
+        if not memories:
+            return []
+        
+        # 计算余弦相似度
+        scored_memories: List[Tuple[UserMemory, float]] = []
+        for memory in memories:
+            if memory.embedding:
+                memory_embedding = np.array(memory.embedding, dtype=np.float32)
+                similarity = self._cosine_similarity(query_embedding, memory_embedding)
+                
+                if similarity >= self.similarity_threshold:
+                    scored_memories.append((memory, similarity))
+        
+        # 按相似度排序并取top_k
+        scored_memories.sort(key=lambda x: x[1], reverse=True)
+        top_memories = [m for m, _ in scored_memories[:limit]]
+        
+        # 更新访问计数和时间
+        if top_memories:
+            memory_ids = [m.id for m in top_memories]
+            await self.db.execute(
+                update(UserMemory)
+                .where(UserMemory.id.in_(memory_ids))
+                .values(
+                    access_count=UserMemory.access_count + 1,
+                    last_accessed_at=datetime.now(timezone.utc)
+                )
+            )
+            await self.db.commit()
+        
+        return top_memories
+    
+    async def _retrieve_by_metadata(
+        self,
+        user_id: int,
+        bot_id: Optional[int],
+        current_message: Optional[str],
+        event_types: Optional[List[str]],
+        limit: int
+    ) -> List[UserMemory]:
+        """
+        使用元数据（关键词、事件类型等）检索记忆
+        
+        这是向量检索不可用时的回退方案。
+        """
         # 构建基础查询
         query = select(UserMemory).where(
             and_(
@@ -317,13 +469,11 @@ AI回复: {bot_response}
         if event_types:
             query = query.where(UserMemory.event_type.in_(event_types))
         
-        # 如果有当前消息，尝试智能匹配
-        relevant_keywords = []
+        # 如果有当前消息且有LLM，尝试智能匹配
         if current_message and self.llm_provider:
             try:
                 retrieval_analysis = await self._analyze_retrieval_needs(current_message)
                 if retrieval_analysis.get("should_retrieve", False):
-                    relevant_keywords = retrieval_analysis.get("relevance_keywords", [])
                     if retrieval_analysis.get("event_types"):
                         query = query.where(
                             UserMemory.event_type.in_(retrieval_analysis["event_types"])
@@ -354,8 +504,20 @@ AI回复: {bot_response}
             )
             await self.db.commit()
         
-        logger.info(f"Retrieved {len(memories)} memories for user {user_id}")
+        logger.info(f"Retrieved {len(memories)} memories via metadata search for user {user_id}")
         return memories
+    
+    @staticmethod
+    def _cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
+        """计算两个向量的余弦相似度"""
+        dot_product = np.dot(vec1, vec2)
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+        
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        
+        return float(dot_product / (norm1 * norm2))
     
     async def _analyze_retrieval_needs(self, current_message: str) -> Dict[str, Any]:
         """
@@ -453,6 +615,17 @@ AI回复: {bot_response}
         total_result = await self.db.execute(total_query)
         total_count = total_result.scalar() or 0
         
+        # 有embedding的记忆数
+        embedded_query = select(func.count(UserMemory.id)).where(
+            and_(
+                UserMemory.user_id == user_id,
+                UserMemory.is_active == True,
+                UserMemory.embedding.isnot(None)
+            )
+        )
+        embedded_result = await self.db.execute(embedded_query)
+        embedded_count = embedded_result.scalar() or 0
+        
         # 按事件类型分组统计
         type_query = select(
             UserMemory.event_type,
@@ -466,8 +639,95 @@ AI回复: {bot_response}
         
         return {
             "total_memories": total_count,
+            "embedded_memories": embedded_count,
+            "embedding_coverage": embedded_count / total_count if total_count > 0 else 0,
             "by_event_type": type_counts
         }
+    
+    async def backfill_embeddings(
+        self,
+        user_id: Optional[int] = None,
+        batch_size: int = 50
+    ) -> Dict[str, int]:
+        """
+        为没有embedding的记忆生成向量嵌入
+        
+        用于迁移现有数据或重新生成丢失的embedding。
+        
+        Args:
+            user_id: 指定用户ID（可选，不指定则处理所有用户）
+            batch_size: 每批处理的记忆数量
+            
+        Returns:
+            处理统计信息
+        """
+        if not self.embedding_service or not self.embedding_service.provider:
+            logger.warning("No embedding service configured, cannot backfill embeddings")
+            return {"processed": 0, "failed": 0, "skipped": 0}
+        
+        # 构建查询 - 获取没有embedding的记忆
+        query = select(UserMemory).where(
+            and_(
+                UserMemory.is_active == True,
+                UserMemory.embedding.is_(None)
+            )
+        )
+        
+        if user_id is not None:
+            query = query.where(UserMemory.user_id == user_id)
+        
+        query = query.limit(batch_size)
+        
+        result = await self.db.execute(query)
+        memories = list(result.scalars().all())
+        
+        processed = 0
+        failed = 0
+        
+        for memory in memories:
+            try:
+                # 生成embedding
+                embed_result = await self.embedding_service.embed_text(memory.event_summary)
+                
+                # 更新记忆
+                await self.db.execute(
+                    update(UserMemory)
+                    .where(UserMemory.id == memory.id)
+                    .values(
+                        embedding=embed_result.embedding,
+                        embedding_model=embed_result.model,
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                )
+                processed += 1
+                
+            except Exception as e:
+                logger.warning(f"Failed to generate embedding for memory {memory.id}: {e}")
+                failed += 1
+        
+        await self.db.commit()
+        
+        logger.info(f"Backfill completed: processed={processed}, failed={failed}")
+        return {
+            "processed": processed,
+            "failed": failed,
+            "remaining": await self._count_memories_without_embedding(user_id)
+        }
+    
+    async def _count_memories_without_embedding(self, user_id: Optional[int] = None) -> int:
+        """统计没有embedding的记忆数量"""
+        query = select(func.count(UserMemory.id)).where(
+            and_(
+                UserMemory.is_active == True,
+                UserMemory.embedding.is_(None)
+            )
+        )
+        
+        if user_id is not None:
+            query = query.where(UserMemory.user_id == user_id)
+        
+        result = await self.db.execute(query)
+        return result.scalar() or 0
 
 
 # 全局服务实例获取函数
@@ -476,7 +736,8 @@ _memory_service_cache: Dict[str, ConversationMemoryService] = {}
 
 def get_conversation_memory_service(
     db: AsyncSession,
-    llm_provider=None
+    llm_provider=None,
+    embedding_service=None
 ) -> ConversationMemoryService:
     """
     获取对话记忆服务实例
@@ -484,8 +745,17 @@ def get_conversation_memory_service(
     Args:
         db: 数据库会话
         llm_provider: LLM提供者
+        embedding_service: 向量嵌入服务（可选，不传则自动获取）
         
     Returns:
         ConversationMemoryService实例
     """
-    return ConversationMemoryService(db, llm_provider)
+    # 如果没有传入embedding_service，尝试自动获取
+    if embedding_service is None:
+        try:
+            from .embedding_service import get_embedding_service
+            embedding_service = get_embedding_service()
+        except Exception as e:
+            logger.warning(f"Could not auto-configure embedding service: {e}")
+    
+    return ConversationMemoryService(db, llm_provider, embedding_service)
