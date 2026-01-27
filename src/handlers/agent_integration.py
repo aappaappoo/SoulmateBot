@@ -31,6 +31,9 @@ from src.agents import (
     AgentOrchestrator, AgentLoader, Message as AgentMessage,
     ChatContext, IntentType, skill_button_generator, skill_registry
 )
+from datetime import datetime
+from src.models.database import UserMemory
+from src.services.conversation_memory_service import DateParser
 
 
 # 全局编排器实例（懒加载）
@@ -49,13 +52,14 @@ def get_orchestrator() -> AgentOrchestrator:
         # 加载所有Agent
         loader = AgentLoader(agents_dir="agents")
         agents = loader.load_agents()
-        
+
         # 创建编排器
         _orchestrator = AgentOrchestrator(
             agents=agents,
             llm_provider=conversation_service.provider,
             enable_skills=True,
-            skill_threshold=3
+            skill_threshold=3,
+            enable_unified_mode=True# 是否开启统一模式
         )
         
         logger.info(f"AgentOrchestrator初始化完成，加载了{len(agents)}个Agent")
@@ -346,8 +350,56 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     await subscription_service.record_usage(db_user, action_type="message")
                     await db.commit()
                     
-                    # 🧠 提取并保存重要对话事件到长期记忆（复用已创建的memory_service）
-                    if memory_service:
+                    # 🧠 保存记忆（优先使用统一分析结果，无需额外 LLM）
+                    if result.memory_analysis and result.memory_analysis.is_important:
+                        try:
+                            # 检查重要性级别
+                            importance_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+                            level = result.memory_analysis.importance_level or "low"
+                            if importance_order.get(level, 0) >= importance_order.get("medium", 1):
+                                # 解析日期
+                                event_date = None
+                                if result.memory_analysis.event_date:
+                                    try:
+                                        event_date = datetime.strptime(result.memory_analysis.event_date, "%Y-%m-%d")
+                                    except ValueError:
+                                        pass
+                                if not event_date and result.memory_analysis.raw_date_expression:
+                                    event_date = DateParser().parse(result.memory_analysis.raw_date_expression)
+                                if not event_date:
+                                    event_date = DateParser().parse_from_message(message_text)
+
+                                # 生成 Embedding
+                                embedding, embedding_model = None, None
+                                if memory_service and memory_service.embedding_service:
+                                    try:
+                                        embed_result = await memory_service.embedding_service.embed_text(
+                                            result.memory_analysis.event_summary or message_text[:200]
+                                        )
+                                        embedding, embedding_model = embed_result.embedding, embed_result.model
+                                    except Exception as e:
+                                        logger.warning(f"Embedding error: {e}")
+
+                                # 保存记忆
+                                memory = UserMemory(
+                                    user_id=db_user.id,
+                                    bot_id=selected_bot.id if selected_bot else None,
+                                    event_summary=result.memory_analysis.event_summary or message_text[:200],
+                                    user_message=message_text,
+                                    bot_response=response,
+                                    importance=result.memory_analysis.importance_level or "medium",
+                                    event_type=result.memory_analysis.event_type,
+                                    keywords=result.memory_analysis.keywords or [],
+                                    event_date=event_date,
+                                    embedding=embedding,
+                                    embedding_model=embedding_model
+                                )
+                                db.add(memory)
+                                logger.info(f"🧠 Saved memory from unified analysis (0 extra LLM calls)")
+                        except Exception as e:
+                            logger.warning(f"Error saving memory: {e}")
+                    elif memory_service:
+                        # 回退到原有方式（非统一模式时）
                         try:
                             saved_memory = await memory_service.extract_and_save_important_events(
                                 user_id=db_user.id,
@@ -356,7 +408,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                                 bot_response=response
                             )
                             if saved_memory:
-                                logger.info(f"🧠 Saved important memory: {saved_memory.event_summary[:50]}...")
+                                logger.info(f"🧠 Saved memory (legacy mode): {saved_memory.event_summary[:50]}...")
                         except Exception as e:
                             logger.warning(f"Error saving memory: {e}")
             

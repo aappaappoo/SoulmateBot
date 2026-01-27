@@ -11,6 +11,7 @@ and coordinates multiple agent responses into a final coherent reply.
 3. 使用最终Agent生成统一回复
 4. 支持Skills系统减少token消耗
 """
+from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -45,8 +46,20 @@ class IntentSource(str, Enum):
     """意图识别来源"""
     RULE_BASED = "rule_based"  # 基于规则（关键词匹配、置信度评分）
     LLM_BASED = "llm_based"    # 基于大模型推理
+    LLM_UNIFIED = "llm_unified" # 基于大模型统一推理
     FALLBACK = "fallback"      # 回退机制
 
+
+@dataclass
+class MemoryAnalysis:
+    """记忆分析结果（统一模式返回）"""
+    is_important: bool = False
+    importance_level: Optional[str] = None
+    event_type: Optional[str] = None
+    event_summary: Optional[str] = None
+    keywords: List[str] = field(default_factory=list)
+    event_date: Optional[str] = None
+    raw_date_expression: Optional[str] = None
 
 @dataclass
 class OrchestratorResult:
@@ -58,6 +71,7 @@ class OrchestratorResult:
     final_response: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
     skill_options: List[Dict[str, str]] = field(default_factory=list)
+    memory_analysis: Optional[MemoryAnalysis] = None
 
 
 class AgentOrchestrator:
@@ -74,13 +88,53 @@ class AgentOrchestrator:
     4. 使用最终决策Agent整合所有响应
     5. 返回最终结果给用户
     """
-    
+    UNIFIED_PROMPT_TEMPLATE = """你是一个智能助手，需要同时完成三项任务：
+
+    ## 任务1：意图识别
+    判断用户消息应该如何处理：
+    - "direct_response": 日常闲聊、问候、简单问答，由你直接回复
+    - "single_agent": 需要单个专业Agent处理
+    - "multi_agent": 需要多个Agent协作处理
+
+    可用的Agent能力：
+    {agent_capabilities}
+
+    ## 任务2：生成回复（仅当 intent 为 direct_response 时）
+    根据以下人设直接回复用户：
+    {system_prompt}
+
+    ## 任务3：记忆分析
+    判断对话是否包含值得记住的重要信息（个人信息、偏好、目标、重要事件等）。
+    日常寒暄（你好、谢谢等）不重要。
+
+    当前时间：{current_time}
+    用户消息：{user_message}
+
+    请严格按以下JSON格式回复：
+    ```json
+    {{
+        "intent": "direct_response" | "single_agent" | "multi_agent",
+        "agents": [],
+        "reasoning": "判断理由",
+        "direct_reply": "回复内容或null",
+        "memory": {{
+            "is_important": false,
+            "importance_level": "low" | "medium" | "high" | null,
+            "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
+            "event_summary": "事件摘要" | null,
+            "keywords": [],
+            "event_date": "YYYY-MM-DD" | null,
+            "raw_date_expression": "原始时间表达" | null
+        }}
+    }}
+    ```"""
     def __init__(
         self,
         agents: List[BaseAgent],
         llm_provider=None,
         enable_skills: bool = True,
         skill_threshold: int = 3,  # 超过此数量的可选Agent时使用技能选择
+        enable_unified_mode: bool = True
     ):
         """
         初始化编排器
@@ -95,7 +149,8 @@ class AgentOrchestrator:
         self.llm_provider = llm_provider
         self.enable_skills = enable_skills
         self.skill_threshold = skill_threshold
-        
+        self.enable_unified_mode = enable_unified_mode
+
         # 构建Agent能力描述
         self._capabilities = self._build_capabilities()
         
@@ -107,7 +162,76 @@ class AgentOrchestrator:
         ))
         
         logger.info(f"AgentOrchestrator初始化完成，加载了{len(self.agents)}个Agent")
-    
+
+    # 统一分析
+    async def analyze_intent_unified(
+            self,
+            message: Message,
+            context: ChatContext
+    ) -> Tuple[IntentType, List[str], Dict[str, Any], IntentSource, Optional[str], Optional[MemoryAnalysis]]:
+        """
+        统一分析：一次 LLM 调用完成意图识别 + 回复生成 + 记忆分析
+        """
+        selected_by_confidence = self._router.select_agents(message, context)
+
+        if not self.llm_provider:
+            if not selected_by_confidence:
+                return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.RULE_BASED, None, None
+            elif len(selected_by_confidence) == 1:
+                return IntentType.SINGLE_AGENT, [
+                    selected_by_confidence[0][0].name], {}, IntentSource.RULE_BASED, None, None
+            else:
+                return IntentType.MULTI_AGENT, [a.name for a, _ in
+                                                selected_by_confidence], {}, IntentSource.RULE_BASED, None, None
+
+        try:
+            prompt = self.UNIFIED_PROMPT_TEMPLATE.format(
+                agent_capabilities=self._get_capabilities_prompt(),
+                system_prompt=(context.system_prompt if context else "") or "你是一个友好的AI助手。",
+                current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"),
+                user_message=message.content
+            )
+
+            response = await self.llm_provider.generate_response(
+                [{"role": "user", "content": prompt}],
+                context=None
+            )
+
+            # 解析 JSON
+            response_text = response.strip()
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
+
+            data = json.loads(response_text.strip())
+
+            intent = IntentType(data.get("intent", "direct_response"))
+            agents = [a for a in data.get("agents", []) if a in self.agents]
+            metadata = {"reasoning": data.get("reasoning", "")}
+            direct_reply = data.get("direct_reply")
+
+            memory_data = data.get("memory", {})
+            memory_analysis = MemoryAnalysis(
+                is_important=memory_data.get("is_important", False),
+                importance_level=memory_data.get("importance_level"),
+                event_type=memory_data.get("event_type"),
+                event_summary=memory_data.get("event_summary"),
+                keywords=memory_data.get("keywords", []),
+                event_date=memory_data.get("event_date"),
+                raw_date_expression=memory_data.get("raw_date_expression"),
+            )
+
+            logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important}")
+            return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis
+
+        except Exception as e:
+            logger.error(f"统一分析出错: {e}")
+            if selected_by_confidence:
+                return IntentType.SINGLE_AGENT, [
+                    selected_by_confidence[0][0].name], {}, IntentSource.FALLBACK, None, None
+            return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK, None, None
+
     def _build_capabilities(self) -> List[AgentCapability]:
         """构建所有Agent的能力描述列表"""
         capabilities = []
@@ -347,84 +471,74 @@ class AgentOrchestrator:
             logger.error(f"综合响应生成失败: {e}")
             # 回退到简单拼接
             return agent_responses[0].content
-    
+
     async def process(
-        self,
-        message: Message,
-        context: ChatContext,
-        force_skill_selection: bool = False
+            self,
+            message: Message,
+            context: ChatContext,
+            force_skill_selection: bool = False
     ) -> OrchestratorResult:
-        """
-        处理用户消息的主入口
-        
-        完整的处理流程：
-        1. 分析意图
-        2. 决定是否使用技能选择
-        3. 执行Agent
-        4. 综合响应
-        
-        Args:
-            message: 用户消息
-            context: 对话上下文
-            force_skill_selection: 强制使用技能选择模式
-            
-        Returns:
-            OrchestratorResult: 处理结果
-        """
+        """处理用户消息的主入口"""
         result = OrchestratorResult(intent_type=IntentType.DIRECT_RESPONSE)
-        
-        # Analyze intent - returns intent type, agent names, metadata, and intent source
-        intent_type, agent_names, metadata, intent_source = await self.analyze_intent(message, context)
-        result.intent_type = intent_type
-        result.intent_source = intent_source
-        result.selected_agents = agent_names
-        result.metadata = metadata
-        
-        # Add intent source to metadata for logging
-        result.metadata["intent_source"] = intent_source.value
-        
-        logger.info(f"🎯 Intent type: {intent_type} | Source: {intent_source.value}")
-        
-        # 检查是否需要使用技能选择
-        if self.enable_skills and (force_skill_selection or len(agent_names) >= self.skill_threshold):
+
+        # 根据配置选择处理模式
+        if self.enable_unified_mode and self.llm_provider:
+            # 🔑 统一模式
+            intent_type, agent_names, metadata, intent_source, direct_reply, memory_analysis = \
+                await self.analyze_intent_unified(message, context)
+
+            result.intent_type = intent_type
+            result.intent_source = intent_source
+            result.selected_agents = agent_names
+            result.metadata = metadata
+            result.metadata["intent_source"] = intent_source.value
+            result.memory_analysis = memory_analysis
+        else:
+            # 原有模式
+            intent_type, agent_names, metadata, intent_source = await self.analyze_intent(message, context)
+            result.intent_type = intent_type
+            result.intent_source = intent_source
+            result.selected_agents = agent_names
+            result.metadata = metadata
+            result.metadata["intent_source"] = intent_source.value
+            direct_reply = None
+
+        logger.info(f"🎯 Intent type: {result.intent_type} | Source: {result.intent_source}")
+
+        # 技能选择检查
+        if self.enable_skills and (force_skill_selection or len(result.selected_agents) >= self.skill_threshold):
             skill_options = self.generate_skill_options(message, context)
             if skill_options:
                 result.intent_type = IntentType.SKILL_SELECTION
                 result.skill_options = skill_options
                 result.final_response = "请选择您需要的服务："
                 return result
-        
-        # 如果是直接响应类型，不需要Agent
-        if intent_type == IntentType.DIRECT_RESPONSE or not agent_names:
-            # 使用LLM直接回复
-            if self.llm_provider:
+
+        # 直接响应
+        if result.intent_type == IntentType.DIRECT_RESPONSE or not result.selected_agents:
+            if direct_reply:
+                result.final_response = direct_reply
+            elif self.llm_provider:
                 try:
                     messages = []
-                    # 添加 system prompt（如果有）
                     if context and context.system_prompt:
                         messages.append({"role": "system", "content": context.system_prompt})
                     messages.append({"role": "user", "content": message.content})
-                    
-                    result.final_response = await self.llm_provider.generate_response(
-                        messages,
-                        context=None
-                    )
+                    result.final_response = await self.llm_provider.generate_response(messages, context=None)
                 except Exception as e:
                     logger.error(f"直接响应生成失败: {e}")
                     result.final_response = "你好！有什么我可以帮助你的吗？"
             else:
                 result.final_response = "你好！有什么我可以帮助你的吗？"
             return result
-        
-        # 执行选中的Agent
-        agent_responses = await self.execute_agents(message, context, agent_names)
+
+        # Agent 处理
+        agent_responses = await self.execute_agents(message, context, result.selected_agents)
         result.agent_responses = agent_responses
-        
-        # 综合响应
         result.final_response = await self.synthesize_response(message, agent_responses, context)
-        
+
         return result
-    
+
     async def process_skill_callback(
         self,
         skill_name: str,

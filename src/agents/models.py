@@ -35,7 +35,7 @@ class Message:
     message_type: MessageType = MessageType.TEXT
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def has_mention(self, agent_name: str) -> bool:
         """
         Check if this message mentions a specific agent.
@@ -49,7 +49,7 @@ class Message:
         mentions = self.metadata.get("mentions", [])
         # Check for @agent_name in mentions
         return f"@{agent_name}" in mentions or agent_name in mentions
-    
+
     def get_clean_content(self) -> str:
         """
         Get message content with @mentions removed.
@@ -81,15 +81,15 @@ class ChatContext:
     active_users: List[str] = field(default_factory=list)
     chat_metadata: Dict[str, Any] = field(default_factory=dict)
     system_prompt: Optional[str] = None
-    
+
     def add_message(self, message: Message) -> None:
         """Add a message to conversation history."""
         self.conversation_history.append(message)
-        
+
         # Keep only recent messages (e.g., last 50)
         if len(self.conversation_history) > 50:
             self.conversation_history = self.conversation_history[-50:]
-    
+
     def get_recent_messages(self, count: int = 10) -> List[Message]:
         """Get the most recent N messages."""
         return self.conversation_history[-count:]
@@ -112,7 +112,7 @@ class AgentResponse:
     confidence: float = 1.0
     metadata: Dict[str, Any] = field(default_factory=dict)
     should_continue: bool = False
-    
+
     def __post_init__(self):
         """Validate confidence score."""
         if not 0.0 <= self.confidence <= 1.0:
