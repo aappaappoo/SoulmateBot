@@ -309,16 +309,16 @@ class EmbeddingService:
         # 计算相似度
         similarity = service.cosine_similarity(vec1, vec2)
     """
-    
+
     def __init__(
-        self,
-        provider: Optional[EmbeddingProvider] = None,
-        enable_cache: bool = True,
-        cache_size: int = 1000
+            self,
+            provider: Optional[EmbeddingProvider] = None,
+            enable_cache: bool = True,
+            cache_size: int = 1000
     ):
         """
         初始化向量嵌入服务
-        
+
         Args:
             provider: 向量嵌入Provider
             enable_cache: 是否启用缓存
@@ -328,12 +328,15 @@ class EmbeddingService:
         self.enable_cache = enable_cache
         self._cache: Dict[str, EmbeddingResult] = {}
         self._cache_size = cache_size
-        
+
         if provider:
-            logger.info(f"EmbeddingService initialized with provider: {provider.name}")
-        else:
-            logger.warning("EmbeddingService initialized without provider")
-    
+            logger.info(
+                f"🔢 EmbeddingService initialized | "
+                f"provider={provider.name} | "
+                f"dimension={provider.dimension} | "
+                f"cache_enabled={enable_cache} | "
+                f"cache_size={cache_size}"
+            )
     def set_provider(self, provider: EmbeddingProvider) -> None:
         """设置Provider"""
         self.provider = provider
@@ -524,38 +527,42 @@ _embedding_service: Optional[EmbeddingService] = None
 def get_embedding_service() -> EmbeddingService:
     """
     获取全局向量嵌入服务实例
-    
+
     自动根据配置初始化合适的Provider
     """
     global _embedding_service
-    
+
     if _embedding_service is None:
-        _embedding_service = EmbeddingService()
-        
-        # 尝试自动配置Provider
+        provider = None
+
+        # 先尝试自动配置Provider
         try:
             from config import settings
-            
-            # 优先使用DashScope（如果已配置）
-            if settings.dashscope_api_key and DASHSCOPE_AVAILABLE:
+
+            # 优先使用DashScope（如果��配置）
+            if hasattr(settings, 'dashscope_api_key') and settings.dashscope_api_key and DASHSCOPE_AVAILABLE:
                 provider = DashScopeEmbeddingProvider(
                     api_key=settings.dashscope_api_key,
-                    model="text-embedding-v3"
+                    model=getattr(settings, 'dashscope_embedding_model', 'text-embedding-v3')
                 )
-                _embedding_service.set_provider(provider)
                 logger.info("Auto-configured DashScope embedding provider")
-            elif settings.openai_api_key and OPENAI_AVAILABLE:
+            elif hasattr(settings, 'openai_api_key') and settings.openai_api_key and OPENAI_AVAILABLE:
                 provider = OpenAIEmbeddingProvider(
                     api_key=settings.openai_api_key,
-                    model="text-embedding-3-small"
+                    model=getattr(settings, 'openai_embedding_model', 'text-embedding-3-small')
                 )
-                _embedding_service.set_provider(provider)
                 logger.info("Auto-configured OpenAI embedding provider")
             else:
-                logger.warning("No embedding provider configured. Please set DASHSCOPE_API_KEY or OPENAI_API_KEY.")
+                logger.warning(
+                    "No embedding provider configured. "
+                    "Please set DASHSCOPE_API_KEY or OPENAI_API_KEY in your .env file."
+                )
         except ImportError:
             logger.warning("Could not import config settings for embedding service")
         except Exception as e:
             logger.error(f"Error auto-configuring embedding provider: {e}")
-    
+
+        # 使用已配置的provider创建服务（如果有的话）
+        _embedding_service = EmbeddingService(provider=provider)
+
     return _embedding_service

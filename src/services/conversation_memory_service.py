@@ -60,7 +60,7 @@ class DateParser:
     - 相对月：上个月、这个月、下个月、上上个月
     - 相对年：去年、今年、明年、前年、后年
     - 具体日期：15号、3月15日、2026年3月15日
-    - 组��表达：下个月15号、明年3月、去年12月25日
+    - 组合表达：下个月15号、明年3月、去年12月25日
     - 星期表达：周一、星期三、下周五、上周日
     - 特殊表达：月底、月初、年底、年初
     """
@@ -167,7 +167,7 @@ class DateParser:
     def _parse_relative_date(self, text: str) -> Optional[datetime]:
         """解析相对日期表达"""
 
-        # ==================== 新增：模糊时间表达 ====================
+        # ==================== 模糊时间表达 ====================
         # 这些表达都指向"今天"
         today_expressions = [
             r'刚刚', r'刚才', r'方才',
@@ -201,8 +201,7 @@ class DateParser:
             if re.search(pattern, text):
                 return self.today
 
-        # ==================== 原有的相对天数逻辑 ====================
-        # 相对天数
+        # ==================== 精确的相对天数 ====================
         day_patterns = {
             r'大前天': -3,
             r'前天': -2,
@@ -216,6 +215,58 @@ class DateParser:
         for pattern, days in day_patterns.items():
             if pattern in text:
                 return self.today + timedelta(days=days)
+
+        # ==================== 相对周 ====================
+        week_patterns = {
+            r'上上周': -2,
+            r'上周': -1,
+            r'这周|本周': 0,
+            r'下周': 1,
+            r'下下周': 2,
+        }
+
+        for pattern, weeks in week_patterns.items():
+            if re.search(pattern, text):
+                # 返回该周的周一
+                target = self.today + timedelta(weeks=weeks)
+                days_since_monday = target.weekday()
+                return target - timedelta(days=days_since_monday)
+
+        # ==================== 相对月 ====================
+        month_patterns = {
+            r'上上个?月': -2,
+            r'上个?月': -1,
+            r'这个?月|本月': 0,
+            r'下个?月': 1,
+            r'下下个?月': 2,
+        }
+
+        for pattern, months in month_patterns.items():
+            if re.search(pattern, text):
+                result = self.today + relativedelta(months=months)
+                # 只匹配纯月份表达，返回该月1日
+                if not re.search(r'\d+[日号]', text):
+                    return result.replace(day=1)
+                return result
+
+        # ==================== 相对年 ====================
+        year_patterns = {
+            r'前年': -2,
+            r'去年': -1,
+            r'今年': 0,
+            r'明年': 1,
+            r'后年': 2,
+        }
+
+        for pattern, years in year_patterns.items():
+            if re.search(pattern, text):
+                result = self.today + relativedelta(years=years)
+                # 只匹配纯年份表达，返回该年1月1日
+                if not re.search(r'\d+月|\d+[日号]', text):
+                    return result.replace(month=1, day=1)
+                return result
+
+        return None
 
     def _parse_combined_date(self, text: str) -> Optional[datetime]:
         """解析组合日期表达（如"下个月15号"、"明年3月15日"）"""
@@ -370,7 +421,15 @@ class DateParser:
 
         # 常见的日期相关关键词模式
         date_patterns = [
-            # 完整日期表达
+            # ==================== 新增：模糊时间表达 ====================
+            r'刚刚|刚才|方才',
+            r'最近|这几天|前几天|这段时间|近期|近来|这两天',
+            r'今天?早上|今天?上午|今天?中午|今天?下午|今天?晚上|今天?凌晨',
+            r'今早|今晚|今日',
+            r'昨天?晚上|昨天?下午|昨天?上午|昨天?早上|昨晚|昨早|昨日',
+            r'前天晚上|前晚',
+            r'这会儿|现在|此刻',
+            # ==================== 完整日期表达 ====================
             r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日号]?',
             r'\d{1,2}[-/月]\d{1,2}[日号]?',
             r'\d{1,2}[日号]',
@@ -413,13 +472,14 @@ class ConversationMemoryService:
     # 用于判断重要性的系统提示词（更新以支持更灵活的日期提取）
     IMPORTANCE_ANALYSIS_PROMPT = """你是一个智能记忆分析助手。你的任务是分析用户和AI助手之间的对话，判断是否包含值得记住的重要事件。
 
-    重要事件包括：
+    重要事件包括（以下的事件重要度为中等以及以上）：
     - 个人信息：生日、年龄、职业、家庭成员、居住地等
     - 重要偏好：喜欢/不喜欢的事物、兴趣爱好、习惯等
     - 重要目标：学习计划、工作目标、人生规划等
     - 情感事件：重要的情感表达、心理状态变化等
     - 生活事件：毕业、求职、结婚、生病、搬家等重大事件
     - 人际关系：朋友、家人、同事等重要关系
+    - 生活小插曲：记录具有情绪价值和连续意义的日常小事件比如：捡到钱、失恋了、升职加薪了、吐槽朋友老板同事等等，用于追踪状态变化与后续关怀。
 
     不重要的事件（应该过滤）：
     - 日常寒暄：你好、再见、谢谢、早上好等
@@ -724,7 +784,7 @@ AI回复: {bot_response}
                 parsed_date = parser.parse_from_message(user_message)
                 raw_date_expr = None
 
-                # 尝试找到原���的时间表达
+                # 尝试找到原组合的时间表达
                 date_patterns = [
                     r'大?前天|昨天|今天|明天|大?后天',
                     r'上{1,2}周|这周|本周|下{1,2}周',
@@ -989,13 +1049,13 @@ AI回复: {bot_response}
         return memory
 
     async def retrieve_memories(
-        self,
-        user_id: int,
-        bot_id: Optional[int] = None,
-        current_message: Optional[str] = None,
-        event_types: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-        use_vector_search: bool = True
+            self,
+            user_id: int,
+            bot_id: Optional[int] = None,
+            current_message: Optional[str] = None,
+            event_types: Optional[List[str]] = None,
+            limit: Optional[int] = None,
+            use_vector_search: bool = True
     ) -> List[UserMemory]:
         """
         检索用户的相关记忆
@@ -1033,9 +1093,9 @@ AI回复: {bot_response}
 
         # 尝试使用向量相似度检索
         if (use_vector_search and
-            current_message and
-            self.embedding_service and
-            self.embedding_service.provider):
+                current_message and
+                self.embedding_service and
+                self.embedding_service.provider):
             try:
                 logger.debug(f"🔎 [Memory-Retrieve][{trace_id}] Attempting vector similarity search...")
 
@@ -1097,13 +1157,13 @@ AI回复: {bot_response}
         return memories
 
     async def _retrieve_by_vector_similarity(
-        self,
-        user_id: int,
-        bot_id: Optional[int],
-        current_message: str,
-        event_types: Optional[List[str]],
-        limit: int,
-        trace_id: str = ""
+            self,
+            user_id: int,
+            bot_id: Optional[int],
+            current_message: str,
+            event_types: Optional[List[str]],
+            limit: int,
+            trace_id: str = ""
     ) -> List[UserMemory]:
         """
         使用向量相似度检索记忆
@@ -1197,7 +1257,7 @@ AI回复: {bot_response}
             logger.debug(f"🔢 [Memory-VectorSearch][{trace_id}] Top {len(top_memories)} memories selected:")
             for i, (memory, score) in enumerate(scored_memories[:limit]):
                 logger.debug(
-                    f"  [{i+1}] id={memory.id} | similarity={score:.4f} | "
+                    f"  [{i + 1}] id={memory.id} | similarity={score:.4f} | "
                     f"type={memory.event_type} | summary={memory.event_summary[:60]}..."
                 )
 
@@ -1209,7 +1269,7 @@ AI回复: {bot_response}
                 .where(UserMemory.id.in_(memory_ids))
                 .values(
                     access_count=UserMemory.access_count + 1,
-                    last_accessed_at=datetime.now(timezone.utc)
+                    last_accessed_at=datetime.utcnow()
                 )
             )
             await self.db.commit()
@@ -1218,13 +1278,13 @@ AI回复: {bot_response}
         return top_memories
 
     async def _retrieve_by_metadata(
-        self,
-        user_id: int,
-        bot_id: Optional[int],
-        current_message: Optional[str],
-        event_types: Optional[List[str]],
-        limit: int,
-        trace_id: str = ""
+            self,
+            user_id: int,
+            bot_id: Optional[int],
+            current_message: Optional[str],
+            event_types: Optional[List[str]],
+            limit: int,
+            trace_id: str = ""
     ) -> List[UserMemory]:
         """
         使用元数据（关键词、事件类型等）检索记忆
@@ -1296,7 +1356,7 @@ AI回复: {bot_response}
             logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Retrieved memories:")
             for i, memory in enumerate(memories):
                 logger.debug(
-                    f"  [{i+1}] id={memory.id} | importance={memory.importance} | "
+                    f"  [{i + 1}] id={memory.id} | importance={memory.importance} | "
                     f"type={memory.event_type} | summary={memory.event_summary[:60]}..."
                 )
 
@@ -1308,7 +1368,7 @@ AI回复: {bot_response}
                 .where(UserMemory.id.in_(memory_ids))
                 .values(
                     access_count=UserMemory.access_count + 1,
-                    last_accessed_at=datetime.now(timezone.utc)
+                    last_accessed_at=datetime.utcnow()
                 )
             )
             await self.db.commit()
@@ -1373,9 +1433,9 @@ AI回复: {bot_response}
             return {"should_retrieve": False}
 
     async def format_memories_for_context(
-        self,
-        memories: List[UserMemory],
-        max_chars: int = 1000
+            self,
+            memories: List[UserMemory],
+            max_chars: int = 1000
     ) -> str:
         """
         将记忆格式化为可注入到对话上下文的字符串
@@ -1425,7 +1485,7 @@ AI回复: {bot_response}
         result = await self.db.execute(
             update(UserMemory)
             .where(UserMemory.id == memory_id)
-            .values(is_active=False, updated_at=datetime.now(timezone.utc))
+            .values(is_active=False, updated_at=datetime.utcnow())
         )
         await self.db.commit()
 
@@ -1491,9 +1551,9 @@ AI回复: {bot_response}
         return stats
 
     async def backfill_embeddings(
-        self,
-        user_id: Optional[int] = None,
-        batch_size: int = 50
+            self,
+            user_id: Optional[int] = None,
+            batch_size: int = 50
     ) -> Dict[str, int]:
         """
         为没有embedding的记忆生成向量嵌入
@@ -1557,7 +1617,7 @@ AI回复: {bot_response}
                     .values(
                         embedding=embed_result.embedding,
                         embedding_model=embed_result.model,
-                        updated_at=datetime.now(timezone.utc)
+                        updated_at=datetime.utcnow()
                     )
                 )
                 processed += 1
@@ -1612,9 +1672,9 @@ _memory_service_cache: Dict[str, ConversationMemoryService] = {}
 
 
 def get_conversation_memory_service(
-    db: AsyncSession,
-    llm_provider=None,
-    embedding_service=None
+        db: AsyncSession,
+        llm_provider=None,
+        embedding_service=None
 ) -> ConversationMemoryService:
     """
     获取对话记忆服务实例
