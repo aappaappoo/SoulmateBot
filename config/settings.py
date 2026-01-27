@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     qwen_tts_speed: float = 0.8
     tts_provider: str = "qwen"  # TTS服务提供商：openai, iflytek 或 qwen
 
+    # Embedding Configuration (向量嵌入配置)
+    embedding_provider: str = "dashscope"  # 嵌入服务提供商：dashscope 或 openai
+    embedding_model: str = "text-embedding-v3"  # 嵌入模型名称
+    memory_similarity_threshold: float = 0.5  # 记忆检索的最低相似度阈值
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
