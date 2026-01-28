@@ -327,13 +327,18 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 )
             )
             
+            # 获取之前保存的 LLM 摘要
+            summary_key = f"llm_summary_{chat_id}_{db_user.id if db_user else 'unknown'}"
+            previous_summary = context.bot_data.get(summary_key)
+            
             try:
                 builder_result = await context_builder.build_context(
                     bot_system_prompt=system_prompt or "",
                     conversation_history=conversation_history_for_builder,
                     current_message=message_text,
                     user_memories=user_memories,
-                    dialogue_strategy=dialogue_strategy_text
+                    dialogue_strategy=dialogue_strategy_text,
+                    llm_generated_summary=previous_summary  # 传递之前的摘要
                 )
                 
                 # 提取构建好的消息列表
@@ -376,6 +381,26 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 使用编排器处理消息
             orchestrator = get_orchestrator()
             result = await orchestrator.process(agent_message, chat_context)
+            
+            # 保存 LLM 生成的摘要供下一轮使用
+            if hasattr(result, 'metadata') and result.metadata.get("conversation_summary"):
+                llm_summary = result.metadata["conversation_summary"]
+                
+                # 存储到 context.bot_data 中，供下一轮对话使用
+                summary_key = f"llm_summary_{chat_id}_{db_user.id if db_user else 'unknown'}"
+                context.bot_data[summary_key] = llm_summary
+                
+                # 定期清理旧的摘要（简单的大小限制）
+                # 保留最近100个摘要，防止内存泄漏
+                summary_keys = [k for k in context.bot_data.keys() if k.startswith("llm_summary_")]
+                if len(summary_keys) > 100:
+                    # 删除最旧的摘要（假设键按时间顺序添加）
+                    oldest_keys = summary_keys[:len(summary_keys) - 100]
+                    for old_key in oldest_keys:
+                        context.bot_data.pop(old_key, None)
+                    logger.debug(f"🧹 Cleaned up {len(oldest_keys)} old summaries from bot_data")
+                
+                logger.info(f"📝 Saved LLM summary: {llm_summary.get('summary_text', '')[:50]}...")
             
             # 日志记录意图类型和来源
             intent_source = result.metadata.get("intent_source", "unknown")

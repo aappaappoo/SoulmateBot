@@ -117,3 +117,64 @@ class AgentResponse:
         """Validate confidence score."""
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError(f"Confidence must be between 0.0 and 1.0, got {self.confidence}")
+
+
+@dataclass
+class KeyElements:
+    """对话关键要素"""
+    time: List[str] = field(default_factory=list)
+    place: List[str] = field(default_factory=list)
+    people: List[str] = field(default_factory=list)
+    events: List[str] = field(default_factory=list)
+    emotions: List[str] = field(default_factory=list)
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> "KeyElements":
+        if not data:
+            return cls()
+        return cls(
+            time=data.get("time", []),
+            place=data.get("place", []),
+            people=data.get("people", []),
+            events=data.get("events", []),
+            emotions=data.get("emotions", [])
+        )
+
+
+@dataclass
+class LLMConversationSummary:
+    """LLM 生成的对话摘要"""
+    summary_text: str = ""
+    key_elements: Optional[KeyElements] = None
+    topics: List[str] = field(default_factory=list)
+    user_state: str = ""
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> "LLMConversationSummary":
+        """从字典创建对象"""
+        if not data:
+            return cls()
+        
+        key_elements = KeyElements.from_dict(data.get("key_elements", {}))
+        
+        return cls(
+            summary_text=data.get("summary_text", ""),
+            key_elements=key_elements,
+            topics=data.get("topics", []),
+            user_state=data.get("user_state", "")
+        )
+    
+    def to_dict(self) -> Dict:
+        """转换为字典"""
+        return {
+            "summary_text": self.summary_text,
+            "key_elements": {
+                "time": self.key_elements.time if self.key_elements else [],
+                "place": self.key_elements.place if self.key_elements else [],
+                "people": self.key_elements.people if self.key_elements else [],
+                "events": self.key_elements.events if self.key_elements else [],
+                "emotions": self.key_elements.emotions if self.key_elements else []
+            },
+            "topics": self.topics,
+            "user_state": self.user_state
+        }
