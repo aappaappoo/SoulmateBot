@@ -24,8 +24,8 @@ class DialoguePhase(Enum):
     """
     OPENING = "opening"           # 开场阶段(前1-2轮) - Opening phase (turns 1-2)
     LISTENING = "listening"       # 倾听阶段(3-5轮) - Listening phase (turns 3-5)
-    DEEPENING = "deepening"       # 深入理解阶段(5-8轮) - Deepening phase (turns 5-8)
-    SUPPORTING = "supporting"     # 支持引导阶段(8轮以上) - Supporting phase (turns 8+)
+    DEEPENING = "deepening"       # 深入理解阶段(6-8轮) - Deepening phase (turns 6-8)
+    SUPPORTING = "supporting"     # 支持引导阶段(9轮以上) - Supporting phase (turns 9+)
 
 
 class ResponseType(Enum):
@@ -283,7 +283,9 @@ class DialogueStrategyInjector:
         
         # 追加策略到原prompt后面（保持原有人设不变）
         # Append strategy to original prompt (preserving original personality)
-        enhanced_prompt = f"{original_prompt}\n\n{strategy_guidance}"
+        # Handle None or empty original_prompt
+        base_prompt = original_prompt if original_prompt else ""
+        enhanced_prompt = f"{base_prompt}\n\n{strategy_guidance}"
         
         logger.info(
             f"Dialogue strategy applied: phase={phase.value}, "
@@ -292,6 +294,10 @@ class DialogueStrategyInjector:
         )
         
         return enhanced_prompt
+
+
+# Module-level singleton to avoid unnecessary object allocation
+_injector_instance: Optional[DialogueStrategyInjector] = None
 
 
 def enhance_prompt_with_strategy(
@@ -304,6 +310,7 @@ def enhance_prompt_with_strategy(
     Convenience function to enhance prompt with dialogue strategy
     
     This is the main entry point for using the dialogue strategy module.
+    Uses a module-level singleton to avoid creating new objects on every call.
     
     Args:
         original_prompt: 原始system prompt
@@ -323,5 +330,7 @@ def enhance_prompt_with_strategy(
         history.insert(0, {"role": "system", "content": enhanced_prompt})
         ```
     """
-    injector = DialogueStrategyInjector()
-    return injector.inject_strategy(original_prompt, conversation_history, current_message)
+    global _injector_instance
+    if _injector_instance is None:
+        _injector_instance = DialogueStrategyInjector()
+    return _injector_instance.inject_strategy(original_prompt, conversation_history, current_message)

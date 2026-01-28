@@ -113,13 +113,13 @@ class TestDialoguePhaseAnalyzer:
         assert phase == DialoguePhase.LISTENING
     
     def test_analyze_phase_deepening(self):
-        """测试深入阶段识别（5-8轮）"""
+        """测试深入阶段识别（6-8轮）"""
         history = [{"role": "user", "content": f"消息{i}"} for i in range(6)]
         phase = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.DEEPENING
     
     def test_analyze_phase_supporting(self):
-        """测试支持阶段识别（8轮以上）"""
+        """测试支持阶段识别（9轮以上）"""
         history = [{"role": "user", "content": f"消息{i}"} for i in range(10)]
         phase = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.SUPPORTING
@@ -497,3 +497,7 @@ class TestEdgeCases:
         enhanced = enhance_prompt_with_strategy(None, history, message)
         assert enhanced is not None
         assert len(enhanced) > 0
+        # 不应该包含字符串 "None"
+        assert "None" not in enhanced
+        # 应该包含策略指导
+        assert "当前对话策略" in enhanced
