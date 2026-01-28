@@ -35,6 +35,7 @@ from datetime import datetime
 from src.models.database import UserMemory
 from src.services.conversation_memory_service import DateParser
 from src.conversation.dialogue_strategy import enhance_prompt_with_strategy
+from src.conversation.context_builder import UnifiedContextBuilder, ContextConfig
 
 
 # 全局编排器实例（懒加载）
@@ -228,7 +229,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 发送typing指示
             await message.chat.send_action("typing")
             
-            # 获取对话历史（构建ChatContext）
+            # 获取对话历史
             history_messages = []
             recent_conversations = []
             if db_user:
@@ -236,7 +237,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     select(Conversation)
                     .where(Conversation.user_id == db_user.id)
                     .order_by(Conversation.timestamp.desc())
-                    .limit(10)
+                    .limit(50)  # 增加到50条以支持中期摘要
                 )
                 recent_conversations = list(db_result.scalars().all())
                 
@@ -256,7 +257,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 )
             
             # 🧠 检索用户的相关记忆
-            memory_context = ""
+            user_memories = []
             if db_user and memory_service:
                 try:
                     memories = await memory_service.retrieve_memories(
@@ -266,32 +267,89 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         skip_llm_analysis=True  # 避免额外 LLM 调用
                     )
                     if memories:
-                        memory_context = await memory_service.format_memories_for_context(memories)
-                        logger.info(f"🧠 Retrieved {len(memories)} memories for context injection")
+                        # 转换为字典格式供 UnifiedContextBuilder 使用
+                        # 统一使用 "YYYY-MM-DD" 格式
+                        user_memories = [
+                            {
+                                "event_summary": m.event_summary,
+                                "event_date": m.event_date.strftime("%Y-%m-%d") if m.event_date else None,
+                                "event_type": m.event_type,
+                                "keywords": m.keywords
+                            }
+                            for m in memories
+                        ]
+                        logger.info(f"🧠 Retrieved {len(user_memories)} memories for context injection")
                 except Exception as e:
-                    logger.warning(f"Error retrieving memories: {e}")
+                    logger.warning(f"Error retrieving memories: {e}", exc_info=True)
             
-            # 将记忆注入到system prompt中
-            enhanced_system_prompt = system_prompt or ""
-            if memory_context:
-                enhanced_system_prompt = f"{enhanced_system_prompt}\n\n{memory_context}"
-            
-            # 应用动态对话策略
-            # Build conversation history in the format expected by dialogue strategy
-            conversation_history_for_strategy = []
+            # 构建对话历史格式（用于 UnifiedContextBuilder）
+            conversation_history_for_builder = []
             for conv in reversed(recent_conversations):
                 if conv.is_user_message:
-                    conversation_history_for_strategy.append({"role": "user", "content": conv.message})
+                    conversation_history_for_builder.append({"role": "user", "content": conv.message})
                 else:
-                    conversation_history_for_strategy.append({"role": "assistant", "content": conv.response})
+                    conversation_history_for_builder.append({"role": "assistant", "content": conv.response})
             
-            # Apply dialogue strategy enhancement
-            if enhanced_system_prompt:
-                enhanced_system_prompt = enhance_prompt_with_strategy(
-                    original_prompt=enhanced_system_prompt,
-                    conversation_history=conversation_history_for_strategy,
-                    current_message=message_text
+            # 应用动态对话策略（生成策略文本）
+            dialogue_strategy_text = None
+            if conversation_history_for_builder:
+                try:
+                    # 先生成对话策略
+                    base_system_prompt = system_prompt or ""
+                    enhanced_with_strategy = enhance_prompt_with_strategy(
+                        original_prompt=base_system_prompt,
+                        conversation_history=conversation_history_for_builder,
+                        current_message=message_text
+                    )
+                    # 提取策略部分（去掉原始 system_prompt）
+                    if base_system_prompt and enhanced_with_strategy.startswith(base_system_prompt):
+                        dialogue_strategy_text = enhanced_with_strategy[len(base_system_prompt):].strip()
+                except Exception as e:
+                    logger.warning(f"Error generating dialogue strategy: {e}", exc_info=True)
+            
+            # 🔧 使用 UnifiedContextBuilder 构建上下文
+            context_builder = UnifiedContextBuilder(
+                config=ContextConfig(
+                    short_term_rounds=5,
+                    mid_term_start=3,
+                    mid_term_end=20,
+                    max_memories=8,
+                    use_llm_summary=False,  # 使用规则摘要节省 token
+                    enable_proactive_strategy=True
                 )
+            )
+            
+            try:
+                builder_result = await context_builder.build_context(
+                    bot_system_prompt=system_prompt or "",
+                    conversation_history=conversation_history_for_builder,
+                    current_message=message_text,
+                    user_memories=user_memories,
+                    dialogue_strategy=dialogue_strategy_text
+                )
+                
+                # 提取构建好的消息列表
+                enhanced_messages = builder_result.messages
+                
+                # 提取 system prompt（第一条消息）
+                enhanced_system_prompt = enhanced_messages[0]["content"] if enhanced_messages else system_prompt
+                
+                # 记录 token 使用情况
+                budget_info = context_builder.get_token_budget_info(builder_result)
+                logger.info(
+                    f"🔧 Context built: {len(enhanced_messages)} messages, "
+                    f"~{budget_info['estimated_tokens']} tokens "
+                    f"({budget_info['usage_percentage']:.1f}% of budget)"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error building context with UnifiedContextBuilder: {e}", exc_info=True)
+                # 回退到简单的 system prompt
+                enhanced_system_prompt = system_prompt or ""
+                enhanced_messages = [
+                    {"role": "system", "content": enhanced_system_prompt},
+                    {"role": "user", "content": message_text}
+                ]
             
             # 创建Agent消息和上下文
             agent_message = AgentMessage(
