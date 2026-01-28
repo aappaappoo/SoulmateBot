@@ -374,7 +374,9 @@ class UnifiedContextBuilder:
         # 添加对话策略（如果提供）
         if dialogue_strategy:
             components.append(dialogue_strategy)
-        
+
+        components.append("""【对话历史】以下是最近的对话记录，请结合上下文理解用户当前的状态和需求：""")
+
         # 用双换行符连接所有组件
         enhanced_prompt = "\n\n".join(components)
         

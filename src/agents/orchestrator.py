@@ -214,13 +214,7 @@ class AgentOrchestrator:
                     "role": "system",
                     "content": context.system_prompt
                 })
-            else:
-                # 默认 system prompt
-                messages.append({
-                    "role": "system",
-                    "content": "你是一个友好的AI助手。"
-                })
-            
+
             # 2. 短期对话历史（最近 3-5 轮，即 6-10 条消息）
             if context and context.conversation_history:
                 recent_history = context.conversation_history[-10:]  # 最多10条
