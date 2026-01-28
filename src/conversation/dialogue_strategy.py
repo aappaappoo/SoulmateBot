@@ -38,6 +38,7 @@ class ResponseType(Enum):
     VALIDATION = "validation"                          # 认可与验证 - Validation and acknowledgment
     COMFORT = "comfort"                                # 安慰与支持 - Comfort and support
     GENTLE_GUIDANCE = "gentle_guidance"                # 温和引导 - Gentle guidance
+    PROACTIVE_INQUIRY = "proactive_inquiry"            # 主动追问 - Proactive inquiry about personal details
 
 
 # 情绪关键词配置
@@ -54,6 +55,38 @@ EMOTION_KEYWORDS = {
         "low": ["还可以", "稍微好点"]
     }
 }
+
+
+# 多消息回复指令
+# Multi-message reply instruction for more human-like responses
+MULTI_MESSAGE_INSTRUCTION = """
+=========================
+📝 回复格式说明
+=========================
+为了让对话更加自然，你可以选择将回复分成多条消息发送。
+
+格式要求：
+- 如果你认为回复应该分成多条消息，请使用 [MSG_SPLIT] 标记分隔
+- 每个分隔的部分会作为独立的消息发送给用户
+- 分隔要自然，就像真人聊天时会分多次发送一样
+- 不要刻意分割，只在自然需要时使用（比如：先回应情绪，再提问；或者分享不同的想法）
+- 最多分成3条消息
+
+示例1（单条回复）：
+我懂你的感受，这种时候确实很不容易呢 💕
+
+示例2（多条回复）：
+哎呀，听起来今天遇到了不少事情呢
+[MSG_SPLIT]
+不过别担心，有什么想说的都可以告诉我~
+
+示例3（多条回复）：
+你说的这个我特别理解
+[MSG_SPLIT]
+对了，你平时一般怎么放松自己呀？
+
+注意：[MSG_SPLIT] 标记只用于分隔消息，不要在回复内容中提及或解释这个标记。
+"""
 
 
 # 策略指导模板
@@ -107,6 +140,30 @@ STRATEGY_TEMPLATES = {
 - 不强加观点，尊重用户的选择
 - 引导而非说教
 注意：你的人设和性格保持不变，以上是建议的沟通方式。
+""",
+    
+    ResponseType.PROACTIVE_INQUIRY: """
+【当前对话策略：主动追问】
+本轮重点：
+- 主动询问用户的兴趣爱好、星座属性、心情状态等个人信息
+- 通过自然的方式表达对用户的好奇和关心
+- 问题要轻松、不带压力，可以分享自己的喜好来引导话题
+- 根据对话情境选择合适的追问话题
+
+可以追问的话题示例：
+- 兴趣爱好："对了，你平时喜欢做什么呀？有什么爱好吗？"
+- 星座："说起来，你是什么星座的呀？我挺好奇的~"
+- 心情状态："最近心情怎么样呀？有什么开心或者烦心的事吗？"
+- 日常生活："今天过得怎么样？有遇到什么有趣的事吗？"
+- 喜好偏好："你喜欢什么类型的音乐/电影/书呀？"
+- 生活习惯："平时是早起型还是夜猫子呀？"
+- 近况："最近在忙什么呀？工作/学习还顺利吗？"
+
+注意：
+- 一次只问一个问题，不要连续追问太多
+- 追问要自然融入对话，不要像审问
+- 如果用户不想回答，要尊重用户的选择
+- 你的人设和性格保持不变，以上是建议的沟通方式。
 """
 }
 
@@ -180,7 +237,8 @@ class DialoguePhaseAnalyzer:
         self,
         phase: DialoguePhase,
         emotion_type: str,
-        emotion_intensity: str
+        emotion_intensity: str,
+        conversation_history: List[Dict[str, str]] = None
     ) -> ResponseType:
         """
         根据阶段和情绪建议回应类型
@@ -190,6 +248,7 @@ class DialoguePhaseAnalyzer:
             phase: 当前对话阶段
             emotion_type: 情绪类型 ("positive", "negative", "neutral")
             emotion_intensity: 情绪强度 ("high", "medium", "low")
+            conversation_history: 对话历史（可选，用于判断是否应该主动追问）
             
         Returns:
             ResponseType: 建议的回应类型
@@ -198,6 +257,10 @@ class DialoguePhaseAnalyzer:
         # Emergency: High-intensity negative emotions require immediate comfort
         if emotion_type == "negative" and emotion_intensity == "high":
             return ResponseType.COMFORT
+        
+        # 检查是否应该主动追问（在情绪稳定时适当穿插）
+        # Check if proactive inquiry should be suggested (when emotions are stable)
+        should_inquire = self._should_proactive_inquiry(phase, emotion_type, conversation_history)
         
         # 根据对话阶段选择策略
         # Select strategy based on dialogue phase
@@ -211,6 +274,8 @@ class DialoguePhaseAnalyzer:
             # Listening phase: Choose between listening and validation
             if emotion_type == "negative":
                 return ResponseType.VALIDATION  # 验证负面情绪
+            elif should_inquire:
+                return ResponseType.PROACTIVE_INQUIRY  # 适时主动追问
             else:
                 return ResponseType.ACTIVE_LISTENING
                 
@@ -219,6 +284,8 @@ class DialoguePhaseAnalyzer:
             # Deepening phase: Empathic questioning for exploration
             if emotion_type == "negative" and emotion_intensity in ["high", "medium"]:
                 return ResponseType.COMFORT  # 中高强度负面情绪需要安慰
+            elif should_inquire and emotion_type == "neutral":
+                return ResponseType.PROACTIVE_INQUIRY  # 中性情绪时主动追问
             else:
                 return ResponseType.EMPATHIC_QUESTIONING
                 
@@ -226,6 +293,8 @@ class DialoguePhaseAnalyzer:
             # 支持阶段：可以适当引导
             # Supporting phase: Gentle guidance when appropriate
             if emotion_type == "positive":
+                if should_inquire:
+                    return ResponseType.PROACTIVE_INQUIRY  # 积极情绪时主动追问
                 return ResponseType.EMPATHIC_QUESTIONING  # 积极情绪时继续探索
             elif emotion_type == "negative":
                 if emotion_intensity == "low":
@@ -233,7 +302,58 @@ class DialoguePhaseAnalyzer:
                 else:
                     return ResponseType.COMFORT  # 中高强度负面需要安慰
             else:
+                if should_inquire:
+                    return ResponseType.PROACTIVE_INQUIRY  # 中性情绪时主动追问
                 return ResponseType.GENTLE_GUIDANCE
+    
+    def _should_proactive_inquiry(
+        self,
+        phase: DialoguePhase,
+        emotion_type: str,
+        conversation_history: List[Dict[str, str]] = None
+    ) -> bool:
+        """
+        判断是否应该主动追问用户个人信息
+        Determine if proactive inquiry about personal details should be suggested
+        
+        这个方法用于在适当的时机穿插主动追问，使对话更加拟人化。
+        追问时机：
+        - 对话已经进行了几轮（不在开场阶段）
+        - 用户情绪稳定（非负面情绪）
+        - 最近几轮没有连续追问过
+        
+        Args:
+            phase: 当前对话阶段
+            emotion_type: 情绪类型
+            conversation_history: 对话历史
+            
+        Returns:
+            bool: 是否应该主动追问
+        """
+        # 开场阶段不追问，先建立信任
+        # Don't inquire in opening phase, build trust first
+        if phase == DialoguePhase.OPENING:
+            return False
+        
+        # 负面情绪时不追问，优先关注情绪
+        # Don't inquire when negative emotions, focus on emotions first
+        if emotion_type == "negative":
+            return False
+        
+        # 如果没有对话历史，不追问
+        if not conversation_history:
+            return False
+        
+        # 计算用户消息轮数
+        user_turns = sum(1 for msg in conversation_history if msg.get("role") == "user")
+        
+        # 每隔一定轮次考虑追问（例如每3-4轮）
+        # Consider inquiry every few turns (e.g., every 3-4 turns)
+        # 使用简单的规则：用户消息轮数能被3整除时考虑追问
+        if user_turns > 0 and user_turns % 3 == 0:
+            return True
+        
+        return False
 
 
 class DialogueStrategyInjector:
@@ -273,9 +393,11 @@ class DialogueStrategyInjector:
         # Analyze user emotion
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
         
-        # 建议回应类型
-        # Suggest response type
-        response_type = self.analyzer.suggest_response_type(phase, emotion_type, emotion_intensity)
+        # 建议回应类型（传入对话历史以判断是否应该主动追问）
+        # Suggest response type (pass conversation history to determine proactive inquiry)
+        response_type = self.analyzer.suggest_response_type(
+            phase, emotion_type, emotion_intensity, conversation_history
+        )
         
         # 获取策略模板
         # Get strategy template
@@ -285,7 +407,9 @@ class DialogueStrategyInjector:
         # Append strategy to original prompt (preserving original personality)
         # Handle None or empty original_prompt
         base_prompt = original_prompt if original_prompt else ""
-        enhanced_prompt = f"{base_prompt}\n\n{strategy_guidance}"
+        # 添加多消息回复指令
+        # Add multi-message reply instruction
+        enhanced_prompt = f"{base_prompt}\n\n{strategy_guidance}\n\n{MULTI_MESSAGE_INSTRUCTION}"
         
         logger.info(
             f"Dialogue strategy applied: phase={phase.value}, "

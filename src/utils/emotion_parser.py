@@ -296,3 +296,58 @@ def strip_emotion_prefix(response: str) -> str:
     """
     _, clean_text = extract_emotion_and_text(response)
     return clean_text
+
+
+# Multi-message split marker
+MSG_SPLIT_MARKER = "[MSG_SPLIT]"
+
+
+def parse_multi_message_response(response: str) -> Tuple[list, str]:
+    """
+    Parse LLM response to extract multiple messages if split markers are present.
+    
+    解析LLM响应，提取多条消息（如果存在分隔标记）。
+    
+    The LLM may include [MSG_SPLIT] markers to indicate where the response should
+    be split into multiple Telegram messages. This function extracts each message
+    while also returning the full content for storage/history purposes.
+    
+    Args:
+        response: The LLM response that may contain [MSG_SPLIT] markers
+        
+    Returns:
+        Tuple of (messages_list, full_content) where:
+        - messages_list: List of individual message strings to send separately
+        - full_content: The complete response without split markers (for storage)
+        
+    Examples:
+        >>> parse_multi_message_response("你好啊[MSG_SPLIT]最近怎么样？")
+        (["你好啊", "最近怎么样？"], "你好啊\n最近怎么样？")
+        
+        >>> parse_multi_message_response("普通回复内容")
+        (["普通回复内容"], "普通回复内容")
+    """
+    if not response:
+        return [], ""
+    
+    # Check if the response contains split markers
+    if MSG_SPLIT_MARKER not in response:
+        return [response.strip()], response.strip()
+    
+    # Split the response by the marker
+    parts = response.split(MSG_SPLIT_MARKER)
+    
+    # Clean up each part and filter out empty strings
+    messages = [part.strip() for part in parts if part.strip()]
+    
+    # Limit to maximum 3 messages to avoid spam
+    if len(messages) > 3:
+        logger.warning(f"📝 Multi-message response exceeded limit, truncating from {len(messages)} to 3 messages")
+        messages = messages[:3]
+    
+    # Create full content by joining with newlines (for storage/history)
+    full_content = "\n".join(messages)
+    
+    logger.info(f"📝 Parsed multi-message response: {len(messages)} message(s)")
+    
+    return messages, full_content

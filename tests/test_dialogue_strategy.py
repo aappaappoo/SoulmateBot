@@ -501,3 +501,106 @@ class TestEdgeCases:
         assert "None" not in enhanced
         # 应该包含策略指导
         assert "当前对话策略" in enhanced
+
+
+class TestProactiveInquiry:
+    """测试主动追问策略"""
+    
+    def setup_method(self):
+        """初始化测试"""
+        self.analyzer = DialoguePhaseAnalyzer()
+    
+    def test_proactive_inquiry_response_type_exists(self):
+        """测试主动追问回应类型存在"""
+        assert ResponseType.PROACTIVE_INQUIRY.value == "proactive_inquiry"
+    
+    def test_proactive_inquiry_template_exists(self):
+        """测试主动追问模板存在"""
+        assert ResponseType.PROACTIVE_INQUIRY in STRATEGY_TEMPLATES
+        template = STRATEGY_TEMPLATES[ResponseType.PROACTIVE_INQUIRY]
+        assert "主动追问" in template
+        assert "兴趣爱好" in template
+        assert "星座" in template
+    
+    def test_no_proactive_inquiry_in_opening_phase(self):
+        """测试开场阶段不主动追问"""
+        # 用户消息只有1轮，应该是开场阶段
+        history = [{"role": "user", "content": "你好"}]
+        phase = self.analyzer.analyze_phase(history)
+        
+        # 即使情绪正面，开场阶段也应该主动倾听而非追问
+        response_type = self.analyzer.suggest_response_type(
+            phase, "neutral", "medium", history
+        )
+        assert response_type != ResponseType.PROACTIVE_INQUIRY
+    
+    def test_no_proactive_inquiry_with_negative_emotion(self):
+        """测试负面情绪时不主动追问"""
+        # 在深入阶段但有负面情绪
+        history = [{"role": "user", "content": f"消息{i}"} for i in range(6)]
+        phase = self.analyzer.analyze_phase(history)
+        
+        response_type = self.analyzer.suggest_response_type(
+            phase, "negative", "medium", history
+        )
+        # 负面情绪时应该安慰，不应追问
+        assert response_type == ResponseType.COMFORT
+    
+    def test_proactive_inquiry_with_neutral_emotion_at_right_turn(self):
+        """测试中性情绪且在合适轮次时可能主动追问"""
+        # 3轮用户消息（应该在倾听阶段，且3能被3整除）
+        history = [
+            {"role": "user", "content": "消息1"},
+            {"role": "assistant", "content": "回复1"},
+            {"role": "user", "content": "消息2"},
+            {"role": "assistant", "content": "回复2"},
+            {"role": "user", "content": "消息3"},
+        ]
+        phase = self.analyzer.analyze_phase(history)
+        assert phase == DialoguePhase.LISTENING
+        
+        response_type = self.analyzer.suggest_response_type(
+            phase, "neutral", "medium", history
+        )
+        # 3轮用户消息，中性情绪，应该触发主动追问
+        assert response_type == ResponseType.PROACTIVE_INQUIRY
+    
+    def test_proactive_inquiry_in_supporting_phase_positive(self):
+        """测试支持阶段正面情绪时可能主动追问"""
+        # 9轮用户消息（应该在支持阶段，且9能被3整除）
+        history = [{"role": "user", "content": f"消息{i}"} for i in range(9)]
+        phase = self.analyzer.analyze_phase(history)
+        assert phase == DialoguePhase.SUPPORTING
+        
+        response_type = self.analyzer.suggest_response_type(
+            phase, "positive", "medium", history
+        )
+        # 9轮用户消息，正面情绪，应该触发主动追问
+        assert response_type == ResponseType.PROACTIVE_INQUIRY
+
+
+class TestMultiMessageInstruction:
+    """测试多消息指令"""
+    
+    def test_multi_message_instruction_in_enhanced_prompt(self):
+        """测试增强后的prompt包含多消息指令"""
+        original_prompt = "你是一个AI助手。"
+        history = [{"role": "user", "content": "你好"}]
+        current_message = "我需要帮助"
+        
+        enhanced = enhance_prompt_with_strategy(original_prompt, history, current_message)
+        
+        # 应该包含多消息指令
+        assert "[MSG_SPLIT]" in enhanced
+        assert "回复格式说明" in enhanced
+    
+    def test_multi_message_instruction_has_examples(self):
+        """测试多消息指令包含示例"""
+        original_prompt = "你是一个AI助手。"
+        history = [{"role": "user", "content": "你好"}]
+        current_message = "我需要帮助"
+        
+        enhanced = enhance_prompt_with_strategy(original_prompt, history, current_message)
+        
+        # 应该包含示例
+        assert "示例" in enhanced
