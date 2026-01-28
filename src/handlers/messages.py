@@ -15,6 +15,7 @@ from src.services.message_router import MessageRouter
 from src.utils.voice_helper import send_voice_or_text_reply
 from src.models.database import Conversation
 from src.ai import conversation_service
+from src.conversation.dialogue_strategy import enhance_prompt_with_strategy
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -93,11 +94,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not user:
                 if "channel" in str(chat_type).lower():
                     logger.info("📢 [STEP 5/9] USER_PROCESS: Channel message - processing without user")
-                    await message. chat.send_action("typing")
+                    await message.chat.send_action("typing")
                     try:
                         history = []
                         if selected_bot.system_prompt:
-                            history. insert(0, {"role": "system", "content":  selected_bot.system_prompt})
+                            # Channel messages have no conversation history, so pass empty list
+                            enhanced_prompt = enhance_prompt_with_strategy(
+                                original_prompt=selected_bot.system_prompt,
+                                conversation_history=[],
+                                current_message=message_text
+                            )
+                            history.insert(0, {"role": "system", "content": enhanced_prompt})
                         logger.info(f"🧠 [STEP 6/9] AI_REQUEST: Sending to AI service, history_length={len(history)}")
                         response = await conversation_service.get_response(message_text, history)
                         logger.info(f"🧠 [STEP 6/9] AI_RESPONSE: Received response, length={len(response)}")
@@ -176,9 +183,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     history.append({"role": "assistant", "content": conv.response})
 
             try:
-                # 添加系统提示
+                # 添加系统提示（使用动态对话策略增强）
                 if selected_bot.system_prompt:
-                    history.insert(0, {"role": "system", "content":  selected_bot.system_prompt})
+                    enhanced_prompt = enhance_prompt_with_strategy(
+                        original_prompt=selected_bot.system_prompt,
+                        conversation_history=history,
+                        current_message=message_text
+                    )
+                    history.insert(0, {"role": "system", "content": enhanced_prompt})
 
                 # 获取AI响应
                 logger.info(f"🧠 [STEP 7/9] AI_REQUEST: Sending request to AI service, history_length={len(history)}, message_length={len(message_text)}")
