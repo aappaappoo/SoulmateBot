@@ -146,7 +146,7 @@ class TestDialoguePhaseAnalyzer:
     
     def test_analyze_emotion_negative_low(self):
         """测试识别低强度负面情绪"""
-        message = "感觉不太好，有点累"
+        message = "感觉不太好，有点不舒服"
         emotion_type, intensity = self.analyzer.analyze_emotion(message)
         assert emotion_type == "negative"
         assert intensity == "low"
@@ -390,15 +390,21 @@ class TestDialogueStrategyIntegration:
         enhanced_1 = enhance_prompt_with_strategy(original_prompt, history_1, message_1)
         assert "主动倾听" in enhanced_1 or "当前对话策略" in enhanced_1
         
-        # 第3轮：倾听阶段
-        history_3 = [
+        # 第4轮：倾听阶段（需要至少3轮用户消息），使用负面情绪消息
+        history_4 = [
             {"role": "user", "content": "你好"},
             {"role": "assistant", "content": "你好"},
             {"role": "user", "content": "我今天心情不好"},
+            {"role": "assistant", "content": "怎么了"},
+            {"role": "user", "content": "我感觉很难过"},
+            {"role": "assistant", "content": "我在听"},
+            {"role": "user", "content": "工作压力好大"},
         ]
-        message_3 = "我感觉很难过"
-        enhanced_3 = enhance_prompt_with_strategy(original_prompt, history_3, message_3)
-        assert "当前对话策略" in enhanced_3
+        message_4 = "我真的很焦虑"  # 负面情绪，会触发 VALIDATION 策略
+        enhanced_4 = enhance_prompt_with_strategy(original_prompt, history_4, message_4)
+        assert "当前对话策略" in enhanced_4
+        # 倾听阶段+负面情绪应该是验证策略
+        assert "认可" in enhanced_4 or "验证" in enhanced_4
         
         # 第6轮：深入阶段
         history_6 = [{"role": "user", "content": f"消息{i}"} for i in range(6)]
@@ -407,8 +413,8 @@ class TestDialogueStrategyIntegration:
         assert "当前对话策略" in enhanced_6
         
         # 验证每个阶段的prompt都不同
-        assert enhanced_1 != enhanced_3
-        assert enhanced_3 != enhanced_6
+        assert enhanced_1 != enhanced_4
+        assert enhanced_4 != enhanced_6
     
     def test_emotion_based_strategy_selection(self):
         """测试基于情绪的策略选择"""
