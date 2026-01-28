@@ -9,7 +9,12 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.utils.emotion_parser import extract_emotion_and_text, strip_emotion_prefix
+from src.utils.emotion_parser import (
+    extract_emotion_and_text, 
+    strip_emotion_prefix,
+    parse_llm_response_with_emotion,
+    ParsedEmotionResponse,
+)
 
 
 class TestEmotionParser:
@@ -193,3 +198,135 @@ class TestEmotionParserEdgeCases:
         # 前缀被识别，但情绪标签为None因为没有匹配的关键词
         assert emotion is None
         assert text == "这是一个未知情绪"
+
+
+class TestParseLLMResponseWithEmotion:
+    """测试 parse_llm_response_with_emotion 函数"""
+    
+    def test_json_format_parsing(self):
+        """测试JSON格式解析"""
+        json_response = '{"response": "你好啊！", "emotion_info": {"emotion_type": "happy", "intensity": "high", "tone_description": "开心、轻快"}}'
+        parsed = parse_llm_response_with_emotion(json_response)
+        
+        assert parsed.clean_text == "你好啊！"
+        assert parsed.emotion_type == "happy"
+        assert parsed.intensity == "high"
+        assert parsed.tone_description == "开心、轻快"
+    
+    def test_json_format_without_emotion_info(self):
+        """测试JSON格式但不包含emotion_info"""
+        json_response = '{"response": "普通回复内容"}'
+        parsed = parse_llm_response_with_emotion(json_response)
+        
+        assert parsed.clean_text == "普通回复内容"
+        assert parsed.emotion_type is None
+        assert parsed.intensity is None
+    
+    def test_legacy_prefix_format(self):
+        """测试传统前缀格式解析"""
+        response = "（语气：温柔、轻声）我理解你的感受"
+        parsed = parse_llm_response_with_emotion(response)
+        
+        assert parsed.clean_text == "我理解你的感受"
+        assert parsed.emotion_type == "gentle"
+        assert parsed.intensity == "medium"  # Default intensity
+    
+    def test_legacy_prefix_with_high_intensity(self):
+        """测试传统前缀格式带高强度关键词"""
+        response = "（语气：非常开心、强烈兴奋）太棒了！"
+        parsed = parse_llm_response_with_emotion(response)
+        
+        assert parsed.clean_text == "太棒了！"
+        assert parsed.emotion_type == "excited"
+        assert parsed.intensity == "high"
+    
+    def test_plain_text_response(self):
+        """测试普通文本响应"""
+        response = "这是一条普通的回复"
+        parsed = parse_llm_response_with_emotion(response)
+        
+        assert parsed.clean_text == "这是一条普通的回复"
+        assert parsed.emotion_type is None
+        assert parsed.intensity is None
+    
+    def test_empty_response(self):
+        """测试空响应"""
+        parsed = parse_llm_response_with_emotion("")
+        
+        assert parsed.clean_text == ""
+        assert parsed.emotion_type is None
+    
+    def test_none_response(self):
+        """测试None响应"""
+        parsed = parse_llm_response_with_emotion(None)
+        
+        assert parsed.clean_text == ""
+        assert parsed.emotion_type is None
+    
+    def test_invalid_json(self):
+        """测试无效JSON（回退到普通文本）"""
+        response = "{invalid json"
+        parsed = parse_llm_response_with_emotion(response)
+        
+        assert parsed.clean_text == response
+        assert parsed.emotion_type is None
+    
+    def test_json_without_response_field(self):
+        """测试JSON缺少response字段（回退到普通文本）"""
+        response = '{"content": "内容", "emotion_info": {}}'
+        parsed = parse_llm_response_with_emotion(response)
+        
+        # Should fall back to treating as plain text
+        assert parsed.clean_text == response
+
+
+class TestParsedEmotionResponse:
+    """测试 ParsedEmotionResponse 类"""
+    
+    def test_to_dict(self):
+        """测试转换为字典"""
+        parsed = ParsedEmotionResponse(
+            clean_text="你好",
+            emotion_type="happy",
+            intensity="high",
+            tone_description="开心、轻快"
+        )
+        result = parsed.to_dict()
+        
+        assert result["clean_text"] == "你好"
+        assert result["emotion_type"] == "happy"
+        assert result["intensity"] == "high"
+        assert result["tone_description"] == "开心、轻快"
+    
+    def test_get_emotion_info_dict(self):
+        """测试获取情绪信息字典"""
+        parsed = ParsedEmotionResponse(
+            clean_text="你好",
+            emotion_type="happy",
+            intensity="high",
+            tone_description="开心"
+        )
+        emotion_info = parsed.get_emotion_info_dict()
+        
+        assert emotion_info is not None
+        assert emotion_info["emotion_type"] == "happy"
+        assert "clean_text" not in emotion_info
+    
+    def test_get_emotion_info_dict_empty(self):
+        """测试情绪信息全为空时返回None"""
+        parsed = ParsedEmotionResponse(clean_text="你好")
+        emotion_info = parsed.get_emotion_info_dict()
+        
+        assert emotion_info is None
+    
+    def test_get_emotion_info_dict_partial(self):
+        """测试部分情绪信息"""
+        parsed = ParsedEmotionResponse(
+            clean_text="你好",
+            emotion_type="happy"
+        )
+        emotion_info = parsed.get_emotion_info_dict()
+        
+        assert emotion_info is not None
+        assert emotion_info["emotion_type"] == "happy"
+        assert emotion_info["intensity"] is None

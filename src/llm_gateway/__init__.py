@@ -8,7 +8,7 @@ LLM Gateway - 统一的大语言模型调用层
 - 多Provider支持（OpenAI, Anthropic, vLLM）
 """
 
-from .gateway import LLMGateway, LLMRequest, LLMResponse, get_llm_gateway
+from .gateway import LLMGateway, LLMRequest, LLMResponse, EmotionInfo, get_llm_gateway
 from .providers import LLMProvider, OpenAIProvider, AnthropicProvider, VLLMProvider, ProviderConfig
 from .rate_limiter import RateLimiter, TokenBucket
 from .token_counter import TokenCounter, UsageStats
@@ -17,6 +17,7 @@ __all__ = [
     'LLMGateway',
     'LLMRequest',
     'LLMResponse',
+    'EmotionInfo',
     'get_llm_gateway',
     'LLMProvider',
     'OpenAIProvider',

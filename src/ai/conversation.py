@@ -1,7 +1,7 @@
 """
 AI service for conversation handling
 """
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from abc import ABC, abstractmethod
 import time
 import uuid
@@ -353,6 +353,118 @@ class ConversationService:
             f"provider={provider_name} | response_length={len(response)}"
         )
         return response
+    
+    async def get_response_with_emotion(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, str]] = None,
+        context: Optional[str] = None,
+        enable_emotion_detection: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Get AI response with emotion detection.
+        
+        通过LLM API检测情绪类型和强度，返回结构化的响应数据。
+        情绪信息不会包含在回复文本中，而是作为独立的字段返回。
+
+        Args:
+            user_message: User's current message
+            conversation_history: Previous conversation messages  
+            context: Additional context or system prompt
+            enable_emotion_detection: Whether to enable LLM-based emotion detection
+
+        Returns:
+            Dict containing:
+            - response: Clean response text (without emotion prefix)
+            - emotion_info: Dict with emotion_type, intensity, tone_description (or None)
+        """
+        from src.utils.emotion_parser import parse_llm_response_with_emotion
+        
+        messages = conversation_history or []
+        messages.append({"role": "user", "content": user_message})
+
+        # Keep only recent history to avoid token limits
+        if len(messages) > 20:
+            messages = messages[-20:]
+        
+        # Enhance context with emotion detection instruction if enabled
+        enhanced_context = context
+        if enable_emotion_detection:
+            enhanced_context = self._add_emotion_instruction(context)
+
+        provider_name = type(self.provider).__name__
+        logger.info(
+            f"🧠 [ConversationService] Starting AI call with emotion detection: "
+            f"provider={provider_name} | history_count={len(messages)} | "
+            f"user_message_length={len(user_message)} | "
+            f"emotion_detection={enable_emotion_detection}"
+        )
+
+        raw_response = await self.provider.generate_response(messages, enhanced_context)
+        
+        # Parse the response to extract emotion info
+        parsed = parse_llm_response_with_emotion(raw_response)
+
+        logger.info(
+            f"🧠 [ConversationService] AI call with emotion completed: "
+            f"provider={provider_name} | response_length={len(parsed.clean_text)} | "
+            f"emotion_type={parsed.emotion_type} | intensity={parsed.intensity}"
+        )
+        
+        return {
+            "response": parsed.clean_text,
+            "emotion_info": parsed.get_emotion_info_dict()
+        }
+    
+    def _add_emotion_instruction(self, context: Optional[str]) -> str:
+        """
+        在系统提示中添加情绪检测指令。
+        
+        指导LLM在回复时同时返回情绪信息，使用JSON格式返回结构化数据。
+        
+        Args:
+            context: 原始系统提示
+            
+        Returns:
+            增强后的系统提示
+        """
+        emotion_instruction = """
+
+=========================
+📊 情绪表达指令
+=========================
+请在回复时同时分析你要表达的情绪，并以JSON格式返回。
+
+返回格式：
+{
+    "response": "你的回复内容（不要包含语气前缀）",
+    "emotion_info": {
+        "emotion_type": "情绪类型",
+        "intensity": "强度级别",
+        "tone_description": "语气描述"
+    }
+}
+
+情绪类型(emotion_type)可选值：
+- happy: 开心、愉悦
+- gentle: 温柔、柔和
+- sad: 低落、伤感
+- excited: 兴奋、激动
+- angry: 生气、愤怒
+- crying: 委屈、哭泣
+- neutral: 平静、中性
+
+强度级别(intensity)可选值：
+- high: 情绪强烈
+- medium: 情绪适中
+- low: 情绪轻微
+
+语气描述(tone_description)：用自然语言简短描述语气特点，如"温柔、轻声、放慢语速"。
+
+请确保只返回JSON格式的内容，不要在JSON之外添加任何文本。"""
+        
+        base_context = context if context else ""
+        return base_context + emotion_instruction
 
 
 # Global conversation service instance

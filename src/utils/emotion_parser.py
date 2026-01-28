@@ -2,14 +2,14 @@
 Emotion parser utility for LLM responses
 从LLM响应中解析语气标签并分离干净文本
 
-LLM responses may contain emotion prefixes like:
-- （语气：开心、轻快、兴奋，语速稍快，语调上扬）这是内容
-- （语气：低落、语速较慢，情绪克制）这是内容
-- （语气：生气，愤怒）这是内容
-- （语气：温柔、轻声、放慢语速，语调柔和）这是内容
+Supports two formats:
+1. Legacy prefix format: （语气：开心、轻快、兴奋，语速稍快，语调上扬）这是内容
+2. JSON format: {"response": "这是内容", "emotion_info": {"emotion_type": "happy", "intensity": "high", "tone_description": "开心、轻快"}}
 """
 import re
-from typing import Tuple, Optional
+import json
+from typing import Tuple, Optional, Dict, Any
+from dataclasses import dataclass
 from loguru import logger
 
 
@@ -43,6 +43,173 @@ EMOTION_KEYWORDS_MAP = {
     "委屈": "crying",
     "哭泣": "crying",
 }
+
+# Mapping from intensity keywords to intensity levels
+INTENSITY_KEYWORDS_MAP = {
+    "高": "high",
+    "强": "high",
+    "强烈": "high",
+    "非常": "high",
+    "极度": "high",
+    "中": "medium",
+    "适中": "medium",
+    "一般": "medium",
+    "低": "low",
+    "轻微": "low",
+    "略微": "low",
+    "有点": "low",
+}
+
+
+@dataclass
+class ParsedEmotionResponse:
+    """
+    解析后的情绪响应对象
+    
+    Attributes:
+        clean_text: 干净的响应文本（不包含情绪前缀或JSON结构）
+        emotion_type: 情绪类型
+        intensity: 情绪强度
+        tone_description: 语气描述（原始中文描述）
+    """
+    clean_text: str
+    emotion_type: Optional[str] = None
+    intensity: Optional[str] = None
+    tone_description: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "clean_text": self.clean_text,
+            "emotion_type": self.emotion_type,
+            "intensity": self.intensity,
+            "tone_description": self.tone_description
+        }
+    
+    def get_emotion_info_dict(self) -> Optional[Dict[str, Any]]:
+        """获取情绪信息字典（不包含clean_text）"""
+        if not self.emotion_type and not self.intensity and not self.tone_description:
+            return None
+        return {
+            "emotion_type": self.emotion_type,
+            "intensity": self.intensity,
+            "tone_description": self.tone_description
+        }
+
+
+def parse_llm_response_with_emotion(response: str) -> ParsedEmotionResponse:
+    """
+    解析LLM响应，提取情绪信息和干净文本。
+    
+    支持两种格式：
+    1. JSON格式：{"response": "...", "emotion_info": {...}}
+    2. 前缀格式：（语气：...）内容
+    
+    Args:
+        response: LLM原始响应
+        
+    Returns:
+        ParsedEmotionResponse对象，包含干净文本和情绪信息
+    """
+    if not response:
+        return ParsedEmotionResponse(clean_text="")
+    
+    # Try to parse as JSON first
+    json_result = _try_parse_json_format(response)
+    if json_result:
+        logger.debug(f"🎭 Parsed JSON emotion format: emotion_type={json_result.emotion_type}, intensity={json_result.intensity}")
+        return json_result
+    
+    # Fall back to legacy prefix format
+    emotion_tag, clean_text = extract_emotion_and_text(response)
+    
+    # If we found emotion from prefix, extract additional info
+    if emotion_tag:
+        # Get the prefix for tone description
+        match = EMOTION_PATTERN.match(response)
+        tone_desc = match.group(0)[4:-1] if match else None  # Remove （语气： and ）
+        
+        # Try to determine intensity from the prefix
+        intensity = _parse_intensity_from_text(response)
+        
+        return ParsedEmotionResponse(
+            clean_text=clean_text,
+            emotion_type=emotion_tag,
+            intensity=intensity,
+            tone_description=tone_desc
+        )
+    
+    return ParsedEmotionResponse(clean_text=clean_text)
+
+
+def _try_parse_json_format(response: str) -> Optional[ParsedEmotionResponse]:
+    """
+    尝试将响应解析为JSON格式。
+    
+    期望格式：
+    {
+        "response": "回复内容",
+        "emotion_info": {
+            "emotion_type": "happy",
+            "intensity": "high", 
+            "tone_description": "开心、轻快、兴奋"
+        }
+    }
+    
+    Args:
+        response: LLM响应字符串
+        
+    Returns:
+        ParsedEmotionResponse对象或None（如果不是有效的JSON格式）
+    """
+    try:
+        # Try to find JSON in the response
+        # The response might be pure JSON or JSON wrapped in text
+        stripped = response.strip()
+        
+        # Check if it starts with { and ends with }
+        if not (stripped.startswith('{') and stripped.endswith('}')):
+            return None
+        
+        data = json.loads(stripped)
+        
+        # Check required fields
+        if "response" not in data:
+            return None
+        
+        clean_text = data.get("response", "")
+        emotion_info = data.get("emotion_info", {})
+        
+        if emotion_info:
+            return ParsedEmotionResponse(
+                clean_text=clean_text,
+                emotion_type=emotion_info.get("emotion_type"),
+                intensity=emotion_info.get("intensity"),
+                tone_description=emotion_info.get("tone_description")
+            )
+        else:
+            return ParsedEmotionResponse(clean_text=clean_text)
+            
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return None
+
+
+def _parse_intensity_from_text(text: str) -> Optional[str]:
+    """
+    从文本中解析情绪强度。
+    
+    Args:
+        text: 包含情绪描述的文本
+        
+    Returns:
+        强度级别（high, medium, low）或None
+    """
+    # Priority: high > medium > low
+    for intensity_word, intensity_level in INTENSITY_KEYWORDS_MAP.items():
+        if intensity_word in text:
+            return intensity_level
+    
+    return "medium"  # Default to medium if no intensity keywords found
 
 
 def extract_emotion_and_text(response: str) -> Tuple[Optional[str], str]:
