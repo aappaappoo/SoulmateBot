@@ -335,3 +335,95 @@ class TestParsedEmotionResponse:
         assert emotion_info is not None
         assert emotion_info["emotion_type"] == "happy"
         assert emotion_info["intensity"] is None
+
+
+class TestParseMultiMessageResponse:
+    """测试 parse_multi_message_response 函数"""
+    
+    # Import the function
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.parse_multi_message_response = emotion_parser.parse_multi_message_response
+    
+    def test_single_message_no_split(self):
+        """测试单条消息（无分隔符）"""
+        response = "你好啊，今天天气真好！"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        assert len(messages) == 1
+        assert messages[0] == "你好啊，今天天气真好！"
+        assert full_content == "你好啊，今天天气真好！"
+    
+    def test_two_messages_split(self):
+        """测试两条消息（有分隔符）"""
+        response = "你好啊[MSG_SPLIT]今天天气真好！"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        assert len(messages) == 2
+        assert messages[0] == "你好啊"
+        assert messages[1] == "今天天气真好！"
+        assert full_content == "你好啊\n今天天气真好！"
+    
+    def test_three_messages_split(self):
+        """测试三条消息（两个分隔符）"""
+        response = "第一条[MSG_SPLIT]第二条[MSG_SPLIT]第三条"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        assert len(messages) == 3
+        assert messages[0] == "第一条"
+        assert messages[1] == "第二条"
+        assert messages[2] == "第三条"
+        assert full_content == "第一条\n第二条\n第三条"
+    
+    def test_more_than_three_messages_truncated(self):
+        """测试超过三条消息被截断"""
+        response = "第一条[MSG_SPLIT]第二条[MSG_SPLIT]第三条[MSG_SPLIT]第四条[MSG_SPLIT]第五条"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        # Should be limited to 3 messages
+        assert len(messages) == 3
+        assert messages[0] == "第一条"
+        assert messages[1] == "第二条"
+        assert messages[2] == "第三条"
+    
+    def test_empty_response(self):
+        """测试空响应"""
+        messages, full_content = self.parse_multi_message_response("")
+        
+        assert len(messages) == 0
+        assert full_content == ""
+    
+    def test_none_response(self):
+        """测试None响应"""
+        messages, full_content = self.parse_multi_message_response(None)
+        
+        assert len(messages) == 0
+        assert full_content == ""
+    
+    def test_whitespace_around_split(self):
+        """测试分隔符周围有空白"""
+        response = "你好啊  [MSG_SPLIT]  今天天气真好！"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        assert len(messages) == 2
+        assert messages[0] == "你好啊"
+        assert messages[1] == "今天天气真好！"
+    
+    def test_empty_parts_filtered(self):
+        """测试空部分被过滤"""
+        response = "[MSG_SPLIT]你好啊[MSG_SPLIT][MSG_SPLIT]今天天气真好！[MSG_SPLIT]"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        assert len(messages) == 2
+        assert messages[0] == "你好啊"
+        assert messages[1] == "今天天气真好！"
+    
+    def test_with_emotion_prefix(self):
+        """测试带语气前缀的多消息"""
+        response = "（语气：开心）你好啊[MSG_SPLIT]今天天气真好！"
+        messages, full_content = self.parse_multi_message_response(response)
+        
+        assert len(messages) == 2
+        # The emotion prefix is preserved in the first message
+        assert "（语气：开心）" in messages[0]
+        assert messages[1] == "今天天气真好！"

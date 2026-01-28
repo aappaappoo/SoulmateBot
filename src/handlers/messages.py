@@ -200,9 +200,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 logger.info(f"🧠 [STEP 7/9] AI_RESPONSE: Received AI response, response_length={len(response)}")
 
-                # 发送响应（根据用户语音设置决定是语音还是文本）
+                # 发送响应（根据用户语音设置决定是语音还是文本，支持多消息分割）
+                # Send response with multi-message support
                 logger.info(f"🎤 [STEP 8/9] RESPONSE_DISPATCH: Determining response type (voice/text) for user_id={user.id}")
-                message_type = await send_voice_or_text_reply(
+                message_type, full_response = await send_voice_or_text_reply(
                     message=message,
                     response=response,
                     bot=selected_bot,
@@ -212,22 +213,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 logger.info(f"📤 [STEP 8/9] REPLY_SENT: Response sent to user_id={user.id}, bot=@{selected_bot.bot_username}, type={message_type}")
 
-                # 保存用户消息到数据库
+                # 保存用户消息到数据库（使用完整内容，不含分隔符）
+                # Save to database using full content without split markers
                 logger.info(f"🗄️ [STEP 9/9] DB_SAVE: Saving conversation to database for db_user_id={db_user.id}")
                 user_conv = Conversation(
                     user_id=db_user.id,
                     message=message_text,
-                    response=response,
+                    response=full_response,
                     is_user_message=True,
                     message_type="text"
                 )
                 db.add(user_conv)
 
-                # 保存机器人回复到数据库（记录消息类型）
+                # 保存机器人回复到数据库（记录消息类型，使用完整内容）
                 bot_conv = Conversation(
                     user_id=db_user.id,
                     message=message_text,
-                    response=response,
+                    response=full_response,
                     is_user_message=False,
                     message_type=message_type
                 )
