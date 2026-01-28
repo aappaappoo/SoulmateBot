@@ -241,12 +241,20 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 )
                 recent_conversations = list(db_result.scalars().all())
                 
+                # 构建 Message 对象列表，使用 user_id 来标识 user 或 assistant
                 for conv in reversed(recent_conversations):
-                    history_messages.append(AgentMessage(
-                        content=conv.message if conv.is_user_message else conv.response,
-                        user_id=user_id,
-                        chat_id=str(chat_id)
-                    ))
+                    if conv.is_user_message:
+                        history_messages.append(AgentMessage(
+                            content=conv.message,
+                            user_id="user",  # 标识为用户消息
+                            chat_id=str(chat_id)
+                        ))
+                    else:
+                        history_messages.append(AgentMessage(
+                            content=conv.response,
+                            user_id="assistant",  # 标识为助手消息
+                            chat_id=str(chat_id)
+                        ))
             
             # 🧠 创建记忆服务实例（在整个请求中复用）
             memory_service = None
