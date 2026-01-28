@@ -44,22 +44,6 @@ EMOTION_KEYWORDS_MAP = {
     "哭泣": "crying",
 }
 
-# Mapping from intensity keywords to intensity levels
-INTENSITY_KEYWORDS_MAP = {
-    "高": "high",
-    "强": "high",
-    "强烈": "high",
-    "非常": "high",
-    "极度": "high",
-    "中": "medium",
-    "适中": "medium",
-    "一般": "medium",
-    "低": "low",
-    "轻微": "low",
-    "略微": "low",
-    "有点": "low",
-}
-
 
 @dataclass
 class ParsedEmotionResponse:
@@ -180,7 +164,8 @@ def _try_parse_json_format(response: str) -> Optional[ParsedEmotionResponse]:
         clean_text = data.get("response", "")
         emotion_info = data.get("emotion_info", {})
         
-        if emotion_info:
+        # Validate emotion_info is a dict before accessing
+        if emotion_info and isinstance(emotion_info, dict):
             return ParsedEmotionResponse(
                 clean_text=clean_text,
                 emotion_type=emotion_info.get("emotion_type"),
@@ -194,7 +179,7 @@ def _try_parse_json_format(response: str) -> Optional[ParsedEmotionResponse]:
         return None
 
 
-def _parse_intensity_from_text(text: str) -> Optional[str]:
+def _parse_intensity_from_text(text: str) -> str:
     """
     从文本中解析情绪强度。
     
@@ -202,12 +187,25 @@ def _parse_intensity_from_text(text: str) -> Optional[str]:
         text: 包含情绪描述的文本
         
     Returns:
-        强度级别（high, medium, low）或None
+        强度级别（high, medium, low），默认为 medium
     """
-    # Priority: high > medium > low
-    for intensity_word, intensity_level in INTENSITY_KEYWORDS_MAP.items():
-        if intensity_word in text:
-            return intensity_level
+    # Check intensity in priority order: high > medium > low
+    # Group keywords by intensity level
+    high_keywords = ["高", "强", "强烈", "非常", "极度"]
+    medium_keywords = ["中", "适中", "一般"]
+    low_keywords = ["低", "轻微", "略微", "有点"]
+    
+    for keyword in high_keywords:
+        if keyword in text:
+            return "high"
+    
+    for keyword in medium_keywords:
+        if keyword in text:
+            return "medium"
+    
+    for keyword in low_keywords:
+        if keyword in text:
+            return "low"
     
     return "medium"  # Default to medium if no intensity keywords found
 

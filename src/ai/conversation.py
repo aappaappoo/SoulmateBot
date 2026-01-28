@@ -376,11 +376,12 @@ class ConversationService:
         Returns:
             Dict containing:
             - response: Clean response text (without emotion prefix)
-            - emotion_info: Dict with emotion_type, intensity, tone_description (or None)
+            - emotion_info: Dict with emotion_type, intensity, tone_description, or None if no emotion detected
         """
         from src.utils.emotion_parser import parse_llm_response_with_emotion
         
-        messages = conversation_history or []
+        # Create a copy of the list to avoid mutating the input
+        messages = list(conversation_history) if conversation_history else []
         messages.append({"role": "user", "content": user_message})
 
         # Keep only recent history to avoid token limits
