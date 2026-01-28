@@ -34,8 +34,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "用户在打招呼，直接回复即可",
-            "direct_reply": "（语气：开心、轻快）你好啊！",
+            "direct_reply": "你好啊！",
             "emotion": "happy",
+            "emotion_description": "开心、轻快，语速稍快，语调上扬",
             "memory": {
                 "is_important": False,
                 "importance_level": None,
@@ -57,6 +58,7 @@ class TestOrchestratorEmotion:
         
         # 验证情感被正确提取
         assert metadata.get("emotion") == "happy"
+        assert metadata.get("emotion_description") == "开心、轻快，语速稍快，语调上扬"
         assert source == IntentSource.LLM_UNIFIED
     
     @pytest.mark.asyncio
@@ -66,8 +68,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "用户表达了负面情绪，需要温柔回应",
-            "direct_reply": "（语气：温柔、轻声）我理解你的感受",
+            "direct_reply": "我理解你的感受",
             "emotion": "gentle",
+            "emotion_description": "温柔、轻声，语调柔和",
             "memory": {
                 "is_important": False
             }
@@ -82,6 +85,7 @@ class TestOrchestratorEmotion:
         intent, agents, metadata, source, reply, memory = await orchestrator.analyze_intent_unified(message, context)
         
         assert metadata.get("emotion") == "gentle"
+        assert metadata.get("emotion_description") == "温柔、轻声，语调柔和"
     
     @pytest.mark.asyncio
     async def test_emotion_extraction_excited(self):
@@ -90,8 +94,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "用户分享好消息，表达兴奋",
-            "direct_reply": "（语气：兴奋、活跃）太棒了！",
+            "direct_reply": "太棒了！",
             "emotion": "excited",
+            "emotion_description": "兴奋、活跃，富有感染力",
             "memory": {
                 "is_important": True,
                 "importance_level": "medium",
@@ -109,6 +114,7 @@ class TestOrchestratorEmotion:
         intent, agents, metadata, source, reply, memory = await orchestrator.analyze_intent_unified(message, context)
         
         assert metadata.get("emotion") == "excited"
+        assert metadata.get("emotion_description") == "兴奋、活跃，富有感染力"
     
     @pytest.mark.asyncio
     async def test_emotion_extraction_sad(self):
@@ -117,8 +123,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "用户表达悲伤",
-            "direct_reply": "（语气：低落、伤感）我知道这对你来说很难...",
+            "direct_reply": "我知道这对你来说很难...",
             "emotion": "sad",
+            "emotion_description": "低落、伤感，语速较慢",
             "memory": {
                 "is_important": True,
                 "importance_level": "high",
@@ -135,6 +142,7 @@ class TestOrchestratorEmotion:
         intent, agents, metadata, source, reply, memory = await orchestrator.analyze_intent_unified(message, context)
         
         assert metadata.get("emotion") == "sad"
+        assert metadata.get("emotion_description") == "低落、伤感，语速较慢"
     
     @pytest.mark.asyncio
     async def test_emotion_extraction_angry(self):
@@ -143,8 +151,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "用户表达愤怒",
-            "direct_reply": "（语气：生气、愤怒）这太过分了！",
+            "direct_reply": "这太过分了！",
             "emotion": "angry",
+            "emotion_description": "生气、愤怒，语调激烈",
             "memory": {
                 "is_important": False
             }
@@ -159,6 +168,7 @@ class TestOrchestratorEmotion:
         intent, agents, metadata, source, reply, memory = await orchestrator.analyze_intent_unified(message, context)
         
         assert metadata.get("emotion") == "angry"
+        assert metadata.get("emotion_description") == "生气、愤怒，语调激烈"
     
     @pytest.mark.asyncio
     async def test_emotion_extraction_crying(self):
@@ -167,8 +177,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "用户表达委屈",
-            "direct_reply": "（语气：委屈、哭泣）为什么会这样...",
+            "direct_reply": "为什么会这样...",
             "emotion": "crying",
+            "emotion_description": "委屈、哭泣，声音哽咽",
             "memory": {
                 "is_important": False
             }
@@ -183,6 +194,7 @@ class TestOrchestratorEmotion:
         intent, agents, metadata, source, reply, memory = await orchestrator.analyze_intent_unified(message, context)
         
         assert metadata.get("emotion") == "crying"
+        assert metadata.get("emotion_description") == "委屈、哭泣，声音哽咽"
     
     @pytest.mark.asyncio
     async def test_no_emotion_extraction(self):
@@ -193,6 +205,7 @@ class TestOrchestratorEmotion:
             "reasoning": "普通对话",
             "direct_reply": "好的，我明白了",
             "emotion": None,
+            "emotion_description": None,
             "memory": {
                 "is_important": False
             }
@@ -208,6 +221,7 @@ class TestOrchestratorEmotion:
         
         # 没有有效情感，metadata中不应包含emotion
         assert "emotion" not in metadata
+        assert "emotion_description" not in metadata
     
     @pytest.mark.asyncio
     async def test_invalid_emotion_ignored(self):
@@ -218,6 +232,7 @@ class TestOrchestratorEmotion:
             "reasoning": "测试无效情感",
             "direct_reply": "测试回复",
             "emotion": "invalid_emotion",  # 无效的情感标签
+            "emotion_description": "一些描述",
             "memory": {
                 "is_important": False
             }
@@ -233,6 +248,8 @@ class TestOrchestratorEmotion:
         
         # 无效情感应该被忽略
         assert "emotion" not in metadata
+        # emotion_description也不应该存在，因为emotion无效
+        assert "emotion_description" not in metadata
     
     def test_supported_emotions_constant(self):
         """测试SUPPORTED_EMOTIONS常量存在且正确"""
@@ -252,8 +269,9 @@ class TestOrchestratorEmotion:
             "intent": "direct_response",
             "agents": [],
             "reasoning": "友好问候",
-            "direct_reply": "（语气：开心、轻快）很高兴见到你！",
+            "direct_reply": "很高兴见到你！",
             "emotion": "happy",
+            "emotion_description": "开心、轻快，语速稍快",
             "memory": {
                 "is_important": False
             }
@@ -270,4 +288,5 @@ class TestOrchestratorEmotion:
         # 验证结果
         assert result.intent_type == IntentType.DIRECT_RESPONSE
         assert result.metadata.get("emotion") == "happy"
-        assert result.final_response == "（语气：开心、轻快）很高兴见到你！"
+        assert result.metadata.get("emotion_description") == "开心、轻快，语速稍快"
+        assert result.final_response == "很高兴见到你！"
