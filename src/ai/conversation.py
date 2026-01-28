@@ -9,8 +9,9 @@ import openai
 import anthropic
 import aiohttp
 from loguru import logger
-
+import json
 from config import settings
+import pprint
 
 
 class AIProvider(ABC):
@@ -25,11 +26,11 @@ class AIProvider(ABC):
         return str(uuid.uuid4())[:8]
 
     def _log_request(
-        self,
-        request_id: str,
-        messages: List[Dict[str, str]],
-        model: str,
-        context: Optional[str] = None
+            self,
+            request_id: str,
+            messages: List[Dict[str, str]],
+            model: str,
+            context: Optional[str] = None
     ) -> None:
         """记录请求日志"""
         message_count = len(messages)
@@ -51,6 +52,7 @@ class AIProvider(ABC):
             f"context_length={context_length}"
         )
         logger.debug(f"📝 [AI-REQ][{request_id}] last_user_message: {last_user_msg}")
+        logger.debug(f"📦 [LLM-REQ][{request_id}] full_messages:\n{pprint.pformat(messages)}")
 
     def _log_response(
         self,
@@ -101,7 +103,7 @@ class OpenAIProvider(AIProvider):
 
         system_message = {
             "role": "system",
-            "content": context or "你是一个温柔、善解人意的情感陪伴助手。你的任务是倾听用户的心声，提供情感支持和陪伴。请用温暖、关怀的语气回复。"
+            "content": context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。"
         }
 
         full_messages = [system_message] + messages
@@ -151,7 +153,7 @@ class AnthropicProvider(AIProvider):
         """Generate response using Anthropic Claude"""
         request_id = self._generate_request_id()
 
-        system_prompt = context or "你是一个温柔、善解人意的情感陪伴助手。你的任务是倾听用户的心声，提供情感支持和陪伴。请用温暖、关怀的语气回复。"
+        system_prompt = context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。你善于倾听用户的心声，提供情感支持和陪伴。请用温暖、关怀的语气回复。"
 
         # Convert messages to Anthropic format
         claude_messages = []
@@ -212,7 +214,7 @@ class VLLMProvider(AIProvider):
 
         system_message = {
             "role": "system",
-            "content": context or "你是一个温柔、善解人意的情感陪伴助手。"
+            "content": context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。"
         }
 
         full_messages = [system_message] + messages
