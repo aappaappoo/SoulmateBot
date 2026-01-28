@@ -390,6 +390,16 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 summary_key = f"llm_summary_{chat_id}_{db_user.id if db_user else 'unknown'}"
                 context.bot_data[summary_key] = llm_summary
                 
+                # 定期清理旧的摘要（简单的大小限制）
+                # 保留最近100个摘要，防止内存泄漏
+                summary_keys = [k for k in context.bot_data.keys() if k.startswith("llm_summary_")]
+                if len(summary_keys) > 100:
+                    # 删除最旧的摘要（假设键按时间顺序添加）
+                    oldest_keys = summary_keys[:len(summary_keys) - 100]
+                    for old_key in oldest_keys:
+                        context.bot_data.pop(old_key, None)
+                    logger.debug(f"🧹 Cleaned up {len(oldest_keys)} old summaries from bot_data")
+                
                 logger.info(f"📝 Saved LLM summary: {llm_summary.get('summary_text', '')[:50]}...")
             
             # 日志记录意图类型和来源

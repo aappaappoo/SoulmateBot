@@ -326,8 +326,16 @@ class AgentOrchestrator:
             # 解析对话摘要
             conversation_summary = data.get("conversation_summary")
             if conversation_summary:
-                metadata["conversation_summary"] = conversation_summary
-                logger.debug(f"📝 [SUMMARY] Generated summary: {conversation_summary.get('summary_text', '')[:50]}...")
+                # 验证摘要结构
+                if isinstance(conversation_summary, dict):
+                    required_fields = ['summary_text', 'key_elements', 'topics', 'user_state']
+                    if all(field in conversation_summary for field in required_fields):
+                        metadata["conversation_summary"] = conversation_summary
+                        logger.debug(f"📝 [SUMMARY] Generated summary: {conversation_summary.get('summary_text', '')[:50]}...")
+                    else:
+                        logger.warning(f"📝 [SUMMARY] Incomplete summary structure, missing fields: {[f for f in required_fields if f not in conversation_summary]}")
+                else:
+                    logger.warning(f"📝 [SUMMARY] Invalid summary type: {type(conversation_summary)}")
 
             logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important} | emotion={emotion}" + (f" | emotion_description={emotion_description}" if emotion_description else ""))
             return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis

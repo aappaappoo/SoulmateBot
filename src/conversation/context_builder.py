@@ -362,22 +362,33 @@ class UnifiedContextBuilder:
         
         # 添加对话摘要（优先使用 LLM 生成的）
         if llm_generated_summary:
-            key_elements = llm_generated_summary.get('key_elements', {})
-            summary_text = f"""
+            # 验证摘要结构
+            if not isinstance(llm_generated_summary, dict):
+                logger.warning("llm_generated_summary should be a dict, skipping")
+            else:
+                key_elements = llm_generated_summary.get('key_elements', {})
+                if not isinstance(key_elements, dict):
+                    key_elements = {}
+                
+                # 辅助函数：处理空列表显示
+                def format_list(items):
+                    return ', '.join(items) if items else '无'
+                
+                summary_text = f"""
 【本次对话回顾】
 {llm_generated_summary.get('summary_text', '')}
 
 关键要素：
-- 时间：{', '.join(key_elements.get('time', [])) or '无'}
-- 地点：{', '.join(key_elements.get('place', [])) or '无'}
-- 人物：{', '.join(key_elements.get('people', [])) or '无'}
-- 事件：{', '.join(key_elements.get('events', [])) or '无'}
-- 情绪：{', '.join(key_elements.get('emotions', [])) or '无'}
+- 时间：{format_list(key_elements.get('time', []))}
+- 地点：{format_list(key_elements.get('place', []))}
+- 人物：{format_list(key_elements.get('people', []))}
+- 事件：{format_list(key_elements.get('events', []))}
+- 情绪：{format_list(key_elements.get('emotions', []))}
 
-话题：{', '.join(llm_generated_summary.get('topics', []))}
+话题：{format_list(llm_generated_summary.get('topics', []))}
 用户状态：{llm_generated_summary.get('user_state', '')}
 """
-            components.append(summary_text.strip())
+                components.append(summary_text.strip())
             
         elif mid_term_summary:
             # 回退到规则摘要

@@ -137,6 +137,73 @@ class TestConversationSummary:
         assert "key_elements" in last_message_content, "提示词应包含key_elements字段说明"
         assert "summary_text" in last_message_content, "提示词应包含summary_text字段说明"
     
+    @pytest.mark.asyncio
+    async def test_malformed_summary_graceful_degradation(self):
+        """测试当LLM返回格式错误的摘要时优雅降级"""
+        # 测试缺少必需字段的摘要
+        llm_response = {
+            "intent": "direct_response",
+            "agents": [],
+            "reasoning": "直接回复",
+            "conversation_summary": {
+                "summary_text": "不完整的摘要"
+                # 缺少 key_elements, topics, user_state
+            },
+            "direct_reply": "好的",
+            "emotion": None,
+            "memory": {"is_important": False}
+        }
+        
+        llm_provider = MockLLMProvider(llm_response)
+        orchestrator = AgentOrchestrator([], llm_provider=llm_provider, enable_unified_mode=True)
+        
+        context = ChatContext(
+            chat_id="789",
+            conversation_history=[],
+            system_prompt="你是一个助手"
+        )
+        
+        message = Message(content="测试", user_id="user", chat_id="789")
+        
+        # 应该不会抛出异常
+        intent_type, agents, metadata, intent_source, direct_reply, memory_analysis = \
+            await orchestrator.analyze_intent_unified(message, context)
+        
+        # 验证不完整的摘要不会被保存
+        assert "conversation_summary" not in metadata, "不完整的摘要不应被保存"
+    
+    @pytest.mark.asyncio
+    async def test_invalid_summary_type(self):
+        """测试当摘要类型错误时的处理"""
+        # 摘要是字符串而不是字典
+        llm_response = {
+            "intent": "direct_response",
+            "agents": [],
+            "reasoning": "直接回复",
+            "conversation_summary": "这是一个错误的摘要格式",
+            "direct_reply": "好的",
+            "emotion": None,
+            "memory": {"is_important": False}
+        }
+        
+        llm_provider = MockLLMProvider(llm_response)
+        orchestrator = AgentOrchestrator([], llm_provider=llm_provider, enable_unified_mode=True)
+        
+        context = ChatContext(
+            chat_id="890",
+            conversation_history=[],
+            system_prompt="你是一个助手"
+        )
+        
+        message = Message(content="测试", user_id="user", chat_id="890")
+        
+        # 应该不会抛出异常
+        intent_type, agents, metadata, intent_source, direct_reply, memory_analysis = \
+            await orchestrator.analyze_intent_unified(message, context)
+        
+        # 验证错误类型的摘要不会被保存
+        assert "conversation_summary" not in metadata, "错误类型的摘要不应被保存"
+    
     def test_key_elements_from_dict(self):
         """测试KeyElements从字典创建"""
         data = {
@@ -309,3 +376,43 @@ class TestContextBuilderWithSummary:
         # 只需验证没有崩溃且能正常构建即可
         assert "你是一个AI助手" in system_prompt
         assert len(result.messages) > 0
+    
+    @pytest.mark.asyncio
+    async def test_context_builder_handles_malformed_summary(self):
+        """测试上下文构建器处理格式错误的摘要"""
+        from src.conversation.context_builder import UnifiedContextBuilder, ContextConfig
+        
+        builder = UnifiedContextBuilder(
+            config=ContextConfig(
+                short_term_rounds=2,
+                use_llm_summary=False,
+                enable_proactive_strategy=False
+            )
+        )
+        
+        # 测试各种格式错误的摘要
+        malformed_summaries = [
+            None,
+            "invalid string",
+            123,
+            {"summary_text": "test"},  # 缺少 key_elements
+            {"summary_text": "test", "key_elements": None},  # key_elements 是 None
+        ]
+        
+        conversation_history = [
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "你好！"},
+        ]
+        
+        for malformed_summary in malformed_summaries:
+            # 应该不会抛出异常
+            result = await builder.build_context(
+                bot_system_prompt="你是一个AI助手",
+                conversation_history=conversation_history,
+                current_message="测试",
+                llm_generated_summary=malformed_summary
+            )
+            
+            # 验证能够正常构建
+            assert len(result.messages) > 0
+            assert result.messages[0]["role"] == "system"
