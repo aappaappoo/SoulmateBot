@@ -214,14 +214,16 @@ class VLLMProvider(AIProvider):
     async def generate_response(self, messages: List[Dict[str, str]], context: Optional[str] = None) -> str:
         """Generate response using vLLM API"""
         request_id = self._generate_request_id()
-
-        system_message = {
-            "role": "system",
-            "content": context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。"
-        }
-
-        full_messages = [system_message] + messages
-
+        has_system = any(msg.get("role") == "system" for msg in messages)
+        if has_system:
+            full_messages = messages
+        else:
+            system_message = {
+                "role": "system",
+                "content": context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。"
+            }
+            full_messages = [system_message] + messages
+        self._log_request(request_id, full_messages, self.model, context)
         headers = {
             "Content-Type": "application/json"
         }
