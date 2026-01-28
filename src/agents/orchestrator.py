@@ -91,7 +91,7 @@ class AgentOrchestrator:
     # 支持的情感标签
     SUPPORTED_EMOTIONS = ["happy", "gentle", "sad", "excited", "angry", "crying"]
     
-    UNIFIED_PROMPT_TEMPLATE = """你是一个智能助手，需要同时完成三项任务：
+    UNIFIED_PROMPT_TEMPLATE = """你是一个智能助手，需要同时完成四项任务：
 
     ## 任务1：意图识别
     判断用户消息应该如何处理：
@@ -121,7 +121,23 @@ class AgentOrchestrator:
     - "温柔、轻声，语调柔和"
     - "兴奋、活跃，富有感染力"
 
-    ## 任务3：记忆分析
+    ## 任务3：对话摘要生成（重要！）
+    请根据【对话历史】和当前消息，生成一个累积的对话摘要。
+    
+    摘要要求：
+    1. **综合整个对话**，不只是当前这一轮
+    2. 提取关键要素：
+       - 时间：对话中提到的时间点（如"今天"、"下班后"、"昨天"等）
+       - 地点：提到的地点（如"公司"、"家里"、"学校"等）
+       - 人物：涉及的人物（如"用户"、"领导"、"朋友"、"家人"等）
+       - 事件：发生的事情或讨论的话题
+       - 情绪：用户表达的情绪状态
+    3. 记录对话的核心话题
+    4. 描述用户当前的状态
+    
+    这个摘要将用于后续对话的上下文理解，请确保信息完整且准确。
+
+    ## 任务4：记忆分析
     判断对话是否包含值得记住的重要信息（个人信息、偏好、目标、重要事件等）。
     日常寒暄（你好、谢谢等）不重要。
 
@@ -134,6 +150,20 @@ class AgentOrchestrator:
         "intent": "direct_response" | "single_agent" | "multi_agent",
         "agents": [],
         "reasoning": "判断理由",
+        
+        "conversation_summary": {{
+            "summary_text": "综合整个对话的摘要文本（100字以内）",
+            "key_elements": {{
+                "time": ["时间点1", "时间点2"],
+                "place": ["地点1", "地点2"],
+                "people": ["人物1", "人物2"],
+                "events": ["事件1", "事件2"],
+                "emotions": ["情绪1", "情绪2"]
+            }},
+            "topics": ["话题1", "话题2", "话题3"],
+            "user_state": "用户当前状态描述"
+        }},
+        
         "direct_reply": "纯文本回复内容，不包含语气标注",
         "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
         "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
@@ -292,6 +322,12 @@ class AgentOrchestrator:
                 event_date=memory_data.get("event_date"),
                 raw_date_expression=memory_data.get("raw_date_expression"),
             )
+
+            # 解析对话摘要
+            conversation_summary = data.get("conversation_summary")
+            if conversation_summary:
+                metadata["conversation_summary"] = conversation_summary
+                logger.debug(f"📝 [SUMMARY] Generated summary: {conversation_summary.get('summary_text', '')[:50]}...")
 
             logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important} | emotion={emotion}" + (f" | emotion_description={emotion_description}" if emotion_description else ""))
             return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis

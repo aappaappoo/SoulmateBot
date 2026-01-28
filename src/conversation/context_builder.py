@@ -105,7 +105,8 @@ class UnifiedContextBuilder:
         conversation_history: List[Dict[str, str]],
         current_message: str,
         user_memories: Optional[List[Dict[str, Any]]] = None,
-        dialogue_strategy: Optional[str] = None
+        dialogue_strategy: Optional[str] = None,
+        llm_generated_summary: Optional[Dict] = None  # 新增参数
     ) -> BuilderResult:
         """
         构建完整的对话上下文
@@ -116,6 +117,7 @@ class UnifiedContextBuilder:
             current_message: 当前用户消息
             user_memories: 用户长期记忆列表（可选）
             dialogue_strategy: 已生成的对话策略（可选，如果提供则不重新生成）
+            llm_generated_summary: LLM 生成的对话摘要（可选）
             
         Returns:
             BuilderResult: 包含消息列表和元数据
@@ -151,6 +153,7 @@ class UnifiedContextBuilder:
             bot_system_prompt=bot_system_prompt,
             memory_context=memory_context,
             mid_term_summary=mid_term_summary,
+            llm_generated_summary=llm_generated_summary,  # 传递 LLM 摘要
             dialogue_strategy=dialogue_strategy,
             proactive_guidance=proactive_guidance
         )
@@ -326,8 +329,9 @@ class UnifiedContextBuilder:
         bot_system_prompt: str,
         memory_context: str,
         mid_term_summary: Optional[ConversationSummary],
-        dialogue_strategy: Optional[str],
-        proactive_guidance: str
+        llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
+        dialogue_strategy: Optional[str] = None,
+        proactive_guidance: str = ""
     ) -> str:
         """
         构建增强的 System Prompt
@@ -335,7 +339,7 @@ class UnifiedContextBuilder:
         结构：
         1. 原始人设
         2. 长期记忆
-        3. 中期对话摘要
+        3. 中期对话摘要（优先使用LLM生成的摘要）
         4. 对话策略
         5. 主动策略
         
@@ -343,6 +347,7 @@ class UnifiedContextBuilder:
             bot_system_prompt: 原始人设
             memory_context: 长期记忆文本
             mid_term_summary: 中期摘要
+            llm_generated_summary: LLM 生成的对话摘要（可选）
             dialogue_strategy: 对话策略
             proactive_guidance: 主动策略
             
@@ -355,8 +360,27 @@ class UnifiedContextBuilder:
         if memory_context:
             components.append(memory_context)
         
-        # 添加中期对话摘要
-        if mid_term_summary:
+        # 添加对话摘要（优先使用 LLM 生成的）
+        if llm_generated_summary:
+            key_elements = llm_generated_summary.get('key_elements', {})
+            summary_text = f"""
+【本次对话回顾】
+{llm_generated_summary.get('summary_text', '')}
+
+关键要素：
+- 时间：{', '.join(key_elements.get('time', [])) or '无'}
+- 地点：{', '.join(key_elements.get('place', [])) or '无'}
+- 人物：{', '.join(key_elements.get('people', [])) or '无'}
+- 事件：{', '.join(key_elements.get('events', [])) or '无'}
+- 情绪：{', '.join(key_elements.get('emotions', [])) or '无'}
+
+话题：{', '.join(llm_generated_summary.get('topics', []))}
+用户状态：{llm_generated_summary.get('user_state', '')}
+"""
+            components.append(summary_text.strip())
+            
+        elif mid_term_summary:
+            # 回退到规则摘要
             summary_text = f"""
 【本次对话回顾】
 {mid_term_summary.summary_text}
