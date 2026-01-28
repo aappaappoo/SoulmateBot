@@ -136,7 +136,7 @@ class AgentOrchestrator:
         "reasoning": "判断理由",
         "direct_reply": "纯文本回复内容，不包含语气标注",
         "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
-        "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬",
+        "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
         "memory": {{
             "is_important": false,
             "importance_level": "low" | "medium" | "high" | null,
@@ -233,8 +233,9 @@ class AgentOrchestrator:
 
             # 提取情感标签并添加DEBUG日志
             emotion = data.get("emotion")
-            emotion_description = data.get("emotion_description")
+            emotion_description = None
             if emotion and emotion in self.SUPPORTED_EMOTIONS:
+                emotion_description = data.get("emotion_description")
                 logger.debug(f"🎭 [EMOTION EXTRACT] Extracted emotion from LLM response: emotion={emotion}, emotion_description={emotion_description}")
                 metadata["emotion"] = emotion
                 if emotion_description:
@@ -253,7 +254,7 @@ class AgentOrchestrator:
                 raw_date_expression=memory_data.get("raw_date_expression"),
             )
 
-            logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important} | emotion={emotion} | emotion_description={emotion_description}")
+            logger.info(f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important} | emotion={emotion}" + (f" | emotion_description={emotion_description}" if emotion_description else ""))
             return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis
 
         except Exception as e:
