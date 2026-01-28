@@ -41,6 +41,14 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
     # Parse multi-message response
     messages, full_content = parse_multi_message_response(response)
     
+    # 处理空消息的边界情况
+    # Handle edge case when messages is empty (empty or None response)
+    if not messages:
+        logger.warning(f"📝 [VOICE FLOW 0/5] EMPTY_PARSE: No messages parsed from response, using original response")
+        # 当解析结果为空时，使用原始响应作为完整内容
+        full_content = response.strip() if response else ""
+        messages = [response.strip()] if response and response.strip() else []
+    
     if len(messages) > 1:
         logger.info(f"📝 [VOICE FLOW 0/5] MULTI_MSG_PARSE: Parsed {len(messages)} messages to send separately")
     
@@ -137,12 +145,15 @@ async def send_voice_or_text_reply(message, response: str, bot, subscription_ser
         return "text", full_content
 
 
-async def send_multi_text_messages(message, messages: list, delay_seconds: float = 0.5):
+async def send_multi_text_messages(message, messages: list, delay_seconds: float = 0.5) -> None:
     """
     发送多条文本消息，模拟真人聊天的节奏
     
     Send multiple text messages with a small delay between them to simulate
     human-like typing rhythm.
+    
+    Note: If sending a message fails, the exception will propagate and remaining
+    messages will not be sent. This is by design to maintain error visibility.
     
     Args:
         message: Telegram 消息对象
@@ -159,3 +170,6 @@ async def send_multi_text_messages(message, messages: list, delay_seconds: float
             # 在消息之间添加短暂延迟（模拟打字节奏），最后一条不延迟
             if i < len(messages) - 1:
                 await asyncio.sleep(delay_seconds)
+        else:
+            # 跳过空消息（如只有语气前缀的消息）
+            logger.debug(f"📝 Skipping empty message (index={i}) after emotion prefix extraction")

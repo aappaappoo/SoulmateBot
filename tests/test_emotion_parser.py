@@ -385,6 +385,8 @@ class TestParseMultiMessageResponse:
         assert messages[0] == "第一条"
         assert messages[1] == "第二条"
         assert messages[2] == "第三条"
+        # full_content should also only contain the first 3 messages
+        assert full_content == "第一条\n第二条\n第三条"
     
     def test_empty_response(self):
         """测试空响应"""
@@ -408,6 +410,8 @@ class TestParseMultiMessageResponse:
         assert len(messages) == 2
         assert messages[0] == "你好啊"
         assert messages[1] == "今天天气真好！"
+        # full_content should have whitespace stripped
+        assert full_content == "你好啊\n今天天气真好！"
     
     def test_empty_parts_filtered(self):
         """测试空部分被过滤"""
@@ -417,6 +421,8 @@ class TestParseMultiMessageResponse:
         assert len(messages) == 2
         assert messages[0] == "你好啊"
         assert messages[1] == "今天天气真好！"
+        # full_content should only contain non-empty parts
+        assert full_content == "你好啊\n今天天气真好！"
     
     def test_with_emotion_prefix(self):
         """测试带语气前缀的多消息"""
@@ -427,3 +433,6 @@ class TestParseMultiMessageResponse:
         # The emotion prefix is preserved in the first message
         assert "（语气：开心）" in messages[0]
         assert messages[1] == "今天天气真好！"
+        # full_content should contain the emotion prefix
+        assert "（语气：开心）" in full_content
+        assert full_content == "（语气：开心）你好啊\n今天天气真好！"
