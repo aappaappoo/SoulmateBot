@@ -48,12 +48,49 @@ class LLMRequest:
 
 
 @dataclass
+class EmotionInfo:
+    """
+    情绪信息对象
+    
+    用于存储LLM检测到的情绪类型、强度和语气描述。
+    这些信息不会包含在响应文本中，而是作为独立的元数据返回。
+    
+    Attributes:
+        emotion_type: 情绪类型 (happy, sad, angry, gentle, excited, crying, neutral)
+        intensity: 情绪强度 (high, medium, low)
+        tone_description: 语气描述（中文自然语言描述）
+    """
+    emotion_type: Optional[str] = None
+    intensity: Optional[str] = None
+    tone_description: Optional[str] = None
+    
+    def to_dict(self) -> Dict:
+        """转换为字典"""
+        return {
+            "emotion_type": self.emotion_type,
+            "intensity": self.intensity,
+            "tone_description": self.tone_description
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Optional[Dict]) -> "EmotionInfo":
+        """从字典创建EmotionInfo对象"""
+        if not data:
+            return cls()
+        return cls(
+            emotion_type=data.get("emotion_type"),
+            intensity=data.get("intensity"),
+            tone_description=data.get("tone_description")
+        )
+
+
+@dataclass
 class LLMResponse:
     """
     LLM响应对象
     
     Attributes:
-        content: 响应内容
+        content: 响应内容（不包含情绪前缀的干净文本）
         model: 实际使用的模型
         provider: 实际使用的Provider
         usage: Token使用统计
@@ -62,6 +99,7 @@ class LLMResponse:
         latency_ms: 响应延迟（毫秒）
         success: 是否成功
         error: 错误信息（如果失败）
+        emotion_info: 情绪信息（包含情绪类型、强度和语气描述）
     """
     content: str
     model: str
@@ -72,10 +110,11 @@ class LLMResponse:
     latency_ms: float = 0.0
     success: bool = True
     error: Optional[str] = None
+    emotion_info: Optional[EmotionInfo] = None
     
     def to_dict(self) -> Dict:
         """转换为字典"""
-        return {
+        result = {
             "content": self.content,
             "model": self.model,
             "provider": self.provider,
@@ -86,6 +125,9 @@ class LLMResponse:
             "success": self.success,
             "error": self.error
         }
+        if self.emotion_info:
+            result["emotion_info"] = self.emotion_info.to_dict()
+        return result
 
 
 class LLMGateway:
