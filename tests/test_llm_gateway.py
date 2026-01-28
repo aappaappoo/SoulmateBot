@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from src.llm_gateway.rate_limiter import RateLimiter, TokenBucket
 from src.llm_gateway.token_counter import TokenCounter, UsageStats
-from src.llm_gateway.gateway import LLMGateway, LLMRequest, LLMResponse
+from src.llm_gateway.gateway import LLMGateway, LLMRequest, LLMResponse, EmotionInfo
 from src.llm_gateway.providers import ProviderConfig, LLMProvider
 
 
@@ -197,6 +197,99 @@ class TestLLMResponse:
         assert data["content"] == "Test"
         assert data["model"] == "gpt-4"
         assert "usage" in data
+    
+    def test_response_with_emotion_info(self):
+        """Test response with emotion_info"""
+        usage = UsageStats(prompt_tokens=100, completion_tokens=50, total_tokens=150)
+        emotion = EmotionInfo(
+            emotion_type="happy",
+            intensity="high",
+            tone_description="开心、轻快"
+        )
+        response = LLMResponse(
+            content="你好！",
+            model="gpt-4",
+            provider="openai",
+            usage=usage,
+            emotion_info=emotion
+        )
+        
+        data = response.to_dict()
+        assert "emotion_info" in data
+        assert data["emotion_info"]["emotion_type"] == "happy"
+        assert data["emotion_info"]["intensity"] == "high"
+        assert data["emotion_info"]["tone_description"] == "开心、轻快"
+    
+    def test_response_without_emotion_info(self):
+        """Test response without emotion_info doesn't include it in dict"""
+        usage = UsageStats(prompt_tokens=100, completion_tokens=50, total_tokens=150)
+        response = LLMResponse(
+            content="普通回复",
+            model="gpt-4",
+            provider="openai",
+            usage=usage
+        )
+        
+        data = response.to_dict()
+        assert "emotion_info" not in data
+
+
+class TestEmotionInfo:
+    """Tests for EmotionInfo"""
+    
+    def test_emotion_info_creation(self):
+        """Test emotion info creation"""
+        emotion = EmotionInfo(
+            emotion_type="happy",
+            intensity="high",
+            tone_description="开心、轻快"
+        )
+        
+        assert emotion.emotion_type == "happy"
+        assert emotion.intensity == "high"
+        assert emotion.tone_description == "开心、轻快"
+    
+    def test_emotion_info_to_dict(self):
+        """Test serialization to dict"""
+        emotion = EmotionInfo(
+            emotion_type="sad",
+            intensity="medium",
+            tone_description="低落、缓慢"
+        )
+        
+        data = emotion.to_dict()
+        assert data == {
+            "emotion_type": "sad",
+            "intensity": "medium",
+            "tone_description": "低落、缓慢"
+        }
+    
+    def test_emotion_info_from_dict(self):
+        """Test creation from dict"""
+        data = {
+            "emotion_type": "gentle",
+            "intensity": "low",
+            "tone_description": "温柔"
+        }
+        
+        emotion = EmotionInfo.from_dict(data)
+        assert emotion.emotion_type == "gentle"
+        assert emotion.intensity == "low"
+        assert emotion.tone_description == "温柔"
+    
+    def test_emotion_info_from_none(self):
+        """Test creation from None returns empty"""
+        emotion = EmotionInfo.from_dict(None)
+        assert emotion.emotion_type is None
+        assert emotion.intensity is None
+        assert emotion.tone_description is None
+    
+    def test_emotion_info_defaults(self):
+        """Test default values"""
+        emotion = EmotionInfo()
+        assert emotion.emotion_type is None
+        assert emotion.intensity is None
+        assert emotion.tone_description is None
 
 
 class TestLLMGateway:

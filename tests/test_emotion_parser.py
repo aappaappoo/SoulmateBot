@@ -4,17 +4,22 @@ Tests for emotion parser utility
 """
 import pytest
 
-# Import directly from the module to avoid dependency issues
+# Import directly from the module file to avoid dependency chain issues
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import importlib.util
 
-from src.utils.emotion_parser import (
-    extract_emotion_and_text, 
-    strip_emotion_prefix,
-    parse_llm_response_with_emotion,
-    ParsedEmotionResponse,
-)
+# Get the path to the emotion_parser module
+module_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'utils', 'emotion_parser.py')
+spec = importlib.util.spec_from_file_location("emotion_parser", module_path)
+emotion_parser = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(emotion_parser)
+
+# Import functions from the loaded module
+extract_emotion_and_text = emotion_parser.extract_emotion_and_text
+strip_emotion_prefix = emotion_parser.strip_emotion_prefix
+parse_llm_response_with_emotion = emotion_parser.parse_llm_response_with_emotion
+ParsedEmotionResponse = emotion_parser.ParsedEmotionResponse
 
 
 class TestEmotionParser:
