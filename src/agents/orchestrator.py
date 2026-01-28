@@ -205,16 +205,61 @@ class AgentOrchestrator:
                                                 selected_by_confidence], {}, IntentSource.RULE_BASED, None, None
 
         try:
+            # ========== 修复：构建完整的消息列表 ==========
+            messages = []
+            
+            # 1. System Prompt（已经包含人设 + 记忆 + 摘要 + 策略）
+            if context and context.system_prompt:
+                messages.append({
+                    "role": "system",
+                    "content": context.system_prompt
+                })
+            else:
+                # 默认 system prompt
+                messages.append({
+                    "role": "system",
+                    "content": "你是一个友好的AI助手。"
+                })
+            
+            # 2. 短期对话历史（最近 3-5 轮，即 6-10 条消息）
+            if context and context.conversation_history:
+                recent_history = context.conversation_history[-10:]  # 最多10条
+                for hist_msg in recent_history:
+                    if hasattr(hist_msg, 'content') and hasattr(hist_msg, 'user_id'):
+                        # 判断是用户还是助手
+                        user_id_str = str(hist_msg.user_id).lower()
+                        if "agent" in user_id_str or "bot" in user_id_str or "assistant" in user_id_str:
+                            role = "assistant"
+                        else:
+                            role = "user"
+                        messages.append({
+                            "role": role,
+                            "content": hist_msg.content
+                        })
+                    elif isinstance(hist_msg, dict):
+                        # 如果已经是 dict 格式，直接使用
+                        messages.append(hist_msg)
+            
+            # 3. 当前用户消息 + 统一 Prompt 模板
             prompt = self.UNIFIED_PROMPT_TEMPLATE.format(
                 agent_capabilities=self._get_capabilities_prompt(),
-                system_prompt=(context.system_prompt if context else "") or "你是一个友好的AI助手。",
+                system_prompt="",  # 已经在 system 消息中了
                 current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"),
                 user_message=message.content
             )
-
+            messages.append({
+                "role": "user",
+                "content": prompt
+            })
+            
+            # 添加日志，方便调试
+            logger.info(f"📨 [Orchestrator] Sending {len(messages)} messages to LLM")
+            logger.debug(f"📨 [Orchestrator] Message roles: {[m['role'] for m in messages]}")
+            
+            # 调用 LLM（使用完整的消息列表）
             response = await self.llm_provider.generate_response(
-                [{"role": "user", "content": prompt}],
-                context=None
+                messages,  # ← 完整的消息列表，不是只有一条
+                context=None  # context 已经在 system prompt 中
             )
 
             # 解析 JSON
