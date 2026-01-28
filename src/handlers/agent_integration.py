@@ -34,6 +34,7 @@ from src.agents import (
 from datetime import datetime
 from src.models.database import UserMemory
 from src.services.conversation_memory_service import DateParser
+from src.conversation.dialogue_strategy import enhance_prompt_with_strategy
 
 
 # 全局编排器实例（懒加载）
@@ -274,6 +275,23 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             enhanced_system_prompt = system_prompt or ""
             if memory_context:
                 enhanced_system_prompt = f"{enhanced_system_prompt}\n\n{memory_context}"
+            
+            # 应用动态对话策略
+            # Build conversation history in the format expected by dialogue strategy
+            conversation_history_for_strategy = []
+            for conv in reversed(recent_conversations):
+                if conv.is_user_message:
+                    conversation_history_for_strategy.append({"role": "user", "content": conv.message})
+                else:
+                    conversation_history_for_strategy.append({"role": "assistant", "content": conv.response})
+            
+            # Apply dialogue strategy enhancement
+            if enhanced_system_prompt:
+                enhanced_system_prompt = enhance_prompt_with_strategy(
+                    original_prompt=enhanced_system_prompt,
+                    conversation_history=conversation_history_for_strategy,
+                    current_message=message_text
+                )
             
             # 创建Agent消息和上下文
             agent_message = AgentMessage(
