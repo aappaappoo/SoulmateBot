@@ -89,7 +89,7 @@ def demo_config():
 def main():
     """Main demo function"""
     print("\n" + "="*50)
-    print("SoulmateBot Component Demo")
+    print("Solin Component Demo")
     print("="*50 + "\n")
     
     try:

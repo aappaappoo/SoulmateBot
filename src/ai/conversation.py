@@ -55,27 +55,30 @@ class AIProvider(ABC):
         logger.debug(f"📦 [LLM-REQ][{request_id}] full_messages:\n{pprint.pformat(messages)}")
 
     def _log_response(
-        self,
-        request_id: str,
-        response: str,
-        latency_ms: float
+            self,
+            request_id: str,
+            response: str,
+            latency_ms: float
     ) -> None:
         """记录响应日志"""
-        response_preview = response[:150].replace("\n", " ")
-        if len(response) > 150:
-            response_preview += "..."
-
         logger.info(
             f"✅ [AI-RES][{request_id}] provider={self.provider_name} | "
             f"latency={latency_ms:.0f}ms | response_length={len(response)}"
         )
-        logger.debug(f"📤 [AI-RES][{request_id}] response_preview: {response_preview}")
+        # DEBUG 级别：输出完整回复
+        if logger.level("DEBUG").no >= logger._core.min_level:
+            logger.debug(f"📤 [AI-RES][{request_id}] full_response:\n{pprint.pformat(response)}")
+        else:
+            response_preview = response[:150].replace("\n", " ")
+            if len(response) > 150:
+                response_preview += "..."
+            logger.info(f"📤 [AI-RES][{request_id}] response_preview: {response_preview}")
 
     def _log_error(
-        self,
-        request_id: str,
-        error: Exception,
-        latency_ms: float
+            self,
+            request_id: str,
+            error: Exception,
+            latency_ms: float
     ) -> None:
         """记录错误日志"""
         logger.error(
@@ -240,9 +243,9 @@ class VLLMProvider(AIProvider):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self.api_url}/v1/chat/completions",
-                    json=payload,
-                    headers=headers
+                        f"{self.api_url}/v1/chat/completions",
+                        json=payload,
+                        headers=headers
                 ) as response:
                     latency_ms = (time.perf_counter() - start_time) * 1000
 
@@ -273,8 +276,18 @@ class VLLMProvider(AIProvider):
                         f"finish_reason={result['choices'][0].get('finish_reason', 'N/A')} | "
                         f"response_length={len(content)}"
                     )
-                    logger.debug(f"📤 [AI-RES][{request_id}] response_preview: {content[:150].replace(chr(10), ' ')}...")
-
+                    if logger.level("DEBUG").no >= logger._core.min_level:
+                        if hasattr(response, 'json'):
+                            response_data = await response.json()
+                            content = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                            logger.debug(
+                                f"📤 [AI-RES][{request_id}] full_response:\n{pprint.pformat(content)}"
+                            )
+                    else:
+                        response_preview = response[:150].replace("\n", " ")
+                        if len(response) > 150:
+                            response_preview += "..."
+                        logger.info(f"📤 [AI-RES][{request_id}] response_preview: {response_preview}")
                     return content
 
         except aiohttp.ClientError as e:
@@ -310,15 +323,16 @@ class ConversationService:
                 model=settings.anthropic_model
             )
         else:
-            raise ValueError("No AI provider configured. Please set VLLM_API_URL, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")
+            raise ValueError(
+                "No AI provider configured. Please set VLLM_API_URL, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")
 
         logger.info(f"🤖 ConversationService initialized with provider: {type(self.provider).__name__}")
 
     async def get_response(
-        self,
-        user_message: str,
-        conversation_history: List[Dict[str, str]] = None,
-        context: Optional[str] = None
+            self,
+            user_message: str,
+            conversation_history: List[Dict[str, str]] = None,
+            context: Optional[str] = None
     ) -> str:
         """
         Get AI response for user message
@@ -353,13 +367,13 @@ class ConversationService:
             f"provider={provider_name} | response_length={len(response)}"
         )
         return response
-    
+
     async def get_response_with_emotion(
-        self,
-        user_message: str,
-        conversation_history: List[Dict[str, str]] = None,
-        context: Optional[str] = None,
-        enable_emotion_detection: bool = True
+            self,
+            user_message: str,
+            conversation_history: List[Dict[str, str]] = None,
+            context: Optional[str] = None,
+            enable_emotion_detection: bool = True
     ) -> Dict[str, Any]:
         """
         Get AI response with emotion detection.
@@ -379,7 +393,7 @@ class ConversationService:
             - emotion_info: Dict with emotion_type, intensity, tone_description, or None if no emotion detected
         """
         from src.utils.emotion_parser import parse_llm_response_with_emotion
-        
+
         # Create a copy of the list to avoid mutating the input
         messages = list(conversation_history) if conversation_history else []
         messages.append({"role": "user", "content": user_message})
@@ -387,7 +401,7 @@ class ConversationService:
         # Keep only recent history to avoid token limits
         if len(messages) > 20:
             messages = messages[-20:]
-        
+
         # Enhance context with emotion detection instruction if enabled
         enhanced_context = context
         if enable_emotion_detection:
@@ -402,7 +416,7 @@ class ConversationService:
         )
 
         raw_response = await self.provider.generate_response(messages, enhanced_context)
-        
+
         # Parse the response to extract emotion info
         parsed = parse_llm_response_with_emotion(raw_response)
 
@@ -411,12 +425,12 @@ class ConversationService:
             f"provider={provider_name} | response_length={len(parsed.clean_text)} | "
             f"emotion_type={parsed.emotion_type} | intensity={parsed.intensity}"
         )
-        
+
         return {
             "response": parsed.clean_text,
             "emotion_info": parsed.get_emotion_info_dict()
         }
-    
+
     def _add_emotion_instruction(self, context: Optional[str]) -> str:
         """
         在系统提示中添加情绪检测指令。
@@ -463,7 +477,7 @@ class ConversationService:
 语气描述(tone_description)：用自然语言简短描述语气特点，如"温柔、轻声、放慢语速"。
 
 请确保只返回JSON格式的内容，不要在JSON之外添加任何文本。"""
-        
+
         base_context = context if context else ""
         return base_context + emotion_instruction
 

@@ -250,7 +250,7 @@ messages:
 # 元数据
 metadata:
   version: "1.0.0"
-  author: "SoulmateBot Team"
+  author: "Solin Team"
   created_at: "2024-01-01"
   updated_at: "2024-01-01"
   category: "{bot_type}"

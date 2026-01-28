@@ -348,7 +348,7 @@ messages:
 ```yaml
 metadata:
   version: "1.0.0"
-  author: "SoulmateBot Team"
+  author: "Solin Team"
   created_at: "2025-01-23"
   updated_at: "2025-01-23"
 ```

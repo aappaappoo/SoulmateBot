@@ -14,8 +14,12 @@ from src.models.database import SubscriptionTier
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from src.services.voice_preference_service import voice_preference_service
+
     user = update.effective_user
-    
+    bot_username = context.bot.username
+
     # Get or create user in database
     db = get_db_session()
     try:
@@ -27,33 +31,50 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             last_name=user.last_name,
             language_code=user.language_code
         )
-        
+
+        # 获取当前语音状态
+        is_voice_enabled = voice_preference_service.is_voice_enabled(user.id, bot_username)
+        voice_status = "✅ 已开启" if is_voice_enabled else "❌ 已关闭"
+        voice_button_text = "📝 关闭语音" if is_voice_enabled else "🎤 开启语音"
+
         welcome_message = f"""
 👋 你好 {user.first_name}！
 
-欢迎来到情感陪伴机器人 SoulmateBot！
+欢迎来到情感陪伴机器人 Solin！
 
 我是你的情感陪伴助手，随时准备倾听你的心声，陪伴你度过每一天。
 
-🌟 我能做什么：
+🌟 我能做么：
 • 💬 和你聊天，提供情感支持
-• 🖼️ 发送温馨的图片
-• 📊 查看你的使用情况
+• 🎤 用语音回复你的消息
+
+🎙️ 语音回复状态: {voice_status}
 
 📝 可用命令：
 /start - 开始使用
 /help - 查看帮助
 /status - 查看订阅状态
-/subscribe - 订阅高级功能
-/pay_basic - 订阅基础版（¥9.99/月）
-/pay_premium - 订阅高级版（¥19.99/月）
-/check_payment - 查询支付状态
-/image - 获取温馨图片
+/voice - 语音设置
 
 💝 现在就开始和我聊天吧！
         """
-        
-        await update.message.reply_text(welcome_message)
+
+        # 创建语音开关按钮
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    voice_button_text,
+                    callback_data="voice_toggle"
+                )
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            welcome_message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
     finally:
         db.close()
 
@@ -229,7 +250,7 @@ async def pay_basic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = wechat_service.create_native_pay_order(
             order_id=order_id,
             amount=999,
-            description="SoulmateBot 基础版订阅 - 1个月",
+            description="Solin 基础版订阅 - 1个月",
             user_id=db_user.id
         )
         
@@ -311,7 +332,7 @@ async def pay_premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         result = wechat_service.create_native_pay_order(
             order_id=order_id,
             amount=1999,
-            description="SoulmateBot 高级版订阅 - 1个月",
+            description="Solin 高级版订阅 - 1个月",
             user_id=db_user.id
         )
         

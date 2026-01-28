@@ -334,7 +334,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 response = result.final_response
                 
                 # 发送回复（根据用户语音设置决定是语音还是文本）
-                message_type = await send_voice_or_text_reply(
+                message_type, _ = await send_voice_or_text_reply(
                     message=message,
                     response=response,
                     bot=selected_bot,

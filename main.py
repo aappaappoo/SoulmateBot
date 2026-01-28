@@ -1,14 +1,3 @@
-"""
-Multi-Bot Launcher - 多机器人并行启动器
-==========================================
-
-同时启动和管理多个 Telegram Bot 实例，每个 Bot 独立轮询消息。
-
-使用方法:
-  python multi_bot_launcher.py              # 启动所有已注册的 Bot
-  python multi_bot_launcher.py --list       # 列出所有可用的 Bot
-  python multi_bot_launcher.py --bot qiqi   # 只启动指定的 Bot
-"""
 import asyncio
 import signal
 import yaml
@@ -37,6 +26,7 @@ from src.handlers import (
 from src.handlers.agent_integration import (
     handle_message_with_agents, handle_skills_command, get_skill_callback_handler
 )
+
 
 @dataclass
 class BotVoiceConfig:
@@ -259,7 +249,6 @@ class MultiBotLauncher:
         for handler in get_voice_handlers():
             app.add_handler(handler)
         logger.info(f"Voice handlers registered for @{bot_db.bot_username}")
-
 
         # ===== Bot 管理命令 =====
         # app.add_handler(CommandHandler("list_bots", list_bots_command))
