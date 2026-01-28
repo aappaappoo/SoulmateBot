@@ -268,10 +268,11 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     )
                     if memories:
                         # 转换为字典格式供 UnifiedContextBuilder 使用
+                        # 统一使用 "YYYY-MM-DD" 格式
                         user_memories = [
                             {
                                 "event_summary": m.event_summary,
-                                "event_date": m.event_date.strftime("%Y年%m月%d日") if m.event_date else None,
+                                "event_date": m.event_date.strftime("%Y-%m-%d") if m.event_date else None,
                                 "event_type": m.event_type,
                                 "keywords": m.keywords
                             }
@@ -279,7 +280,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         ]
                         logger.info(f"🧠 Retrieved {len(user_memories)} memories for context injection")
                 except Exception as e:
-                    logger.warning(f"Error retrieving memories: {e}")
+                    logger.warning(f"Error retrieving memories: {e}", exc_info=True)
             
             # 构建对话历史格式（用于 UnifiedContextBuilder）
             conversation_history_for_builder = []
@@ -294,17 +295,17 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             if conversation_history_for_builder:
                 try:
                     # 先生成对话策略
-                    temp_system_prompt = system_prompt or ""
-                    dialogue_strategy_text = enhance_prompt_with_strategy(
-                        original_prompt=temp_system_prompt,
+                    base_system_prompt = system_prompt or ""
+                    enhanced_with_strategy = enhance_prompt_with_strategy(
+                        original_prompt=base_system_prompt,
                         conversation_history=conversation_history_for_builder,
                         current_message=message_text
                     )
                     # 提取策略部分（去掉原始 system_prompt）
-                    if temp_system_prompt and dialogue_strategy_text.startswith(temp_system_prompt):
-                        dialogue_strategy_text = dialogue_strategy_text[len(temp_system_prompt):].strip()
+                    if base_system_prompt and enhanced_with_strategy.startswith(base_system_prompt):
+                        dialogue_strategy_text = enhanced_with_strategy[len(base_system_prompt):].strip()
                 except Exception as e:
-                    logger.warning(f"Error generating dialogue strategy: {e}")
+                    logger.warning(f"Error generating dialogue strategy: {e}", exc_info=True)
             
             # 🔧 使用 UnifiedContextBuilder 构建上下文
             context_builder = UnifiedContextBuilder(
@@ -342,7 +343,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 )
                 
             except Exception as e:
-                logger.error(f"Error building context with UnifiedContextBuilder: {e}")
+                logger.error(f"Error building context with UnifiedContextBuilder: {e}", exc_info=True)
                 # 回退到简单的 system prompt
                 enhanced_system_prompt = system_prompt or ""
                 enhanced_messages = [

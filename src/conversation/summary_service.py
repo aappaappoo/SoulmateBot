@@ -7,6 +7,11 @@ Conversation Summary Service - 对话摘要服务
 3. 返回结构化的摘要数据（摘要文本、关键话题、情绪轨迹、用户需求）
 
 用于节省 token，将中期对话（第 3-20 轮）压缩为摘要
+
+回退行为：
+- 当 use_llm=True 但 llm_provider 不可用时，自动回退到规则摘要
+- 当 LLM API 调用失败时，记录警告并回退到规则摘要
+- 规则摘要始终可用，不依赖外部服务
 """
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field

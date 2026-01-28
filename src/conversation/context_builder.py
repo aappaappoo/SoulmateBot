@@ -201,25 +201,43 @@ class UnifiedContextBuilder:
         if not conversation_history:
             return [], []
         
-        # 短期：取最后 N 条
-        short_term = conversation_history[-self.config.short_term_rounds * 2:]  # *2 因为包含user和assistant
+        # 计算短期历史的消息数量
+        # 注意：一轮对话通常包含一条用户消息和一条助手消息
+        # 但我们按实际消息数计算，不假设每轮恰好两条
+        user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
+        num_user_messages = len(user_messages)
         
-        # 中期：取中间部分
-        # 先排除短期部分
-        remaining = conversation_history[:-len(short_term)] if len(short_term) > 0 else conversation_history
+        # 短期：取最近 N 轮对话（基于用户消息数）
+        if num_user_messages <= self.config.short_term_rounds:
+            # 所有历史都是短期
+            return conversation_history, []
+        
+        # 找到倒数第 N 条用户消息的位置
+        user_msg_indices = [i for i, msg in enumerate(conversation_history) if msg.get("role") == "user"]
+        short_term_start_idx = user_msg_indices[-self.config.short_term_rounds]
+        
+        # 短期历史从该位置到结尾
+        short_term = conversation_history[short_term_start_idx:]
+        
+        # 剩余的历史（不包括短期部分）
+        remaining = conversation_history[:short_term_start_idx]
+        
+        if not remaining:
+            return short_term, []
         
         # 计算中期范围（基于用户消息轮数）
         # 找到第 mid_term_start 轮到 mid_term_end 轮的消息
-        user_turn_indices = []
-        for i, msg in enumerate(remaining):
-            if msg.get("role") == "user":
-                user_turn_indices.append(i)
+        remaining_user_indices = [i for i, msg in enumerate(remaining) if msg.get("role") == "user"]
         
         # 如果有足够的历史，提取中期
-        if len(user_turn_indices) >= self.config.mid_term_start:
-            start_idx = user_turn_indices[self.config.mid_term_start - 1] if self.config.mid_term_start > 0 else 0
-            end_idx = user_turn_indices[min(self.config.mid_term_end - 1, len(user_turn_indices) - 1)]
-            mid_term = remaining[start_idx:end_idx + 1]
+        if len(remaining_user_indices) >= self.config.mid_term_start and self.config.mid_term_start > 0:
+            start_idx = remaining_user_indices[self.config.mid_term_start - 1]
+            end_user_idx = min(self.config.mid_term_end - 1, len(remaining_user_indices) - 1)
+            if end_user_idx >= 0 and end_user_idx < len(remaining_user_indices):
+                end_idx = remaining_user_indices[end_user_idx]
+                mid_term = remaining[start_idx:end_idx + 1]
+            else:
+                mid_term = []
         else:
             mid_term = []
         
@@ -408,6 +426,7 @@ class UnifiedContextBuilder:
         估算消息列表的 token 数
         
         简单估算：中文约1.5字符/token，英文约4字符/token
+        使用 round() 以避免截断导致的低估
         """
         total_tokens = 0
         
@@ -418,8 +437,8 @@ class UnifiedContextBuilder:
             chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
             other_chars = len(content) - chinese_chars
             
-            # 估算
-            tokens = int(chinese_chars / 1.5 + other_chars / 4)
+            # 估算（使用 round 避免截断）
+            tokens = round(chinese_chars / 1.5 + other_chars / 4)
             
             # 消息格式开销
             total_tokens += tokens + 4
@@ -446,16 +465,31 @@ class UnifiedContextBuilder:
             return messages
         
         # 分离组件
-        system_msg = messages[0] if messages[0].get("role") == "system" else None
-        current_msg = messages[-1] if messages[-1].get("role") == "user" else None
+        system_msg = messages[0] if messages and messages[0].get("role") == "system" else None
+        current_msg = messages[-1] if messages and messages[-1].get("role") == "user" else None
         history = messages[1:-1] if len(messages) > 2 else []
         
         # 逐步移除历史消息直到满足预算
         budget = self.config.max_total_tokens - self.config.reserved_output_tokens
         
-        while history and self._estimate_tokens([system_msg] + history + [current_msg]) > budget:
+        # 构建测试消息列表
+        test_messages = []
+        if system_msg:
+            test_messages.append(system_msg)
+        test_messages.extend(history)
+        if current_msg:
+            test_messages.append(current_msg)
+        
+        while history and self._estimate_tokens(test_messages) > budget:
             history.pop(0)
             logger.debug(f"移除一条历史消息，剩余: {len(history)}")
+            # 重建测试消息列表
+            test_messages = []
+            if system_msg:
+                test_messages.append(system_msg)
+            test_messages.extend(history)
+            if current_msg:
+                test_messages.append(current_msg)
         
         # 重新组合
         result = []
