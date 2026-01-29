@@ -14,7 +14,6 @@ from loguru import logger
 
 from src.database import get_db_session
 from src.models.database import Conversation, User, Bot
-from src.services.channel_manager import ChannelManagerService
 
 
 async def handle_my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,24 +45,29 @@ async def handle_my_chat_member(update: Update, context: ContextTypes.DEFAULT_TY
     if new_status in ['kicked', 'left']:
         logger.info(f"User {user.id} blocked/left the bot in chat {chat.id}")
 
-        # 清理该用户的聊天记录
+        # 清理该用户的所有对话记录
         await clear_user_conversation_async(
             telegram_user_id=user.id,
             chat_id=chat.id,
-            bot_username=context.bot.username
+            bot_username=context.bot.username,
+            bot_data=context.bot_data
         )
+
+
 async def clear_user_conversation_async(
         telegram_user_id: int,
         chat_id: int,
-        bot_username: str = None
+        bot_username: str = None,
+        bot_data: dict = None
 ) -> int:
     """
-    异步清理用户的所有对话记录（包括三层存储）
+    异步清理用户的所有对话记录（包括所有存储层）
 
     Args:
         telegram_user_id: Telegram用户ID
-        chat_id: 聊天ID（保留参数，便于将来按聊天清理）
+        chat_id: 聊天ID
         bot_username: Bot用户名（可选）
+        bot_data: Telegram bot_data 对象，用于清理 LLM 摘要缓存
 
     Returns:
         int: 删除的记录总数
@@ -88,22 +92,46 @@ async def clear_user_conversation_async(
             from src.conversation import get_context_manager
             context_manager = get_context_manager()
             if bot:
-                context_manager.delete_context(str(user.id), str(bot.id))
-                logger.info(f"Cleared in-memory context for user {user.id} with bot {bot.id}")
-            else:
-                # 如果没有指定bot，尝试清理该用户的所有上下文
-                logger.debug(f"No bot specified, skipping in-memory context cleanup for user {user.id}")
+                deleted = context_manager.delete_context(str(user.id), str(bot.id))
+                if deleted:
+                    logger.info(f"Cleared in-memory context for user {user.id} with bot {bot.id}")
         except Exception as e:
             logger.warning(f"Failed to clear in-memory context: {e}")
 
-        # ========== 2. 清理数据库对话记录（中期记忆 - Conversation表）==========
+        # ========== 2. 清理 LLM 生成的对话摘要缓存（中期���要）==========
+        if bot_data is not None:
+            try:
+                # 清理 LLM 摘要缓存 - 使用多种可能的 key 格式
+                keys_to_clear = [
+                    f"llm_summary_{chat_id}_{user.id}",
+                    f"llm_summary_{chat_id}_{telegram_user_id}",
+                    f"llm_summary_{telegram_user_id}_{user.id}",
+                ]
+                for key in keys_to_clear:
+                    if key in bot_data:
+                        del bot_data[key]
+                        logger.info(f"Cleared LLM summary cache: {key}")
+            except Exception as e:
+                logger.warning(f"Failed to clear LLM summary cache: {e}")
+
+        # ========== 3. 清理 Session（会话管理器）==========
+        try:
+            from src.conversation import get_session_manager
+            session_manager = get_session_manager()
+            if bot:
+                session_id = f"{user.id}_{bot.id}"
+                deleted = session_manager.delete_session(session_id)
+                if deleted:
+                    logger.info(f"Cleared session for user {user.id} with bot {bot.id}")
+        except Exception as e:
+            logger.warning(f"Failed to clear session: {e}")
+
+        # ========== 4. 清理数据库对话记录（Conversation表）==========
+        # 🔧 修复：直接按 user_id 删除，不依赖 session_id（因为存储时没有设置 session_id）
         conv_query = db.query(Conversation).filter(Conversation.user_id == user.id)
 
-        # 如果有Bot信息，可以进一步过滤
-        # session_id格式: "{user_id}_{bot_id}"
-        if bot:
-            session_id = f"{user.id}_{bot.id}"
-            conv_query = conv_query.filter(Conversation.session_id == session_id)
+        # 不再按 session_id 过滤，因为存储时没有设置 session_id
+        # 如果需要区分 Bot，可以考虑按 chat_id 或其他方式
 
         conv_count = conv_query.count()
         if conv_count > 0:
@@ -111,8 +139,10 @@ async def clear_user_conversation_async(
             total_deleted += conv_count
             logger.info(f"Cleared {conv_count} conversation records for user {user.id} "
                         f"(telegram_id: {telegram_user_id})")
+        else:
+            logger.debug(f"No conversation records found for user {user.id}")
 
-        # ========== 3. 清理长期记忆（UserMemory表）==========
+        # ========== 5. 清理长期记忆（UserMemory表）==========
         try:
             from src.models.database import UserMemory
             memory_query = db.query(UserMemory).filter(
@@ -133,7 +163,7 @@ async def clear_user_conversation_async(
         except Exception as e:
             logger.warning(f"Failed to clear user memories: {e}")
 
-        # 提交所有更改
+        # 提交所有数据库更改
         db.commit()
 
         logger.info(f"Total cleared for user {user.id} (telegram_id: {telegram_user_id}): "

@@ -223,7 +223,6 @@ class VLLMProvider(AIProvider):
                 "content": context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。"
             }
             full_messages = [system_message] + messages
-        self._log_request(request_id, full_messages, self.model, context)
         headers = {
             "Content-Type": "application/json"
         }
