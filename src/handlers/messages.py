@@ -163,16 +163,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 发送typing指示
             await message.chat. send_action("typing")
 
-            # 异步获取对话历史
-            logger.info(f"🗄️ [STEP 6/9] HISTORY_FETCH: Fetching conversation history for db_user_id={db_user.id}")
+            # 生成session_id用于隔离不同Bot的对话历史
+            # 格式: "{user_id}_{bot_id}_" 确保每个用户和每个Bot之间的对话是隔离的
+            session_id = f"{db_user.id}_{selected_bot.id}_"
+            logger.info(f"🗄️ [STEP 6/9] SESSION_ID: Generated session_id={session_id} for bot @{selected_bot.bot_username}")
+
+            # 异步获取对话历史（按session_id过滤，确保只获取当前Bot的对话）
+            logger.info(f"🗄️ [STEP 6/9] HISTORY_FETCH: Fetching conversation history for db_user_id={db_user.id}, bot_id={selected_bot.id}")
             result = await db.execute(
                 select(Conversation)
-                .where(Conversation. user_id == db_user.id)
+                .where(Conversation.user_id == db_user.id)
+                .where(Conversation.session_id.like(f"{session_id}%"))
                 .order_by(Conversation.timestamp.desc())
                 .limit(10)
             )
             recent_conversations = result.scalars().all()
-            logger.info(f"🗄️ [STEP 6/9] HISTORY_FETCH: Found {len(recent_conversations)} recent conversation(s)")
+            logger.info(f"🗄️ [STEP 6/9] HISTORY_FETCH: Found {len(recent_conversations)} recent conversation(s) for bot @{selected_bot.bot_username}")
 
             # 构建对话历史
             history = []
@@ -215,9 +221,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # 保存用户消息到数据库（使用完整内容，不含分隔符）
                 # Save to database using full content without split markers
-                logger.info(f"🗄️ [STEP 9/9] DB_SAVE: Saving conversation to database for db_user_id={db_user.id}")
+                logger.info(f"🗄️ [STEP 9/9] DB_SAVE: Saving conversation to database for db_user_id={db_user.id}, session_id={session_id}")
                 user_conv = Conversation(
                     user_id=db_user.id,
+                    session_id=session_id,
                     message=message_text,
                     response=full_response,
                     is_user_message=True,
@@ -228,6 +235,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # 保存机器人回复到数据库（记录消息类型，使用完整内容）
                 bot_conv = Conversation(
                     user_id=db_user.id,
+                    session_id=session_id,
                     message=message_text,
                     response=full_response,
                     is_user_message=False,

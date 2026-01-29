@@ -53,6 +53,10 @@ SoulmateBot 数据库管理工具
   token-list          列出所有Token
   token-validate      验证Token有效性
 
+  conversation clear           交互式清空聊天记录
+  conv clear-user-bot <user_id> <bot_id>   清空指定用户与Bot的聊天记录
+  conv clear-user <user_id>    清空指定用户的所有聊天记录
+
   init                初始化测试数据(交互式)
   all                 重建数据库并初始化测试数据
 
