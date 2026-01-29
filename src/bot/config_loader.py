@@ -160,10 +160,58 @@ class SkillConfig:
 
 
 @dataclass
+class SkillTierConfig:
+    """技能等级配置"""
+    basic: List[str] = field(default_factory=lambda: [
+        "emotional_support", "daily_chat", "short_term_memory"
+    ])
+    premium: List[str] = field(default_factory=lambda: [
+        "web_search", "deep_analysis", "long_term_memory", "voice_reply"
+    ])
+
+
+@dataclass
 class SkillsConfig:
     """Bot技能总配置"""
     enabled: List[SkillConfig] = field(default_factory=list)
     default_skill: Optional[str] = None  # 默认技能ID
+    tier_system: SkillTierConfig = field(default_factory=SkillTierConfig)
+
+
+@dataclass
+class ValueDimensionsConfig:
+    """价值观维度配置 - 1-10分的人格维度"""
+    rationality: int = 5       # 理性 vs 感性（1=极感性, 10=极理性）
+    openness: int = 5          # 保守 vs 开放（1=保守, 10=开放）
+    assertiveness: int = 5     # 顺从 vs 坚持（1=顺从, 10=坚持）← 关键参数！
+    optimism: int = 5          # 悲观 vs 乐观
+    depth_preference: int = 5  # 浅聊 vs 深度
+
+
+@dataclass 
+class StanceConfig:
+    """预设立场配置"""
+    topic: str                 # 话题
+    position: str              # Bot的观点
+    confidence: float = 0.5    # 坚持程度 0-1
+
+
+@dataclass
+class ResponsePreferencesConfig:
+    """回应风格偏好"""
+    agree_first: bool = True       # 倾向先认同再表达不同
+    use_examples: bool = True      # 喜欢用例子说明
+    ask_back: bool = True          # 倾向反问用户
+    use_humor: bool = False        # 用幽默化解
+
+
+@dataclass
+class ValuesConfig:
+    """Bot价值观系统配置"""
+    dimensions: ValueDimensionsConfig = field(default_factory=ValueDimensionsConfig)
+    stances: List[StanceConfig] = field(default_factory=list)
+    response_preferences: ResponsePreferencesConfig = field(default_factory=ResponsePreferencesConfig)
+    default_behavior: str = "curious"  # 遇到没有预设立场的话题: curious/neutral/avoid
 
 
 @dataclass
@@ -221,6 +269,9 @@ class BotConfig:
     
     # Bot语音配置 - 定义Bot的语音回复设置
     voice: VoiceConfig = field(default_factory=VoiceConfig)
+    
+    # Bot价值观系统配置 - 定义Bot的价值观和立场
+    values: ValuesConfig = field(default_factory=ValuesConfig)
     
     # 功能开关
     features_enabled: List[str] = field(default_factory=list)
@@ -418,9 +469,21 @@ class BotConfigLoader:
                 priority=skill_data.get("priority", 0)
             ))
         
+        # 解析技能分层体系
+        tier_data = data.get("tier_system", {})
+        tier_system = SkillTierConfig(
+            basic=tier_data.get("basic", [
+                "emotional_support", "daily_chat", "short_term_memory"
+            ]),
+            premium=tier_data.get("premium", [
+                "web_search", "deep_analysis", "long_term_memory", "voice_reply"
+            ])
+        )
+        
         return SkillsConfig(
             enabled=enabled,
-            default_skill=data.get("default_skill")
+            default_skill=data.get("default_skill"),
+            tier_system=tier_system
         )
     
     def _parse_voice_config(self, data: Dict) -> VoiceConfig:
@@ -432,6 +495,47 @@ class BotConfigLoader:
         return VoiceConfig(
             enabled=data.get("enabled", False),
             voice_id=data.get("voice_id", "alloy")
+        )
+    
+    def _parse_values_config(self, data: Dict) -> ValuesConfig:
+        """
+        解析价值观系统配置
+        
+        配置Bot的价值观维度、预设立场和回应偏好
+        """
+        # 解析价值观维度
+        dimensions_data = data.get("dimensions", {})
+        dimensions = ValueDimensionsConfig(
+            rationality=dimensions_data.get("rationality", 5),
+            openness=dimensions_data.get("openness", 5),
+            assertiveness=dimensions_data.get("assertiveness", 5),
+            optimism=dimensions_data.get("optimism", 5),
+            depth_preference=dimensions_data.get("depth_preference", 5)
+        )
+        
+        # 解析预设立场
+        stances = []
+        for stance_data in data.get("stances", []):
+            stances.append(StanceConfig(
+                topic=stance_data.get("topic", ""),
+                position=stance_data.get("position", ""),
+                confidence=stance_data.get("confidence", 0.5)
+            ))
+        
+        # 解析回应偏好
+        preferences_data = data.get("response_preferences", {})
+        response_preferences = ResponsePreferencesConfig(
+            agree_first=preferences_data.get("agree_first", True),
+            use_examples=preferences_data.get("use_examples", True),
+            ask_back=preferences_data.get("ask_back", True),
+            use_humor=preferences_data.get("use_humor", False)
+        )
+        
+        return ValuesConfig(
+            dimensions=dimensions,
+            stances=stances,
+            response_preferences=response_preferences,
+            default_behavior=data.get("default_behavior", "curious")
         )
     
     def load_config(self, bot_id: str) -> Optional[BotConfig]:
@@ -479,6 +583,9 @@ class BotConfigLoader:
                 
                 # Bot语音配置 - 语音回复设置
                 voice=self._parse_voice_config(data.get("voice", {})),
+                
+                # Bot价值观系统配置 - 价值观和立场
+                values=self._parse_values_config(data.get("values", {})),
                 
                 features_enabled=data.get("features", {}).get("enabled", []),
                 features_disabled=data.get("features", {}).get("disabled", []),
