@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import ChatMemberHandler
 from loguru import logger
 from sqlalchemy import select
 
+from src.handlers.chat_member_handler import handle_my_chat_member, get_chat_member_handler
 from src.database import get_async_db_context, init_async_db
 from src.handlers.voice_handler import get_voice_handlers
 from src.models.database import Bot as BotModel
@@ -274,6 +276,7 @@ class MultiBotLauncher:
         app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
         app.add_handler(CommandHandler("my_feedback", my_feedback_command))
         app.add_handler(CommandHandler("skills", handle_skills_command))
+        app.add_handler(get_chat_member_handler())
         app.add_handler(get_skill_callback_handler())
 
         # ===== 消息处理器 =====

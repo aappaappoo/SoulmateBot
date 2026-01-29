@@ -55,6 +55,7 @@ from .bot_crud import BotCRUD
 from .channel_crud import ChannelCRUD
 from .mapping_crud import MappingCRUD
 from .token_manager import TokenManager
+from .conversation_crud import ConversationCRUD
 
 
 def init_test_data() -> bool:
@@ -340,6 +341,31 @@ def main():
             UserCRUD.delete_interactive()
         else:
             print("用法: python -m scripts.db_manager user [list|create|update|delete]")
+
+    elif command == 'conversation' or command == 'conv':
+        if subcommand == 'clear':
+            ConversationCRUD.clear_interactive()
+        elif subcommand == 'clear-user-bot':
+            # python -m scripts.db_manager conv clear-user-bot <user_id> <bot_id>
+            if len(sys.argv) >= 5:
+                user_id = int(sys.argv[3])
+                bot_id = int(sys.argv[4])
+                ConversationCRUD.clear_user_bot_history(user_id=user_id, bot_id=bot_id, confirm=False)
+            else:
+                print("用法: python -m scripts.db_manager conv clear-user-bot <user_id> <bot_id>")
+        elif subcommand == 'clear-user':
+            # python -m scripts.db_manager conv clear-user <user_id>
+            if len(sys.argv) >= 4:
+                user_id = int(sys.argv[3])
+                ConversationCRUD.clear_user_all_history(user_id=user_id, confirm=False)
+            else:
+                print("用法: python -m scripts.db_manager conv clear-user <user_id>")
+        else:
+            print("用法: python -m scripts.db_manager conversation [clear|clear-user-bot|clear-user]")
+            print("\n命令说明:")
+            print("   clear              - 交互式清空聊天记录")
+            print("   clear-user-bot     - 清空指定用户与Bot的聊天记录")
+            print("   clear-user         - 清空指定用户的所有聊天记录")
 
     # Bot命令
     elif command == 'bot':

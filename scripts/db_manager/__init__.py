@@ -28,6 +28,7 @@ from .bot_crud import BotCRUD
 from .channel_crud import ChannelCRUD
 from .mapping_crud import MappingCRUD
 from .token_manager import TokenManager
+from .conversation_crud import ConversationCRUD
 
 __all__ = [
     "DatabaseManager",
@@ -36,4 +37,5 @@ __all__ = [
     "ChannelCRUD",
     "MappingCRUD",
     "TokenManager",
+    "ConversationCRUD",
 ]
