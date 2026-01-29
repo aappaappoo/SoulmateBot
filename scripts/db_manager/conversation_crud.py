@@ -82,9 +82,9 @@ class ConversationCRUD:
             query = db.query(Conversation).filter(Conversation.user_id == user.id)
 
             # 如果session_id包含bot信息，可以通过session_id过滤
-            # 格式通常是 "{user_id}_{bot_id}_{timestamp}" 或类似格式
-            session_prefix = f"{user.id}_{bot.id}_"
-            query = query.filter(Conversation.session_id.like(f"{session_prefix}%"))
+            # 格式: "{user_id}_{bot_id}"
+            session_id = f"{user.id}_{bot.id}"
+            query = query.filter(Conversation.session_id == session_id)
 
             count = query.count()
 

@@ -164,8 +164,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.chat. send_action("typing")
 
             # 生成session_id用于隔离不同Bot的对话历史
-            # 格式: "{user_id}_{bot_id}_" 确保每个用户和每个Bot之间的对话是隔离的
-            session_id = f"{db_user.id}_{selected_bot.id}_"
+            # 格式: "{user_id}_{bot_id}" 确保每个用户和每个Bot之间的对话是隔离的
+            session_id = f"{db_user.id}_{selected_bot.id}"
             logger.info(f"🗄️ [STEP 6/9] SESSION_ID: Generated session_id={session_id} for bot @{selected_bot.bot_username}")
 
             # 异步获取对话历史（按session_id过滤，确保只获取当前Bot的对话）
@@ -173,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result = await db.execute(
                 select(Conversation)
                 .where(Conversation.user_id == db_user.id)
-                .where(Conversation.session_id.like(f"{session_id}%"))
+                .where(Conversation.session_id == session_id)
                 .order_by(Conversation.timestamp.desc())
                 .limit(10)
             )
