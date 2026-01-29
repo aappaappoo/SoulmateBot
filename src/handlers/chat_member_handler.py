@@ -87,10 +87,10 @@ async def clear_user_conversation_async(
         query = db.query(Conversation).filter(Conversation.user_id == user.id)
 
         # 如果有Bot信息，可以进一步过滤
-        # 根据session_id格式进行过滤（假设格式为 "{user_id}_{bot_id}_{...}"）
+        # session_id格式: "{user_id}_{bot_id}"
         if bot:
-            session_prefix = f"{user.id}_{bot.id}_"
-            query = query.filter(Conversation.session_id.like(f"{session_prefix}%"))
+            session_id = f"{user.id}_{bot.id}"
+            query = query.filter(Conversation.session_id == session_id)
 
         # 获取记录数并删除
         count = query.count()
