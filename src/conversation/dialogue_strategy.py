@@ -13,8 +13,27 @@ Core principles:
 """
 
 from enum import Enum
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
+from dataclasses import dataclass
 from loguru import logger
+
+
+class ConversationType(str, Enum):
+    """对话类型分类"""
+    EMOTIONAL_VENT = "emotional_vent"           # 情绪倾诉 - 暂不反驳
+    OPINION_DISCUSSION = "opinion_discussion"   # 观点讨论 - 可以表达立场
+    INFO_REQUEST = "info_request"               # 信息需求 - 可触发搜索技能
+    DECISION_CONSULTING = "decision_consulting" # 决策咨询 - 分析+建议
+    CASUAL_CHAT = "casual_chat"                 # 日常闲聊 - 轻松互动
+
+
+class StanceStrategy(str, Enum):
+    """立场表达策略"""
+    AGREE = "agree"                         # 完全同意
+    AGREE_AND_ADD = "agree_and_add"         # 先同意再补充
+    PARTIAL_AGREE = "partial_agree"         # 部分同意，指出不同
+    RESPECTFUL_DISAGREE = "respectful_disagree"  # 尊重地表达不同意见
+    CHALLENGE = "challenge"                 # 温和质疑用户假设
 
 
 class DialoguePhase(Enum):
@@ -166,6 +185,283 @@ STRATEGY_TEMPLATES = {
 - 你的人设和性格保持不变，以上是建议的沟通方式。
 """
 }
+
+
+# 立场策略模板
+# Stance strategy templates for expressing different levels of agreement/disagreement
+STANCE_STRATEGY_TEMPLATES = {
+    StanceStrategy.AGREE: """
+【立场策略：完全同意】
+- 表达对用户观点的完全认同
+- 用自己的语言强化用户的看法
+- 可以补充支持性的例子或理由
+- 保持真诚，不要虚假迎合
+注意：你的人设和性格保持不变。
+""",
+    
+    StanceStrategy.AGREE_AND_ADD: """
+【立场策略：先同意再补充】
+- 先认可用户观点中的合理部分
+- 用"不过"、"另外"等词语自然过渡
+- 温和地补充你的不同视角或额外信息
+- 避免让用户感觉被反驳
+注意：你的人设和性格保持不变。
+""",
+    
+    StanceStrategy.PARTIAL_AGREE: """
+【立场策略：部分同意】
+- 明确指出你认同的部分
+- 坦诚地说明你有不同看法的地方
+- 用具体理由解释你的不同观点
+- 尊重用户的选择，不强加观点
+注意：你的人设和性格保持不变。
+""",
+    
+    StanceStrategy.RESPECTFUL_DISAGREE: """
+【立场策略：尊重地表达不同意见】
+- 先理解并复述用户的观点，表达尊重
+- 明确但温和地表达你的不同看法
+- 提供具体的理由和例子支持你的观点
+- 承认这是你的个人判断，允许用户保留自己的看法
+- 在照顾用户感受的前提下，坚持你的判断
+注意：你的人设和性格保持不变。
+""",
+    
+    StanceStrategy.CHALLENGE: """
+【立场策略：温和质疑】
+- 通过提问引导用户重新思考
+- 指出用户观点中可能存在的矛盾或盲点
+- 用假设性问题启发思考："如果...会怎样？"
+- 保持好奇和探讨的态度，不是批判
+- 给用户空间自己得出结论
+注意：你的人设和性格保持不变。
+"""
+}
+
+
+# 对话类型信号词配置
+# Signal words for conversation type detection
+CONVERSATION_TYPE_SIGNALS = {
+    ConversationType.EMOTIONAL_VENT: [
+        "难过", "烦", "累", "不知道怎么办", "受不了", "压力大",
+        "焦虑", "抑郁", "崩溃", "撑不下去", "心烦", "郁闷"
+    ],
+    ConversationType.OPINION_DISCUSSION: [
+        "我觉得", "你怎么看", "是不是应该", "你认为", "怎么想",
+        "对不对", "有道理吗", "你的观点"
+    ],
+    ConversationType.INFO_REQUEST: [
+        "最近", "有什么", "推荐", "是不是真的", "听说", "了解",
+        "知道吗", "能不能", "怎么样", "哪里", "什么时候"
+    ],
+    ConversationType.DECISION_CONSULTING: [
+        "该不该", "怎么选", "帮我分析", "怎么办", "选择",
+        "决定", "建议", "意见"
+    ]
+}
+
+
+class ConversationTypeAnalyzer:
+    """
+    对话类型分析器
+    Analyzes conversation type based on message content
+    """
+    
+    def analyze_type(self, message: str, history: List[Dict[str, str]] = None) -> ConversationType:
+        """
+        根据消息内容和历史判断对话类型
+        Determine conversation type based on message content and history
+        
+        Args:
+            message: 当前用户消息
+            history: 对话历史（可选）
+            
+        Returns:
+            ConversationType: 对话类型
+        """
+        message_lower = message.lower()
+        
+        # 检测情绪倾诉（优先级最高，需要特殊对待）
+        for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.EMOTIONAL_VENT]:
+            if keyword in message_lower:
+                logger.debug(f"Detected EMOTIONAL_VENT: keyword={keyword}")
+                return ConversationType.EMOTIONAL_VENT
+        
+        # 检测决策咨询
+        for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.DECISION_CONSULTING]:
+            if keyword in message_lower:
+                logger.debug(f"Detected DECISION_CONSULTING: keyword={keyword}")
+                return ConversationType.DECISION_CONSULTING
+        
+        # 检测观点讨论
+        for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.OPINION_DISCUSSION]:
+            if keyword in message_lower:
+                logger.debug(f"Detected OPINION_DISCUSSION: keyword={keyword}")
+                return ConversationType.OPINION_DISCUSSION
+        
+        # 检测信息需求
+        for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.INFO_REQUEST]:
+            if keyword in message_lower:
+                logger.debug(f"Detected INFO_REQUEST: keyword={keyword}")
+                return ConversationType.INFO_REQUEST
+        
+        # 默认为日常闲聊
+        logger.debug("Default to CASUAL_CHAT")
+        return ConversationType.CASUAL_CHAT
+
+
+@dataclass
+class StanceAnalysis:
+    """立场分析结果"""
+    user_opinion: str                    # 用户观点
+    bot_stance: Optional[str] = None     # Bot的预设立场
+    conflict_level: float = 0.0          # 冲突程度 0-1
+    suggested_strategy: StanceStrategy = StanceStrategy.AGREE  # 建议策略
+    topic: Optional[str] = None          # 匹配的话题
+
+
+class StanceAnalyzer:
+    """
+    立场分析器
+    Analyzes user opinion and determines bot's stance strategy
+    """
+    
+    def analyze_stance(self, message: str, bot_values) -> StanceAnalysis:
+        """
+        分析用户观点并确定Bot的立场策略
+        Analyze user opinion and determine bot's stance strategy
+        
+        Args:
+            message: 用户消息
+            bot_values: Bot的价值观配置
+            
+        Returns:
+            StanceAnalysis: 立场分析结果
+        """
+        # 提取用户观点（简化实现：使用整个消息作为观点）
+        user_opinion = message
+        
+        # 匹配Bot的预设立场
+        matched_stance = self._match_bot_stance(message, bot_values.stances)
+        
+        if not matched_stance:
+            # 没有匹配的预设立场，使用默认行为
+            if bot_values.default_behavior == "curious":
+                return StanceAnalysis(
+                    user_opinion=user_opinion,
+                    suggested_strategy=StanceStrategy.AGREE_AND_ADD
+                )
+            else:  # neutral or avoid
+                return StanceAnalysis(
+                    user_opinion=user_opinion,
+                    suggested_strategy=StanceStrategy.AGREE
+                )
+        
+        # 有匹配的立场，根据assertiveness和confidence决定策略
+        conflict_level = self._calculate_conflict(message, matched_stance.position)
+        strategy = self._determine_strategy(
+            conflict_level,
+            bot_values.dimensions.assertiveness,
+            matched_stance.confidence,
+            bot_values.response_preferences
+        )
+        
+        return StanceAnalysis(
+            user_opinion=user_opinion,
+            bot_stance=matched_stance.position,
+            conflict_level=conflict_level,
+            suggested_strategy=strategy,
+            topic=matched_stance.topic
+        )
+    
+    def _match_bot_stance(self, message: str, stances: List) -> Optional[Any]:
+        """
+        匹配Bot的预设立场
+        Match bot's predefined stances based on message content
+        
+        Args:
+            message: 用户消息
+            stances: Bot的预设立场列表
+            
+        Returns:
+            匹配的立场配置或None
+        """
+        message_lower = message.lower()
+        
+        for stance in stances:
+            # 简单的关键词匹配（实际应用中可以使用更复杂的NLP方法）
+            topic_keywords = stance.topic.lower().split()
+            if any(keyword in message_lower for keyword in topic_keywords):
+                logger.debug(f"Matched stance: topic={stance.topic}")
+                return stance
+        
+        return None
+    
+    def _calculate_conflict(self, user_message: str, bot_position: str) -> float:
+        """
+        计算用户观点和Bot立场的冲突程度
+        Calculate conflict level between user opinion and bot position
+        
+        简化实现：检查是否有明显的对立关键词
+        
+        Args:
+            user_message: 用户消息
+            bot_position: Bot的立场
+            
+        Returns:
+            冲突程度 0-1
+        """
+        # 简化实现：如果用户消息包含否定词，冲突程度较高
+        negative_words = ["不", "别", "不要", "不应该", "反对", "不同意"]
+        conflict_count = sum(1 for word in negative_words if word in user_message)
+        
+        # 归一化到0-1
+        conflict_level = min(conflict_count / 3.0, 1.0)
+        
+        return conflict_level
+    
+    def _determine_strategy(
+        self,
+        conflict_level: float,
+        assertiveness: int,
+        confidence: float,
+        preferences
+    ) -> StanceStrategy:
+        """
+        根据冲突程度、Bot的assertiveness和立场confidence决定策略
+        Determine stance strategy based on conflict, assertiveness, and confidence
+        
+        Args:
+            conflict_level: 冲突程度 0-1
+            assertiveness: Bot的坚持程度 1-10
+            confidence: 立场的confidence 0-1
+            preferences: 回应偏好
+            
+        Returns:
+            StanceStrategy: 建议的立场策略
+        """
+        # 低冲突情况
+        if conflict_level < 0.3:
+            if preferences.agree_first:
+                return StanceStrategy.AGREE_AND_ADD
+            else:
+                return StanceStrategy.AGREE
+        
+        # 中等冲突情况
+        if conflict_level < 0.6:
+            if assertiveness >= 7 and confidence >= 0.7:
+                return StanceStrategy.PARTIAL_AGREE
+            else:
+                return StanceStrategy.AGREE_AND_ADD
+        
+        # 高冲突情况
+        if assertiveness >= 7 and confidence >= 0.7:
+            if assertiveness >= 8:
+                return StanceStrategy.RESPECTFUL_DISAGREE
+            else:
+                return StanceStrategy.PARTIAL_AGREE
+        else:
+            return StanceStrategy.PARTIAL_AGREE
 
 
 class DialoguePhaseAnalyzer:
@@ -364,12 +660,15 @@ class DialogueStrategyInjector:
     
     def __init__(self):
         self.analyzer = DialoguePhaseAnalyzer()
+        self.conversation_type_analyzer = ConversationTypeAnalyzer()
+        self.stance_analyzer = StanceAnalyzer()
     
     def inject_strategy(
         self,
         original_prompt: str,
         conversation_history: List[Dict[str, str]],
-        current_message: str
+        current_message: str,
+        bot_values = None
     ) -> str:
         """
         将策略指令追加到原有 system_prompt 后面
@@ -381,6 +680,7 @@ class DialogueStrategyInjector:
             original_prompt: 原始system prompt（包含完整人设）
             conversation_history: 对话历史（不包含system prompt）
             current_message: 当前用户消息
+            bot_values: Bot价值观配置（可选）
             
         Returns:
             str: 增强后的system prompt
@@ -392,6 +692,10 @@ class DialogueStrategyInjector:
         # 分析用户情绪
         # Analyze user emotion
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
+        
+        # 分析对话类型
+        # Analyze conversation type
+        conversation_type = self.conversation_type_analyzer.analyze_type(current_message, conversation_history)
         
         # 建议回应类型（传入对话历史以判断是否应该主动追问）
         # Suggest response type (pass conversation history to determine proactive inquiry)
@@ -407,17 +711,147 @@ class DialogueStrategyInjector:
         # Append strategy to original prompt (preserving original personality)
         # Handle None or empty original_prompt
         base_prompt = original_prompt if original_prompt else ""
+        
+        # 构建增强prompt
+        enhanced_prompt = base_prompt
+        
+        # 如果提供了bot_values，添加价值观和立场策略
+        # If bot_values provided, add values and stance strategy
+        if bot_values:
+            # 注入价值观维度
+            values_guidance = self._build_values_guidance(bot_values)
+            if values_guidance:
+                enhanced_prompt += f"\n\n{values_guidance}"
+            
+            # 如果是观点讨论类型，进行立场分析
+            # If conversation type is opinion discussion, analyze stance
+            if conversation_type == ConversationType.OPINION_DISCUSSION:
+                stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
+                stance_guidance = self._build_stance_guidance(stance_analysis)
+                if stance_guidance:
+                    enhanced_prompt += f"\n\n{stance_guidance}"
+        
+        # 添加对话策略指导
+        enhanced_prompt += f"\n\n{strategy_guidance}"
+        
         # 添加多消息回复指令
         # Add multi-message reply instruction
-        enhanced_prompt = f"{base_prompt}\n\n{strategy_guidance}\n\n{MULTI_MESSAGE_INSTRUCTION}"
+        enhanced_prompt += f"\n\n{MULTI_MESSAGE_INSTRUCTION}"
         
         logger.info(
             f"Dialogue strategy applied: phase={phase.value}, "
             f"emotion={emotion_type}/{emotion_intensity}, "
+            f"conversation_type={conversation_type.value}, "
             f"response_type={response_type.value}"
         )
         
         return enhanced_prompt
+    
+    def _build_values_guidance(self, bot_values) -> str:
+        """
+        构建价值观指导
+        Build values guidance based on bot values configuration
+        
+        Args:
+            bot_values: Bot价值观配置
+            
+        Returns:
+            价值观指导文本
+        """
+        dimensions = bot_values.dimensions
+        preferences = bot_values.response_preferences
+        
+        guidance = """
+=========================
+🎭 你的价值观和立场
+=========================
+这些是你的个人特征，影响你的思考方式和表达风格：
+
+【人格维度】"""
+        
+        # 理性 vs 感性
+        if dimensions.rationality <= 3:
+            guidance += "\n- 你偏感性，更关注情感和直觉"
+        elif dimensions.rationality >= 7:
+            guidance += "\n- 你偏理性，更注重逻辑和分析"
+        
+        # 保守 vs 开放
+        if dimensions.openness <= 3:
+            guidance += "\n- 你比较保守，谨慎对待新事物"
+        elif dimensions.openness >= 7:
+            guidance += "\n- 你很开放，乐于接受新观点"
+        
+        # 顺从 vs 坚持
+        if dimensions.assertiveness <= 3:
+            guidance += "\n- 你倾向顺从，尊重他人观点"
+        elif dimensions.assertiveness >= 7:
+            guidance += "\n- 你敢于表达，会坚持自己的判断"
+        
+        # 悲观 vs 乐观
+        if dimensions.optimism <= 3:
+            guidance += "\n- 你偏悲观，会指出潜在风险"
+        elif dimensions.optimism >= 7:
+            guidance += "\n- 你很乐观，总能看到积极面"
+        
+        # 浅聊 vs 深度
+        if dimensions.depth_preference <= 3:
+            guidance += "\n- 你喜欢轻松浅聊"
+        elif dimensions.depth_preference >= 7:
+            guidance += "\n- 你喜欢深度探讨"
+        
+        # 回应偏好
+        guidance += "\n\n【表达风格】"
+        if preferences.agree_first:
+            guidance += "\n- 你倾向先认同再表达不同看法"
+        else:
+            guidance += "\n- 你可以直接表达不同观点"
+        
+        if preferences.use_examples:
+            guidance += "\n- 你喜欢用例子说明观点"
+        
+        if preferences.ask_back:
+            guidance += "\n- 你喜欢通过反问引导思考"
+        
+        if preferences.use_humor:
+            guidance += "\n- 你善用幽默化解分歧"
+        
+        # 预设立场
+        if bot_values.stances:
+            guidance += "\n\n【你的一些观点】"
+            for stance in bot_values.stances[:3]:  # 只显示前3个
+                guidance += f"\n- 关于{stance.topic}：{stance.position}"
+        
+        guidance += "\n\n注意：这些特征是你的个性，但不要刻意表现，自然融入对话即可。"
+        
+        return guidance
+    
+    def _build_stance_guidance(self, stance_analysis: StanceAnalysis) -> str:
+        """
+        构建立场策略指导
+        Build stance strategy guidance based on stance analysis
+        
+        Args:
+            stance_analysis: 立场分析结果
+            
+        Returns:
+            立场策略指导文本
+        """
+        if not stance_analysis.bot_stance:
+            return ""
+        
+        guidance = f"""
+=========================
+💭 关于当前话题的立场
+=========================
+用户观点：{stance_analysis.user_opinion[:100]}...
+你的观点：{stance_analysis.bot_stance}
+
+"""
+        
+        # 添加对应的立场策略模板
+        guidance += STANCE_STRATEGY_TEMPLATES[stance_analysis.suggested_strategy]
+        
+        return guidance
 
 
 # Module-level singleton to avoid unnecessary object allocation
@@ -427,7 +861,8 @@ _injector_instance: Optional[DialogueStrategyInjector] = None
 def enhance_prompt_with_strategy(
     original_prompt: str,
     conversation_history: List[Dict[str, str]],
-    current_message: str
+    current_message: str,
+    bot_values = None
 ) -> str:
     """
     便捷函数：根据对话历史增强prompt
@@ -440,6 +875,7 @@ def enhance_prompt_with_strategy(
         original_prompt: 原始system prompt
         conversation_history: 对话历史记录（不包含system prompt）
         current_message: 当前用户消息
+        bot_values: Bot价值观配置（可选）
         
     Returns:
         str: 增强后的system prompt
@@ -449,7 +885,8 @@ def enhance_prompt_with_strategy(
         enhanced_prompt = enhance_prompt_with_strategy(
             original_prompt=bot.system_prompt,
             conversation_history=history,
-            current_message=message_text
+            current_message=message_text,
+            bot_values=bot.values
         )
         history.insert(0, {"role": "system", "content": enhanced_prompt})
         ```
@@ -457,4 +894,4 @@ def enhance_prompt_with_strategy(
     global _injector_instance
     if _injector_instance is None:
         _injector_instance = DialogueStrategyInjector()
-    return _injector_instance.inject_strategy(original_prompt, conversation_history, current_message)
+    return _injector_instance.inject_strategy(original_prompt, conversation_history, current_message, bot_values)
