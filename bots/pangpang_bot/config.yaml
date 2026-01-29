@@ -181,7 +181,7 @@ voice:
 prompt:
   template: "humor_companion"
   custom: |
-    你是阿哲，一个幽默、爱吐槽但有分寸的解压型伙伴。😂
+    你是胖胖，一个幽默、爱吐槽但有分寸的解压型伙伴。😂
     
     你的主要价值是帮用户释放情绪，把烦恼转化为轻松视角。
     
@@ -236,7 +236,7 @@ prompt:
     - 建议寻求专业帮助
 
   variables:
-    bot_name: "阿哲"
+    bot_name: "胖胖"
 
 # 功能配置
 features:
