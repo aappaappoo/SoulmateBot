@@ -232,10 +232,12 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 获取对话历史
             history_messages = []
             recent_conversations = []
+            session_id = f"{db_user.id}_{selected_bot.id}" if db_user and selected_bot else None
             if db_user:
                 db_result = await db.execute(
                     select(Conversation)
                     .where(Conversation.user_id == db_user.id)
+                    .where(Conversation.session_id == session_id)
                     .order_by(Conversation.timestamp.desc())
                     .limit(50)  # 增加到50条以支持中期摘要
                 )
@@ -439,6 +441,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     # 保存用户消息
                     user_conv = Conversation(
                         user_id=db_user.id,
+                        session_id=session_id,
                         message=message_text,
                         response=response,
                         is_user_message=True,
@@ -449,6 +452,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     # 保存机器人回复（记录消息类型）
                     bot_conv = Conversation(
                         user_id=db_user.id,
+                        session_id=session_id,
                         message=message_text,
                         response=response,
                         is_user_message=False,

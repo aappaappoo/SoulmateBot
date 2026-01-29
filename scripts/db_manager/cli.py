@@ -345,8 +345,26 @@ def main():
     elif command == 'conversation' or command == 'conv':
         if subcommand == 'clear':
             ConversationCRUD.clear_interactive()
+        elif subcommand == 'delete':
+            # 新增：交互式删除（包括session_id为空的记录）
+            ConversationCRUD.delete_interactive()
+        elif subcommand == 'delete-user-bot':
+            # 新增：python -m scripts.db_manager conv delete-user-bot <user_id> <bot_id>
+            if len(sys.argv) >= 5:
+                user_id = int(sys.argv[3])
+                bot_id = int(sys.argv[4])
+                ConversationCRUD.delete_by_user_and_bot(user_id=user_id, bot_id=bot_id, confirm=False)
+            else:
+                print("用法: python -m scripts.db_manager conv delete-user-bot <user_id> <bot_id>")
+        elif subcommand == 'delete-user':
+            # 新增：python -m scripts.db_manager conv delete-user <user_id>
+            if len(sys.argv) >= 4:
+                user_id = int(sys.argv[3])
+                ConversationCRUD.delete_all_by_user(user_id=user_id, confirm=False)
+            else:
+                print("用法: python -m scripts.db_manager conv delete-user <user_id>")
         elif subcommand == 'clear-user-bot':
-            # python -m scripts.db_manager conv clear-user-bot <user_id> <bot_id>
+            # 保留原有命令（按session_id过滤）
             if len(sys.argv) >= 5:
                 user_id = int(sys.argv[3])
                 bot_id = int(sys.argv[4])
@@ -354,18 +372,24 @@ def main():
             else:
                 print("用法: python -m scripts.db_manager conv clear-user-bot <user_id> <bot_id>")
         elif subcommand == 'clear-user':
-            # python -m scripts.db_manager conv clear-user <user_id>
+            # 保留原有命令
             if len(sys.argv) >= 4:
                 user_id = int(sys.argv[3])
                 ConversationCRUD.clear_user_all_history(user_id=user_id, confirm=False)
             else:
                 print("用法: python -m scripts.db_manager conv clear-user <user_id>")
         else:
-            print("用法: python -m scripts.db_manager conversation [clear|clear-user-bot|clear-user]")
-            print("\n命令说明:")
-            print("   clear              - 交互式清空聊天记录")
-            print("   clear-user-bot     - 清空指定用户与Bot的聊天记录")
+            print("用法: python -m scripts.db_manager conversation [子命令]")
+            print("\n子命令说明:")
+            print("   clear              - 交互式清空聊天记录（按session_id）")
+            print("   delete             - 交互式删除聊天记录（包括session_id为空的）")
+            print("   delete-user-bot    - 删除指定用户与Bot的所有聊天记录")
+            print("   delete-user        - 删除指定用户的所有聊天记录")
+            print("   clear-user-bot     - 清空指定用户与Bot的聊天记录（按session_id）")
             print("   clear-user         - 清空指定用户的所有聊天记录")
+            print("\n示例:")
+            print("   python -m scripts.db_manager conv delete-user-bot 1 4")
+            print("   python -m scripts.db_manager conv delete-user 1")
 
     # Bot命令
     elif command == 'bot':
