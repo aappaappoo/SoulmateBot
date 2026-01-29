@@ -13,9 +13,13 @@ Core principles:
 """
 
 from enum import Enum
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any, TYPE_CHECKING
 from dataclasses import dataclass
 from loguru import logger
+
+# Type checking imports to avoid circular dependencies
+if TYPE_CHECKING:
+    from src.bot.config_loader import ValuesConfig, ResponsePreferencesConfig, StanceConfig
 
 
 class ConversationType(str, Enum):
@@ -274,34 +278,32 @@ class ConversationTypeAnalyzer:
         
         Args:
             message: 当前用户消息
-            history: 对话历史（可选）
+            history: 对话历史（可选，保留用于未来扩展）
             
         Returns:
             ConversationType: 对话类型
         """
-        message_lower = message.lower()
-        
         # 检测情绪倾诉（优先级最高，需要特殊对待）
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.EMOTIONAL_VENT]:
-            if keyword in message_lower:
+            if keyword in message:
                 logger.debug(f"Detected EMOTIONAL_VENT: keyword={keyword}")
                 return ConversationType.EMOTIONAL_VENT
         
         # 检测决策咨询
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.DECISION_CONSULTING]:
-            if keyword in message_lower:
+            if keyword in message:
                 logger.debug(f"Detected DECISION_CONSULTING: keyword={keyword}")
                 return ConversationType.DECISION_CONSULTING
         
         # 检测观点讨论
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.OPINION_DISCUSSION]:
-            if keyword in message_lower:
+            if keyword in message:
                 logger.debug(f"Detected OPINION_DISCUSSION: keyword={keyword}")
                 return ConversationType.OPINION_DISCUSSION
         
         # 检测信息需求
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.INFO_REQUEST]:
-            if keyword in message_lower:
+            if keyword in message:
                 logger.debug(f"Detected INFO_REQUEST: keyword={keyword}")
                 return ConversationType.INFO_REQUEST
         
@@ -326,7 +328,7 @@ class StanceAnalyzer:
     Analyzes user opinion and determines bot's stance strategy
     """
     
-    def analyze_stance(self, message: str, bot_values) -> StanceAnalysis:
+    def analyze_stance(self, message: str, bot_values: 'ValuesConfig') -> StanceAnalysis:
         """
         分析用户观点并确定Bot的立场策略
         Analyze user opinion and determine bot's stance strategy
@@ -374,10 +376,12 @@ class StanceAnalyzer:
             topic=matched_stance.topic
         )
     
-    def _match_bot_stance(self, message: str, stances: List) -> Optional[Any]:
+    def _match_bot_stance(self, message: str, stances: List['StanceConfig']) -> Optional['StanceConfig']:
         """
         匹配Bot的预设立场
         Match bot's predefined stances based on message content
+        
+        简化的关键词匹配实现。对于中文文本，直接检查话题词是否在消息中。
         
         Args:
             message: 用户消息
@@ -386,12 +390,10 @@ class StanceAnalyzer:
         Returns:
             匹配的立场配置或None
         """
-        message_lower = message.lower()
-        
         for stance in stances:
-            # 简单的关键词匹配（实际应用中可以使用更复杂的NLP方法）
-            topic_keywords = stance.topic.lower().split()
-            if any(keyword in message_lower for keyword in topic_keywords):
+            # 简单的关键词匹配：检查话题是否在消息中
+            # 对于中文，直接substring匹配即可
+            if stance.topic in message:
                 logger.debug(f"Matched stance: topic={stance.topic}")
                 return stance
         
@@ -403,6 +405,8 @@ class StanceAnalyzer:
         Calculate conflict level between user opinion and bot position
         
         简化实现：检查是否有明显的对立关键词
+        注意：这是一个基础实现，可能在某些语境下不够准确（如"不要担心"包含"不要"但实际是安抚）。
+        未来可考虑使用更复杂的NLP方法或情感分析。
         
         Args:
             user_message: 用户消息
@@ -425,7 +429,7 @@ class StanceAnalyzer:
         conflict_level: float,
         assertiveness: int,
         confidence: float,
-        preferences
+        preferences: 'ResponsePreferencesConfig'
     ) -> StanceStrategy:
         """
         根据冲突程度、Bot的assertiveness和立场confidence决定策略
@@ -668,7 +672,7 @@ class DialogueStrategyInjector:
         original_prompt: str,
         conversation_history: List[Dict[str, str]],
         current_message: str,
-        bot_values = None
+        bot_values: Optional['ValuesConfig'] = None
     ) -> str:
         """
         将策略指令追加到原有 system_prompt 后面
@@ -747,7 +751,7 @@ class DialogueStrategyInjector:
         
         return enhanced_prompt
     
-    def _build_values_guidance(self, bot_values) -> str:
+    def _build_values_guidance(self, bot_values: 'ValuesConfig') -> str:
         """
         构建价值观指导
         Build values guidance based on bot values configuration
@@ -843,7 +847,7 @@ class DialogueStrategyInjector:
 =========================
 💭 关于当前话题的立场
 =========================
-用户观点：{stance_analysis.user_opinion[:100]}...
+用户观点：{stance_analysis.user_opinion[:100]}{'...' if len(stance_analysis.user_opinion) > 100 else ''}
 你的观点：{stance_analysis.bot_stance}
 
 """
@@ -862,7 +866,7 @@ def enhance_prompt_with_strategy(
     original_prompt: str,
     conversation_history: List[Dict[str, str]],
     current_message: str,
-    bot_values = None
+    bot_values: Optional['ValuesConfig'] = None
 ) -> str:
     """
     便捷函数：根据对话历史增强prompt
