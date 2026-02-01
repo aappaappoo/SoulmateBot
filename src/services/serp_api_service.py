@@ -534,9 +534,9 @@ class SerpApiService:
             # 简单的 HTML 文本提取
             content = response.text
             
-            # 移除 script 和 style 标签
-            content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
-            content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
+            # 移除 script 和 style 标签（处理各种格式的闭合标签）
+            content = re.sub(r'<script\b[^>]*>.*?</script[^>]*>', '', content, flags=re.DOTALL | re.IGNORECASE)
+            content = re.sub(r'<style\b[^>]*>.*?</style[^>]*>', '', content, flags=re.DOTALL | re.IGNORECASE)
             
             # 移除所有 HTML 标签
             content = re.sub(r'<[^>]+>', ' ', content)
