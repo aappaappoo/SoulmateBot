@@ -78,6 +78,16 @@ class SkillRegistry:
         """注册默认技能"""
         default_skills = [
             Skill(
+                id="web_search",
+                name="网络搜索",
+                description="实时网络搜索、新闻资讯、最新动态查询",
+                category=SkillCategory.TOOLS,
+                icon="🔍",
+                agent_name="SearchAgent",
+                keywords=["搜索", "查询", "新闻", "最新", "动态", "资讯", "search", "news", "latest"],
+                priority=10
+            ),
+            Skill(
                 id="tech_help",
                 name="技术帮助",
                 description="编程问题解答、代码调试、技术指导",
