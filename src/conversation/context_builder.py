@@ -266,12 +266,12 @@ class UnifiedContextBuilder:
         for memory in memories_to_use:
             summary = memory.get("event_summary", "")
             event_date = memory.get("event_date")
-            
             if event_date:
-                memory_lines.append(f"- 用户在{event_date}表示{summary}")
+                event_summary = f"- 用户在{event_date}表示{summary}"
             else:
-                memory_lines.append(f"- {summary}")
-        
+                event_summary = f"- {summary}"
+            if event_summary not in memory_lines:
+                memory_lines.append(event_summary)
         return "\n".join(memory_lines)
     
     async def _generate_proactive_guidance(
