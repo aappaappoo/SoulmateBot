@@ -85,6 +85,10 @@ def _build_personalized_welcome(user_first_name: str, bot_config) -> str:
     Returns:
         个性化欢迎消息
     """
+    # 配置常量
+    MAX_PERSONALITY_ITEMS = 4  # 最多显示的性格/爱好项数
+    MAX_IDEALS_LENGTH = 100    # 理想描述的最大字符数
+    
     bot_name = bot_config.name
     description = bot_config.description or ""
     personality = bot_config.personality
@@ -92,13 +96,13 @@ def _build_personalized_welcome(user_first_name: str, bot_config) -> str:
     # 构建性格特点部分
     traits_text = ""
     if personality.traits:
-        traits_list = personality.traits[:4]  # 最多取4个特点
+        traits_list = personality.traits[:MAX_PERSONALITY_ITEMS]
         traits_text = "、".join(traits_list)
     
     # 构建爱好部分
     likes_text = ""
     if personality.likes:
-        likes_list = personality.likes[:4]  # 最多取4个爱好
+        likes_list = personality.likes[:MAX_PERSONALITY_ITEMS]
         likes_text = "、".join(likes_list)
     
     # 构建理想部分
@@ -126,8 +130,8 @@ def _build_personalized_welcome(user_first_name: str, bot_config) -> str:
     
     # 理想
     if ideals_text:
-        # 只取理想的前100个字符避免太长
-        short_ideals = ideals_text[:100] + "..." if len(ideals_text) > 100 else ideals_text
+        # 只取理想的前MAX_IDEALS_LENGTH个字符避免太长
+        short_ideals = ideals_text[:MAX_IDEALS_LENGTH] + "..." if len(ideals_text) > MAX_IDEALS_LENGTH else ideals_text
         welcome_lines.append(f"🌟 *我的理想*：{short_ideals}")
     
     welcome_lines.append("")

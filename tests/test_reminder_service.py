@@ -81,10 +81,10 @@ class ReminderParser:
     
     def _clean_content(self, content: str) -> str:
         # 移除开头的独立"要"或"去"字
-        if content.startswith("要") and len(content) > 1:
-            content = content[1:]
-        elif content.startswith("去") and len(content) > 1:
-            content = content[1:]
+        for prefix in ["要", "去"]:
+            if content.startswith(prefix) and len(content) > 1:
+                content = content[1:]
+                break
         content = content.rstrip("。！？!?")
         return content.strip()
 

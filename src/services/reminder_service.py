@@ -136,10 +136,10 @@ class ReminderParser:
         """清理提醒内容"""
         # 移除开头的独立"要"或"去"字
         # 仅当后面有内容且不会破坏词义时移除
-        if content.startswith("要") and len(content) > 1:
-            content = content[1:]
-        elif content.startswith("去") and len(content) > 1:
-            content = content[1:]
+        for prefix in ["要", "去"]:
+            if content.startswith(prefix) and len(content) > 1:
+                content = content[1:]
+                break
         # 移除结尾的标点符号
         content = content.rstrip("。！？!?")
         return content.strip()
