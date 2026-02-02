@@ -13,7 +13,7 @@ Integrated Message Handler with Agent Orchestrator
 """
 from src.services.voice_preference_service import voice_preference_service
 from src.services.tts_service import tts_service
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from sqlalchemy import select
@@ -314,6 +314,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     # 提取策略部分（去掉原始 system_prompt）
                     if base_system_prompt and enhanced_with_strategy.startswith(base_system_prompt):
                         dialogue_strategy_text = enhanced_with_strategy[len(base_system_prompt):].strip()
+
                 except Exception as e:
                     logger.warning(f"Error generating dialogue strategy: {e}", exc_info=True)
             
@@ -425,7 +426,20 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             else:
                 # 使用编排器的响应
                 response = result.final_response
-                
+                if isinstance(response, tuple):
+                    response = response[0] if response else ""
+                elif response is None:
+                    response = ""
+                parse_mode = None
+                if result.agent_responses:
+                    # 获取第一个 agent 的 parse_mode
+                    for agent_resp in result.agent_responses:
+                        if hasattr(agent_resp, 'metadata') and agent_resp.metadata:
+                            parse_mode = agent_resp.metadata.get('parse_mode')
+                            if parse_mode:
+                                break
+
+
                 # 发送回复（根据用户语音设置决定是语音还是文本）
                 message_type, _ = await send_voice_or_text_reply(
                     message=message,
@@ -433,7 +447,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     bot=selected_bot,
                     subscription_service=subscription_service if db_user else None,
                     db_user=db_user,
-                    user_id=update.effective_user.id if update.effective_user else None
+                    user_id=update.effective_user.id if update.effective_user else None,
+                    parse_mode=parse_mode
                 )
                 
                 # 保存对话到数据库

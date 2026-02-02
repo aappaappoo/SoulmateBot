@@ -15,7 +15,7 @@
 - 搜索结果缓存（减少重复查询）
 - 支持多种搜索提供商
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from loguru import logger
 
@@ -175,7 +175,7 @@ class SearchAgent(BaseAgent):
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """
         执行搜索并生成响应
-        
+
         处理流程:
         1. 提取搜索查询
         2. 执行搜索获取 top-k snippets
@@ -205,12 +205,20 @@ class SearchAgent(BaseAgent):
         # 生成响应
         if search_result.get("success"):
             response_content = self._generate_response(query, search_result, context)
+            if isinstance(response_content, tuple):
+                response_content, parse_mode = response_content
+            else:
+                response_content = response_content
+                parse_mode = None
+
             metadata = {
                 "search_query": query,
                 "snippets_count": len(search_result.get("snippets", [])),
                 "provider": search_result.get("provider"),
                 "cached": search_result.get("cached", False)
             }
+            if parse_mode:
+                metadata["parse_mode"] = parse_mode
         else:
             response_content = self._generate_error_response(query, search_result.get("error"))
             metadata = {
@@ -295,8 +303,11 @@ class SearchAgent(BaseAgent):
         if self._llm_provider:
             return self._generate_llm_response(query, snippets, context)
 
-        # 否则，使用模板生成回答
-        return self._generate_template_response(query, snippets, search_result)
+        # 解包元组，只返回字符串
+        template_result = self._generate_template_response(query, snippets, search_result)
+        if isinstance(template_result, tuple):
+            return template_result[0]  # 只返回响应文本，忽略 parse_mode
+        return template_result
 
     def _generate_llm_response(self, query: str, snippets: List[Dict],
                                context: ChatContext) -> str:
