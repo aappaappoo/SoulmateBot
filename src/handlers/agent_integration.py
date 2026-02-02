@@ -23,6 +23,7 @@ from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
 from src.services.conversation_memory_service import get_conversation_memory_service
 from src.utils.voice_helper import send_voice_or_text_reply
+from src.utils.config_helper import get_bot_values
 from src.models.database import Conversation
 from src.ai import conversation_service
 from src.agents import (
@@ -282,8 +283,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 应用动态对话策略（生成策略文本）
             dialogue_strategy_text = None
             # 获取 bot_config 中的 values 配置（如果存在）
-            bot_config = context.bot_data.get("bot_config")
-            bot_values = bot_config.values if bot_config else None
+            bot_values = get_bot_values(context)
             if conversation_history_for_builder:
                 try:
                     # 先生成对话策略
