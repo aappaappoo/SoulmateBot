@@ -18,6 +18,7 @@ from src.models.database import Bot as BotModel
 from src.bot.config_loader import BotConfigLoader, BotConfig
 from src.llm_gateway import get_llm_gateway
 from src.conversation import get_session_manager
+from src.services.reminder_scheduler import get_reminder_scheduler, start_reminder_scheduler, stop_reminder_scheduler
 from src.handlers import (
     start_command, help_command, status_command, subscribe_command,
     image_command, pay_basic_command, pay_premium_command, check_payment_command,
@@ -200,6 +201,10 @@ class MultiBotLauncher:
                 drop_pending_updates=True
             )
 
+            # 注册到提醒调度器
+            reminder_scheduler = get_reminder_scheduler()
+            reminder_scheduler.register_bot(bot_id, app.bot)
+
             logger.info(f"✅ Bot @{bot_username} is now polling for updates")
 
             # 保持运行
@@ -213,6 +218,9 @@ class MultiBotLauncher:
             if bot_id in self.running_bots:
                 self.running_bots[bot_id].error_count += 1
         finally:
+            # 从提醒调度器注销
+            reminder_scheduler = get_reminder_scheduler()
+            reminder_scheduler.unregister_bot(bot_id)
             await self.stop_bot(bot_id)
 
     async def load_bots_from_db(self) -> List[BotModel]:
@@ -335,6 +343,10 @@ class MultiBotLauncher:
 
         logger.info(f"🚀 Starting {len(bots)} bot(s)...")
 
+        # 启动提醒调度器
+        await start_reminder_scheduler()
+        logger.info("🔔 Reminder scheduler started")
+
         # 创建所有 Bot 的任务
         tasks = []
         for bot_db in bots:
@@ -367,6 +379,9 @@ class MultiBotLauncher:
     async def stop_all(self) -> None:
         """停止所有 Bot"""
         self._shutdown_event.set()
+
+        # 停止提醒调度器
+        await stop_reminder_scheduler()
 
         for bot_id in list(self.running_bots.keys()):
             await self.stop_bot(bot_id)

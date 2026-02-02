@@ -10,6 +10,7 @@ Integrated Message Handler with Agent Orchestrator
 4. 与现有消息处理流程无缝集成
 5. 支持语音回复功能（当Bot启用语音时）
 6. 对话记忆功能：保存重要事件，检索历史记忆
+7. 提醒功能：支持用户设置定时提醒
 """
 from typing import Optional, Dict, List
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -22,6 +23,7 @@ from src.subscription.async_service import AsyncSubscriptionService
 from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
 from src.services.conversation_memory_service import get_conversation_memory_service
+from src.services.reminder_service import ReminderService, format_reminder_confirmation
 from src.utils.voice_helper import send_voice_or_text_reply
 from src.utils.config_helper import get_bot_values
 from src.models.database import Conversation
@@ -177,7 +179,16 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             selected_bot = selected_mapping.bot
         logger.info(f"✅ Selected bot: @{selected_bot.bot_username}")
         # Store the system prompt for later use
-        system_prompt = selected_bot.system_prompt
+        # Priority: YAML config > database
+        bot_config = context.bot_data.get("bot_config")
+        if bot_config:
+            # Use system prompt from YAML config file
+            system_prompt = bot_config.get_system_prompt()
+            logger.info(f"📄 Using system prompt from YAML config for @{selected_bot.bot_username}")
+        else:
+            # Fallback to database
+            system_prompt = selected_bot.system_prompt
+            logger.info(f"💾 Using system prompt from database for @{selected_bot.bot_username}")
         try:
             # 检查用户和订阅状态
             user = update.effective_user
@@ -209,6 +220,27 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         "升级订阅以获取更多额度！\n\n"
                         "使用 /subscribe 查看订阅计划。"
                     )
+                    return
+
+            # 🔔 检查是否是提醒请求
+            if db_user:
+                reminder_service = ReminderService(db)
+                reminder = await reminder_service.parse_and_create_reminder(
+                    message=message_text,
+                    user_id=db_user.id,
+                    telegram_user_id=update.effective_user.id,
+                    chat_id=chat_id,
+                    bot_id=selected_bot.id if selected_bot else None
+                )
+                if reminder:
+                    # 计算提醒时间（分钟）
+                    time_diff = reminder.remind_at - datetime.utcnow()
+                    minutes = int(time_diff.total_seconds() / 60)
+                    confirmation = format_reminder_confirmation(minutes, reminder.reminder_text)
+                    await message.reply_text(confirmation)
+                    # 记录使用量
+                    await subscription_service.record_usage(db_user, action_type="message")
+                    logger.info(f"📅 Reminder set for user {db_user.id}: {reminder.reminder_text[:50]}...")
                     return
 
             # 发送typing指示
