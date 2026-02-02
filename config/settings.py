@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-v3"  # 嵌入模型名称
     memory_similarity_threshold: float = 0.5  # 记忆检索的最低相似度阈值
 
+    # Search Agent / SERP API Configuration (搜索代理配置)
+    serp_api_keys: str = ""  # 多个 SERP API keys，逗号分隔
+    serp_cache_ttl: int = 3600  # 搜索缓存过期时间（秒），默认1小时
+    serp_top_k: int = 5  # 返回搜索结果数量
+    serp_api_provider: str = "serpapi"  # 搜索API提供商：serpapi, google, bing
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
