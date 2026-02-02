@@ -231,7 +231,6 @@ class SearchAgent(BaseAgent):
         user_memory["last_query"] = query
         user_memory["last_search_time"] = datetime.now().isoformat()
         self.memory_write(message.user_id, user_memory)
-
         return AgentResponse(
             content=response_content,
             agent_name=self.name,
@@ -302,11 +301,7 @@ class SearchAgent(BaseAgent):
         # 如果有LLM提供者，使用LLM生成更自然的回答
         if self._llm_provider:
             return self._generate_llm_response(query, snippets, context)
-
-        # 解包元组，只返回字符串
         template_result = self._generate_template_response(query, snippets, search_result)
-        if isinstance(template_result, tuple):
-            return template_result[0]  # 只返回响应文本，忽略 parse_mode
         return template_result
 
     def _generate_llm_response(self, query: str, snippets: List[Dict],
@@ -359,10 +354,11 @@ class SearchAgent(BaseAgent):
             title = html.escape(snippet.get("title", "无标题"))
             text = html.escape(snippet.get("snippet", ""))
             link = snippet.get("link", "")
-            response += f"📌 <b>{i}. {title}</b>\n"  # HTML 加粗用 <b>
-            response += f"   {text}\n"
+            response += f"📌 <b>{i}. {title}</b>\n"
+            if text:
+                response += f"{text}\n"
             if link:
-                response += f'   🔗 <a href="{link}">查看详情</a>\n'  # HTML 链接
+                response += f'🔗 <a href="{html.escape(link)}">查看详情</a>\n'
             response += "\n"
         provider = search_result.get("provider", "unknown")
         if provider == "mock":

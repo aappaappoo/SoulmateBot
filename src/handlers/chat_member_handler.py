@@ -98,7 +98,7 @@ async def clear_user_conversation_async(
         except Exception as e:
             logger.warning(f"Failed to clear in-memory context: {e}")
 
-        # ========== 2. 清理 LLM 生成的对话摘要缓存（中期���要）==========
+        # ========== 2. 清理 LLM 生成的对话摘要缓存（中期）==========
         if bot_data is not None:
             try:
                 # 清理 LLM 摘要缓存 - 使用多种可能的 key 格式

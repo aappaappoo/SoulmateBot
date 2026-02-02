@@ -40,7 +40,7 @@ class ConversationCRUD:
         删除指定用户和Bot的所有聊天记录
 
         与 clear_user_bot_history 的区别：
-        - 此方法会删除所有该用户的���录，包括 session_id 为空的记录
+        - 此方法会删除所有该用户的对话记录，包括 session_id 为空的记录
         - 同时按 session_id 格式 "{user_id}_{bot_id}" 匹配和 session_id 为 NULL 的记录
 
         Args:

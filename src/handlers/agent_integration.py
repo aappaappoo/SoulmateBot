@@ -661,7 +661,7 @@ async def send_response_with_voice(
         voice_config: dict
 ):
     """
-    发送回复（根据用户偏好决定是��使用语音）
+    发送回复（根据用户偏好决定语音）
 
     Args:
         update: Telegram Update

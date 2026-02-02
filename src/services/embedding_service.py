@@ -539,7 +539,7 @@ def get_embedding_service() -> EmbeddingService:
         try:
             from config import settings
 
-            # 优先使用DashScope（如果��配置）
+            # 优先使用DashScope（如果env配置）
             if hasattr(settings, 'dashscope_api_key') and settings.dashscope_api_key and DASHSCOPE_AVAILABLE:
                 provider = DashScopeEmbeddingProvider(
                     api_key=settings.dashscope_api_key,

@@ -79,7 +79,7 @@ async def send_voice_or_text_reply(message,
         logger.info(
             f"📝 [VOICE FLOW 2/5] TEXT_REPLY: Sending text reply (voice disabled), message_count={len(messages)}")
         # 发送多条消息
-        await send_multi_text_messages(message, messages)
+        await send_multi_text_messages(message, messages, parse_mode=parse_mode)
         logger.info(f"📝 [VOICE FLOW 2/5] TEXT_REPLY: Text reply sent successfully")
         return "text", full_content
 
@@ -134,7 +134,7 @@ async def send_voice_or_text_reply(message,
             # 发送剩余的文本消息
             if remaining_msgs:
                 logger.info(f"📝 [VOICE FLOW 5/5] REMAINING_MSG: Sending {len(remaining_msgs)} remaining text messages")
-                await send_multi_text_messages(message, remaining_msgs)
+                await send_multi_text_messages(message, remaining_msgs, parse_mode=parse_mode)
 
             # 记录语音使用量
             if subscription_service and db_user:
@@ -146,7 +146,7 @@ async def send_voice_or_text_reply(message,
         else:
             # 语音生成失败，回退到文本（使用干净文本）
             logger.warning(f"⚠️ [VOICE FLOW 3/5] TTS_FAILED: Voice generation returned None, falling back to text")
-            await send_multi_text_messages(message, messages)
+            await send_multi_text_messages(message, messages, parse_mode=parse_mode)
             return "text", full_content
 
     except Exception as e:
@@ -156,7 +156,7 @@ async def send_voice_or_text_reply(message,
         return "text", full_content
 
 
-async def send_multi_text_messages(message, messages: list, delay_seconds: float = 0.5) -> None:
+async def send_multi_text_messages(message, messages: list, delay_seconds: float = 0.5, parse_mode=None) -> None:
     """
     发送多条文本消息，模拟真人聊天的节奏
     
@@ -176,7 +176,7 @@ async def send_multi_text_messages(message, messages: list, delay_seconds: float
         _, clean_text = extract_emotion_and_text(msg_text)
 
         if clean_text:
-            await message.reply_text(clean_text)
+            await message.reply_text(clean_text, parse_mode=parse_mode)
 
             # 在消息之间添加短暂延迟（模拟打字节奏），最后一条不延迟
             if i < len(messages) - 1:
