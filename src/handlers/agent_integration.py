@@ -23,6 +23,7 @@ from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
 from src.services.conversation_memory_service import get_conversation_memory_service
 from src.utils.voice_helper import send_voice_or_text_reply
+from src.utils.config_helper import get_bot_values
 from src.models.database import Conversation
 from src.ai import conversation_service
 from src.agents import (
@@ -281,6 +282,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
 
             # 应用动态对话策略（生成策略文本）
             dialogue_strategy_text = None
+            # 获取 bot_config 中的 values 配置（如果存在）
+            bot_values = get_bot_values(context)
             if conversation_history_for_builder:
                 try:
                     # 先生成对话策略
@@ -288,7 +291,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     enhanced_with_strategy = enhance_prompt_with_strategy(
                         original_prompt=base_system_prompt,
                         conversation_history=conversation_history_for_builder,
-                        current_message=message_text
+                        current_message=message_text,
+                        bot_values=bot_values
                     )
                     # 提取策略部分（去掉原始 system_prompt）
                     if base_system_prompt and enhanced_with_strategy.startswith(base_system_prompt):
@@ -588,64 +592,3 @@ async def handle_skills_command(update: Update, context: ContextTypes.DEFAULT_TY
 def get_skill_callback_handler() -> CallbackQueryHandler:
     """获取技能回调处理器，用于注册到Bot"""
     return CallbackQueryHandler(handle_skill_callback, pattern=r"^skill:")
-
-
-# async def send_response_with_voice(
-#         update: Update,
-#         context: ContextTypes.DEFAULT_TYPE,
-#         response_text: str,
-#         bot_username: str,
-#         voice_config: dict
-# ):
-#     """
-#     发送回复（根据用户偏好决定语音）
-#
-#     Args:
-#         update: Telegram Update
-#         context: Bot Context
-#         response_text: AI 回复文本
-#         bot_username: Bot 用户名
-#         voice_config: Bot 的语音配置
-#     """
-#     user_id = update.effective_user.id
-#
-#     # 检查用户是否通过 /voice_on 开启了语音回复
-#     # 用户的语音偏好设置优先级最高
-#     user_voice_enabled = voice_preference_service.is_voice_enabled(user_id, bot_username)
-#     if user_voice_enabled:
-#         # 用户开启了语音，尝试生成语音回复
-#         try:
-#             voice_id = voice_config.get("voice_id", "xiaoyan")
-#
-#             logger.info(f"Generating voice response for user {user_id}, voice_id={voice_id}")
-#             # 生成语音
-#             audio_data = await tts_service.generate_voice(
-#                 text=response_text,
-#                 voice_id=voice_id,
-#                 user_id=user_id
-#             )
-#             if audio_data:
-#                 # 发送语音消息
-#                 audio_buffer = tts_service.get_voice_as_buffer(audio_data)
-#                 await update.message.reply_voice(
-#                     voice=audio_buffer,
-#                     caption=response_text[:1024] if len(response_text) > 200 else None
-#                 )
-#                 logger.info(f"Voice response sent to user {user_id}")
-#                 return
-#             else:
-#                 logger.warning(f"Voice generation failed, falling back to text")
-#         except Exception as e:
-#             logger.error(f"Voice response error: {e}")
-#
-#     # 获取语音配置 (需要从某处获取，可以存在 context.bot_data 中)
-#     voice_config = context.bot_data.get("voice_config", {})
-#     bot_username = context.bot.username
-#
-#     await send_response_with_voice(
-#         update=update,
-#         context=context,
-#         response_text=response,
-#         bot_username=bot_username,
-#         voice_config=voice_config
-#     )

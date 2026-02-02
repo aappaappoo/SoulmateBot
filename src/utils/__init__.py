@@ -8,6 +8,7 @@ from .emotion_parser import (
     parse_llm_response_with_emotion,
     ParsedEmotionResponse,
 )
+from .config_helper import get_bot_values
 
 __all__ = [
     "send_voice_or_text_reply",
@@ -15,4 +16,5 @@ __all__ = [
     "strip_emotion_prefix",
     "parse_llm_response_with_emotion",
     "ParsedEmotionResponse",
+    "get_bot_values",
 ]

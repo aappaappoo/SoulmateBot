@@ -178,6 +178,9 @@ class MultiBotLauncher:
             }
             app.bot_data["bot_username"] = bot_username
 
+            # 存储 BotConfig 到 bot_data，供 handler 使用（包含 values 等配置）
+            app.bot_data["bot_config"] = bot_config
+
             # 设置处理器
             self.setup_handlers(app, bot_db, bot_config)
 
@@ -253,21 +256,6 @@ class MultiBotLauncher:
         logger.info(f"Voice handlers registered for @{bot_db.bot_username}")
 
         # ===== Bot 管理命令 =====
-        # app.add_handler(CommandHandler("list_bots", list_bots_command))
-        # app.add_handler(CommandHandler("add_bot", add_bot_command))
-        # app.add_handler(CommandHandler("remove_bot", remove_bot_command))
-        # app.add_handler(CommandHandler("my_bots", my_bots_command))
-        # app.add_handler(CommandHandler("config_bot", config_bot_command))
-        # app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
-        # app.add_handler(CommandHandler("my_feedback", my_feedback_command))
-        # app.add_handler(CommandHandler("skills", handle_skills_command))
-        # app.add_handler(get_skill_callback_handler())
-
-        app.add_handler(CommandHandler("subscribe", subscribe_command))
-        app.add_handler(CommandHandler("image", image_command))
-        app.add_handler(CommandHandler("pay_basic", pay_basic_command))
-        app.add_handler(CommandHandler("pay_premium", pay_premium_command))
-        app.add_handler(CommandHandler("check_payment", check_payment_command))
         app.add_handler(CommandHandler("list_bots", list_bots_command))
         app.add_handler(CommandHandler("add_bot", add_bot_command))
         app.add_handler(CommandHandler("remove_bot", remove_bot_command))

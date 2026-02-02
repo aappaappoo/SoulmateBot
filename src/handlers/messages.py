@@ -13,6 +13,7 @@ from src.subscription.async_service import AsyncSubscriptionService
 from src.services.async_channel_manager import AsyncChannelManagerService
 from src.services.message_router import MessageRouter
 from src.utils.voice_helper import send_voice_or_text_reply
+from src.utils.config_helper import get_bot_values
 from src.models.database import Conversation
 from src.ai import conversation_service
 from src.conversation.dialogue_strategy import enhance_prompt_with_strategy
@@ -97,12 +98,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await message.chat.send_action("typing")
                     try:
                         history = []
+                        # 获取 bot_config 中的 values 配置（如果存在）
+                        bot_values = get_bot_values(context)
                         if selected_bot.system_prompt:
                             # Channel messages have no conversation history, so pass empty list
                             enhanced_prompt = enhance_prompt_with_strategy(
                                 original_prompt=selected_bot.system_prompt,
                                 conversation_history=[],
-                                current_message=message_text
+                                current_message=message_text,
+                                bot_values=bot_values
                             )
                             history.insert(0, {"role": "system", "content": enhanced_prompt})
                         logger.info(f"🧠 [STEP 6/9] AI_REQUEST: Sending to AI service, history_length={len(history)}")
@@ -189,12 +193,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     history.append({"role": "assistant", "content": conv.response})
 
             try:
+                # 获取 bot_config 中的 values 配置（如果存在）
+                bot_values = get_bot_values(context)
                 # 添加系统提示（使用动态对话策略增强）
                 if selected_bot.system_prompt:
                     enhanced_prompt = enhance_prompt_with_strategy(
                         original_prompt=selected_bot.system_prompt,
                         conversation_history=history,
-                        current_message=message_text
+                        current_message=message_text,
+                        bot_values=bot_values
                     )
                     history.insert(0, {"role": "system", "content": enhanced_prompt})
 
