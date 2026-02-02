@@ -21,6 +21,7 @@ from loguru import logger
 
 from src.agents import BaseAgent, Message, ChatContext, AgentResponse, SQLiteMemoryStore
 from src.services.serp_api_service import serp_api_service
+from telegram.constants import ParseMode
 
 
 class SearchAgent(BaseAgent):
@@ -44,7 +45,7 @@ class SearchAgent(BaseAgent):
     - 多 API key 轮用避免限流
     - Redis 缓存热门查询结果
     """
-    
+
     def __init__(self, memory_store=None, llm_provider=None):
         """
         初始化搜索Agent
@@ -61,39 +62,39 @@ class SearchAgent(BaseAgent):
         )
         self._memory = memory_store or SQLiteMemoryStore()
         self._llm_provider = llm_provider
-        
+
         # 搜索相关的关键词库
         self._search_keywords = [
             # 时效性关键词
             "最新", "最近", "今天", "昨天", "现在", "刚刚", "实时",
             "latest", "recent", "today", "now", "current", "breaking",
-            
+
             # 新闻和动态
             "新闻", "动态", "消息", "资讯", "热点", "头条",
             "news", "update", "headline", "trending",
-            
+
             # 查询意图
             "搜索", "查询", "查一下", "查查", "搜一下", "找一下",
             "search", "find", "look up", "google",
-            
+
             # 信息获取
             "是什么", "什么是", "怎么样", "如何", "为什么",
             "what is", "how is", "why", "when", "where", "who",
-            
+
             # 事件和活动
             "发生", "事件", "活动", "比赛", "结果",
             "event", "match", "result", "game",
-            
+
             # 人物和组织
             "动态", "近况", "最新消息",
         ]
-        
+
         # 需要实时信息的话题类型
         self._realtime_topics = [
             "天气", "股票", "汇率", "比赛", "赛事", "选举",
             "发布会", "上市", "开售", "疫情", "政策"
         ]
-        
+
         # 搜索技能定义
         self._skills = ["web_search", "news_query", "realtime_info"]
         self._skill_keywords = {
@@ -106,31 +107,31 @@ class SearchAgent(BaseAgent):
             "news_query": "新闻查询，获取最新的新闻资讯",
             "realtime_info": "实时信息查询，获取最新的实时数据"
         }
-    
+
     @property
     def name(self) -> str:
         """Agent名称"""
         return self._name
-    
+
     @property
     def description(self) -> str:
         """Agent描述"""
         return self._description
-    
+
     @property
     def skills(self) -> List[str]:
         """Agent提供的技能列表"""
         return self._skills
-    
+
     @property
     def skill_keywords(self) -> Dict[str, List[str]]:
         """技能对应的关键词映射"""
         return self._skill_keywords
-    
+
     def get_skill_description(self, skill_id: str) -> Optional[str]:
         """获取指定技能的描述"""
         return self._skill_descriptions.get(skill_id)
-    
+
     def can_handle(self, message: Message, context: ChatContext) -> float:
         """
         判断是否能处理此消息
@@ -143,15 +144,15 @@ class SearchAgent(BaseAgent):
         # 检查@提及
         if message.has_mention(self.name):
             return 1.0
-        
+
         content = message.content.lower()
-        
+
         # 统计搜索关键词匹配数
         keyword_matches = sum(1 for keyword in self._search_keywords if keyword in content)
-        
+
         # 检查是否是需要实时信息的话题
         realtime_match = any(topic in content for topic in self._realtime_topics)
-        
+
         # 根据匹配数计算置信度
         if keyword_matches >= 3 or (keyword_matches >= 1 and realtime_match):
             confidence = 0.9
@@ -163,14 +164,14 @@ class SearchAgent(BaseAgent):
             confidence = 0.5
         else:
             confidence = 0.0
-        
+
         # 检查问号（询问类消息）
         if "?" in content or "？" in content:
             if keyword_matches > 0 or realtime_match:
                 confidence = min(1.0, confidence + 0.1)
-        
+
         return confidence
-    
+
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """
         执行搜索并生成响应
@@ -184,15 +185,15 @@ class SearchAgent(BaseAgent):
         # 读取用户历史
         user_memory = self.memory_read(message.user_id)
         search_count = user_memory.get("search_count", 0)
-        
+
         content = message.get_clean_content()
-        
+
         # 提取搜索查询（简单处理：直接使用用户输入）
         query = self._extract_query(content)
-        
+
         # 判断是否需要抓取网页内容
         fetch_content = self._should_fetch_content(content)
-        
+
         # 执行搜索
         logger.info(f"SearchAgent: Searching for: {query}")
         search_result = serp_api_service.search_with_content(
@@ -200,7 +201,7 @@ class SearchAgent(BaseAgent):
             fetch_content=fetch_content,
             use_cache=True
         )
-        
+
         # 生成响应
         if search_result.get("success"):
             response_content = self._generate_response(query, search_result, context)
@@ -216,13 +217,13 @@ class SearchAgent(BaseAgent):
                 "search_query": query,
                 "error": search_result.get("error")
             }
-        
+
         # 更新使用记录
         user_memory["search_count"] = search_count + 1
         user_memory["last_query"] = query
         user_memory["last_search_time"] = datetime.now().isoformat()
         self.memory_write(message.user_id, user_memory)
-        
+
         return AgentResponse(
             content=response_content,
             agent_name=self.name,
@@ -230,7 +231,7 @@ class SearchAgent(BaseAgent):
             metadata=metadata,
             should_continue=False
         )
-    
+
     def _extract_query(self, content: str) -> str:
         """
         从用户消息中提取搜索查询
@@ -248,16 +249,16 @@ class SearchAgent(BaseAgent):
             "搜一下", "找一下", "请问", "告诉我", "我想知道",
             "search for", "look up", "find", "google"
         ]
-        
+
         for phrase in remove_phrases:
             query = query.replace(phrase, "").strip()
-        
+
         # 如果处理后太短，使用原始内容
         if len(query) < 2:
             query = content
-        
+
         return query
-    
+
     def _should_fetch_content(self, content: str) -> bool:
         """
         判断是否需要抓取网页详细内容
@@ -271,9 +272,9 @@ class SearchAgent(BaseAgent):
         # 如果用户明确要求详细信息，则抓取
         detail_keywords = ["详细", "具体", "完整", "全部", "更多", "详情"]
         return any(keyword in content for keyword in detail_keywords)
-    
-    def _generate_response(self, query: str, search_result: Dict[str, Any], 
-                          context: ChatContext) -> str:
+
+    def _generate_response(self, query: str, search_result: Dict[str, Any],
+                           context: ChatContext) -> str:
         """
         基于搜索结果生成响应
         
@@ -286,18 +287,18 @@ class SearchAgent(BaseAgent):
             str: 生成的响应文本
         """
         snippets = search_result.get("snippets", [])
-        
+
         if not snippets:
             return f"🔍 抱歉，没有找到关于「{query}」的相关信息。\n请尝试换一个关键词搜索。"
-        
+
         # 如果有LLM提供者，使用LLM生成更自然的回答
         if self._llm_provider:
             return self._generate_llm_response(query, snippets, context)
-        
+
         # 否则，使用模板生成回答
         return self._generate_template_response(query, snippets, search_result)
-    
-    def _generate_llm_response(self, query: str, snippets: List[Dict], 
+
+    def _generate_llm_response(self, query: str, snippets: List[Dict],
                                context: ChatContext) -> str:
         """
         使用LLM基于搜索结果生成回答
@@ -317,7 +318,7 @@ class SearchAgent(BaseAgent):
             snippets_text += f"摘要: {snippet.get('snippet', '')}\n"
             if snippet.get('full_content'):
                 snippets_text += f"详细内容: {snippet.get('full_content', '')[:500]}...\n"
-        
+
         prompt = f"""基于以下搜索结果，回答用户的问题。
 
 用户问题: {query}
@@ -327,7 +328,7 @@ class SearchAgent(BaseAgent):
 
 请综合以上信息，生成一个准确、有帮助的回答。如果搜索结果不足以完整回答问题，请说明。
 请用友好、专业的语气回答，适当引用信息来源。"""
-        
+
         try:
             # 调用LLM生成回答
             response = self._llm_provider.generate(prompt)
@@ -335,41 +336,29 @@ class SearchAgent(BaseAgent):
         except Exception as e:
             logger.error(f"LLM generation error: {e}")
             return self._generate_template_response(query, snippets, {})
-    
-    def _generate_template_response(self, query: str, snippets: List[Dict], 
-                                    search_result: Dict[str, Any]) -> str:
+
+    def _generate_template_response(self, query: str, snippets: List[Dict],
+                                    search_result: Dict[str, Any]) -> Tuple[str, str]:
         """
-        使用模板生成响应（不使用LLM时的后备方案）
-        
-        参数:
-            query: 搜索查询
-            snippets: 搜索结果摘要列表
-            search_result: 完整搜索结果
-            
-        返回值:
-            str: 模板生成的响应
+        使用模板生成响应（HTML格式）
         """
-        response = f"🔍 关于「{query}」的搜索结果：\n\n"
-        
+        import html
+        response = f"🔍 关于「{html.escape(query)}」的搜索结果：\n\n"
         for i, snippet in enumerate(snippets, 1):
-            title = snippet.get("title", "无标题")
-            text = snippet.get("snippet", "")
+            title = html.escape(snippet.get("title", "无标题"))
+            text = html.escape(snippet.get("snippet", ""))
             link = snippet.get("link", "")
-            
-            response += f"📌 **{i}. {title}**\n"
+            response += f"📌 <b>{i}. {title}</b>\n"  # HTML 加粗用 <b>
             response += f"   {text}\n"
             if link:
-                response += f"   🔗 [查看详情]({link})\n"
+                response += f'   🔗 <a href="{link}">查看详情</a>\n'  # HTML 链接
             response += "\n"
-        
         provider = search_result.get("provider", "unknown")
         if provider == "mock":
             response += "\n⚠️ 注意：这是模拟搜索结果。请配置真实的 SERP API key 获取实际搜索结果。"
-        
         response += f"\n📅 搜索时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        
-        return response
-    
+        return response, ParseMode.HTML
+
     def _generate_error_response(self, query: str, error: str) -> str:
         """
         生成错误响应
@@ -386,7 +375,7 @@ class SearchAgent(BaseAgent):
             f"❌ {error}\n\n"
             "请稍后重试，或者尝试换一个关键词搜索。"
         )
-    
+
     def memory_read(self, user_id: str) -> Dict[str, Any]:
         """
         读取用户的搜索历史
@@ -397,7 +386,7 @@ class SearchAgent(BaseAgent):
         - last_search_time: 最后搜索时间
         """
         return self._memory.read(self.name, user_id)
-    
+
     def memory_write(self, user_id: str, data: Dict[str, Any]) -> None:
         """
         保存用户的搜索历史
@@ -405,7 +394,7 @@ class SearchAgent(BaseAgent):
         用于统计和个性化服务
         """
         self._memory.write(self.name, user_id, data)
-    
+
     def get_search_stats(self) -> Dict[str, Any]:
         """
         获取搜索服务统计信息

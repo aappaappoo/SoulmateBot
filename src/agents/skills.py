@@ -97,16 +97,16 @@ class SkillRegistry:
                 keywords=["代码", "编程", "bug", "错误", "code", "python", "javascript"],
                 priority=9
             ),
-            Skill(
-                id="tool_query",
-                name="实用工具",
-                description="天气查询、时间查询、计算等实用功能",
-                category=SkillCategory.TOOLS,
-                icon="🔧",
-                agent_name="ToolAgent",
-                keywords=["天气", "时间", "计算", "翻译", "weather", "time"],
-                priority=8
-            ),
+            # Skill(
+            #     id="tool_query",
+            #     name="实用工具",
+            #     description="天气查询、时间查询、计算等实用功能",
+            #     category=SkillCategory.TOOLS,
+            #     icon="🔧",
+            #     agent_name="ToolAgent",
+            #     keywords=["天气", "时间", "计算", "翻译", "weather", "time"],
+            #     priority=8
+            # ),
             Skill(
                 id="finance_advisor",
                 name="金融理财",

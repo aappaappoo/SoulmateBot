@@ -396,7 +396,7 @@ class SerpApiService:
         SerpAPI 官网: https://serpapi.com/
         """
         try:
-            url = "https://serpapi.com/search"
+            url = "https://www.searchapi.io/api/v1/search"
             params = {
                 "q": query,
                 "api_key": api_key,
@@ -405,7 +405,6 @@ class SerpApiService:
                 "gl": "cn",  # 中国区域
                 "hl": "zh-cn"  # 中文
             }
-            
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
