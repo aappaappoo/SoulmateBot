@@ -83,8 +83,42 @@ EMOTION_KEYWORDS = {
 # 多消息回复指令
 # Multi-message reply instruction for more human-like responses
 MULTI_MESSAGE_INSTRUCTION = """
+请严格按以下JSON格式回复：
+```json
+{{
+    "intent": "direct_response" | "single_agent" | "multi_agent",
+    "agents": [],
+    "reasoning": "判断理由",
+    
+    "conversation_summary": {{
+        "summary_text": "综合整个对话的摘要文本（100字以内）",
+        "key_elements": {{
+            "time": ["时间点1", "时间点2"],
+            "place": ["地点1", "地点2"],
+            "people": ["人物1", "人物2"],
+            "events": ["事件1", "事件2"],
+            "emotions": ["情绪1", "情绪2"]
+        }},
+        "topics": ["话题1", "话题2", "话题3"],
+        "user_state": "用户当前状态描述"
+    }},
+    
+    "direct_reply": "纯文本回复内容，不包含语气标注",
+    "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
+    "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
+    "memory": {{
+        "is_important": false,
+        "importance_level": "low" | "medium" | "high" | null,
+        "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
+        "event_summary": "事件摘要" | null,
+        "keywords": [],
+        "event_date": "YYYY-MM-DD" | null,
+        "raw_date_expression": "原始时间表达" | null
+    }}
+}}
+```
 =========================
-📝 回复格式说明
+📝 纯文本回复内容，格式说明
 =========================
 为了让对话更加自然，你可以日常使用1句话来回复，但偶尔选择将回复分成多条消息发送。
 
@@ -765,10 +799,6 @@ class DialogueStrategyInjector:
         dimensions = bot_values.dimensions
         preferences = bot_values.response_preferences
         stances = bot_values.stances
-        print("-------------")
-        print(dimensions)
-        print(preferences)
-        print(stances)
         guidance = """
 =========================
 🎭 你的价值观和立场

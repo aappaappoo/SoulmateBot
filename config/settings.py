@@ -13,6 +13,10 @@ class Environment(str, Enum):
 
 
 class Settings(BaseSettings):
+    # 日志配置
+    log_level: str = "DEBUG"
+    console_log_level: str = "DEBUG"
+    file_log_level: str = "DEBUG"
     # Telegram Configuration
     telegram_bot_token: Optional[str] = None
     telegram_webhook_url: Optional[str] = None
@@ -24,8 +28,10 @@ class Settings(BaseSettings):
     # AI Provider Configuration
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4"
+
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-3-sonnet-20240229"
+
     vllm_api_url: Optional[str] = None
     vllm_api_token: Optional[str] = None
     vllm_model: str = "default"
@@ -37,7 +43,7 @@ class Settings(BaseSettings):
     # Application Configuration
     app_env: Environment = Environment.DEVELOPMENT
     debug: bool = True
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"
     sql_echo: bool = False  # Enable to show SQLAlchemy SQL statements in logs
 
     # Subscription Configuration
@@ -69,12 +75,6 @@ class Settings(BaseSettings):
     # Voice/TTS Configuration
     openai_tts_model: str = "tts-1"  # OpenAI TTS模型：tts-1 或 tts-1-hd
     default_voice_id: str = "alloy"  # 默认语音音色：alloy, echo, fable, onyx, nova, shimmer
-
-    # iFlytek (科大讯飞) TTS Configuration
-    iflytek_app_id: Optional[str] = None  # 讯飞应用ID
-    iflytek_api_key: Optional[str] = None  # 讯飞API Key
-    iflytek_api_secret: Optional[str] = None  # 讯飞API Secret
-    default_iflytek_voice_id: str = "xiaoyan"  # 默认讯飞语音音色
 
     # Qwen (通义千问) TTS Configuration - 阿里云 DashScope
     dashscope_api_key: Optional[str] = None  # DashScope API Key

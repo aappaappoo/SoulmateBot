@@ -623,7 +623,7 @@ class ProactiveDialogueStrategyAnalyzer:
 - 策略：{action.suggestion}
 - 语气：{action.tone_guidance}
 
-【可以这样问】
+【可以这样回复】
 """
         for i, question in enumerate(action.example_questions, 1):
             guidance += f"{i}. {question}\n"

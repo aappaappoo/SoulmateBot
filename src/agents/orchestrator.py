@@ -145,7 +145,7 @@ class AgentOrchestrator:
     用户消息：{user_message}
 
     请严格按以下JSON格式回复：
-    ```json
+    ```
     {{
         "intent": "direct_response" | "single_agent" | "multi_agent",
         "agents": [],
@@ -176,8 +176,7 @@ class AgentOrchestrator:
             "event_date": "YYYY-MM-DD" | null,
             "raw_date_expression": "原始时间表达" | null
         }}
-    }}
-    ```"""
+    }}```"""
     def __init__(
         self,
         agents: List[BaseAgent],
@@ -273,7 +272,7 @@ class AgentOrchestrator:
             )
             messages.append({
                 "role": "user",
-                "content": prompt
+                "content": message.content
             })
             
             # 添加日志，方便调试

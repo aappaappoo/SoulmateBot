@@ -440,16 +440,15 @@ class UnifiedContextBuilder:
             完整的消息列表
         """
         messages = []
-        
         # 1. System prompt
         messages.append({
             "role": "system",
             "content": system_prompt
         })
-        
-        # 2. Short-term history
-        messages.extend(short_term_history)
-        
+        # 2. Short-term history（过滤，只保留 user/assistant）
+        for msg in short_term_history:
+            if msg.get("role") in ("user", "assistant"):
+                messages.append(msg)
         # 3. Current message
         messages.append({
             "role": "user",

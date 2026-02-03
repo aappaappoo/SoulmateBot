@@ -470,7 +470,7 @@ class ConversationMemoryService:
     """
 
     # 用于判断重要性的系统提示词（更新以支持更灵活的日期提取）
-    IMPORTANCE_ANALYSIS_PROMPT = """你是一个智能记忆分析助手。你的任务是分析用户和AI助手之间的对话，判断是否包含值得记住的重要事件。
+    IMPORTANCE_ANALYSIS_PROMPT = """请帮我判断是否包含值得记住的重要事件。
 
     重要事件包括（以下的事件重要度为中等以及以上）：
     - 个人信息：生日、年龄、职业、家庭成员、居住地等
@@ -506,7 +506,7 @@ class ConversationMemoryService:
     只返回JSON，不要其他内容。"""
 
     # 用于检索相关记忆的系统提示词
-    MEMORY_RETRIEVAL_PROMPT = """你是一个智能记忆检索助手。根据用户当前的消息，从历史记忆中找出最相关的记忆。
+    MEMORY_RETRIEVAL_PROMPT = """需要根据用户当前的消息，从历史记忆中找出最相关的记忆。
 
     请分析当前消息可能需要回忆的内容类型，例如：
     - 用户询问"你还记得我吗"时，需要回忆用户的基本信息

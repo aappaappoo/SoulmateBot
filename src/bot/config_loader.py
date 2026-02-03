@@ -162,7 +162,7 @@ class ValuesConfig:
     """Bot价值观系统配置"""
     dimensions: ValueDimensionsConfig = field(default_factory=ValueDimensionsConfig)
     response_preferences: ResponsePreferencesConfig = field(default_factory=ResponsePreferencesConfig)
-    stances: StanceConfig = field(default_factory=StanceConfig)
+    stances: List[StanceConfig] = field(default_factory=list)
     default_behavior: str = "curious"  # 遇到没有预设立场的话题: curious/neutral/avoid
 
 
@@ -232,7 +232,7 @@ class BotConfig:
         if p.name:
             basic_info = f"你的名字是{p.name}"
             if p.gender:
-                basic_info += f"，你是一名{p.appearance.avatar}"
+                basic_info += f"，你是{p.appearance.avatar}"
             sections.append(basic_info + "。")
 
         # 基础人设描述
@@ -286,7 +286,7 @@ class BotConfig:
             if p.speaking_style.get("formality"):
                 style_parts.append(f"正式程度：{p.speaking_style['formality']}")
             if p.speaking_style.get("use_emoji"):
-                emoji_text = "适当使用emoji" if p.speaking_style.get("emoji_frequency") == "moderate" else "使用emoji"
+                emoji_text = "适当使用emoji" if p.speaking_style.get("emoji_frequency") == "moderate" else "偶尔使用emoji"
                 style_parts.append(emoji_text)
 
             if p.speaking_style.get("avoid"):
@@ -588,7 +588,6 @@ class BotConfigLoader:
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
-
             config = BotConfig(
                 # Bot人格配置 - 包含性格、外貌、口头禅、理想、爱好等
                 personality=self._parse_personality_config(data.get("personality", {})),
@@ -605,8 +604,7 @@ class BotConfigLoader:
                 # 元数据
                 version=data.get("metadata", {}).get("version", "1.0.0"),
                 # Bot价值观系统配置 - 价值观和立场
-                values=self._parse_values_config(data.get("values", {})),
-
+                values=self._parse_values_config(data.get("values", {}) or data.get("personality", {}).get("values", {})),
                 config_path=config_path,
                 messages=self._parse_messages_config(data.get("messages", {})),
                 agents=self._parse_agents_config(data.get("agents", {}))

@@ -174,7 +174,6 @@ personality:
       optimism: 5          # 务实，不过度乐观也不悲观
       depth_preference: 6  # 能深聊，喜欢有内容的对话
 
-    # 预设立场
     stances:
       - topic: "加班文化"
         position: "反对无效加班，效率比时长重要。该下班就下班，别把生活都搭进去。"

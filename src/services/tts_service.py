@@ -70,22 +70,14 @@ class TTSService:
         
         # 确定TTS提供商（默认使用 Qwen）
         self.provider = settings.tts_provider.lower() if hasattr(settings, 'tts_provider') else "qwen"
-        
-        if self.provider == "iflytek":
-            self.default_voice = settings.default_iflytek_voice_id if hasattr(settings, 'default_iflytek_voice_id') else "xiaoyan"
-            # 延迟导入讯飞TTS服务
-            from .iflytek_tts_service import iflytek_tts_service
-            self._iflytek_service = iflytek_tts_service
-            self._qwen_service = None
-        elif self.provider == "qwen":
+
+        if self.provider == "qwen":
             self.default_voice = settings.default_qwen_voice_id if hasattr(settings, 'default_qwen_voice_id') else "Cherry"
             # 延迟导入 Qwen TTS 服务
             from .qwen_tts_service import qwen_tts_service
             self._qwen_service = qwen_tts_service
-            self._iflytek_service = None
         else:
             self.default_voice = settings.default_voice_id
-            self._iflytek_service = None
             self._qwen_service = None
         
         self.model = settings.openai_tts_model

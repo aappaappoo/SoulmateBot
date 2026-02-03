@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from loguru import logger
-import json
 
 
 @dataclass
@@ -49,12 +48,43 @@ class Session:
     user_id: str
     bot_id: str
     messages: List[Message] = field(default_factory=list)
+    system_prompt: Optional[str] = None
     context: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
+    max_messages: int = 50  # 最大消息数限制
     is_active: bool = True
-    
+
+    def _trim_messages(self) -> None:
+        """
+        修剪消息列表，保持在最大限制内
+
+        只保留最近的 max_messages 条消息
+        """
+        if len(self.messages) > self.max_messages:
+            # 保留最新的消息
+            self.messages = self.messages[-self.max_messages:]
+
+    def set_system_prompt(self, content: str) -> None:
+        """设置系统提示词（不放入消息列表）"""
+        self.system_prompt = content
+        self.updated_at = datetime.now(timezone.utc)
+
+    def add_user_message(self, content: str, metadata: Optional[Dict] = None) -> Message:
+        """添加用户消息"""
+        message = Message(role="user", content=content, metadata=metadata or {})
+        self.messages.append(message)
+        self._trim_messages()
+        return message
+
+    def add_assistant_message(self, content: str, metadata: Optional[Dict] = None) -> Message:
+        """添加助手回复"""
+        message = Message(role="assistant", content=content, metadata=metadata or {})
+        self.messages.append(message)
+        self._trim_messages()
+        return message
+
     def add_message(self, role: str, content: str, metadata: Optional[Dict] = None) -> Message:
         """添加消息到会话"""
         message = Message(
@@ -65,18 +95,7 @@ class Session:
         self.messages.append(message)
         self.updated_at = datetime.now(timezone.utc)
         return message
-    
-    def add_user_message(self, content: str, metadata: Optional[Dict] = None) -> Message:
-        """添加用户消息"""
-        return self.add_message("user", content, metadata)
-    
-    def add_assistant_message(self, content: str, metadata: Optional[Dict] = None) -> Message:
-        """添加助手回复"""
-        return self.add_message("assistant", content, metadata)
-    
-    def add_system_message(self, content: str, metadata: Optional[Dict] = None) -> Message:
-        """添加系统消息"""
-        return self.add_message("system", content, metadata)
+
     
     def get_messages(self, limit: Optional[int] = None) -> List[Message]:
         """获取消息列表"""
@@ -84,11 +103,23 @@ class Session:
             return self.messages[-limit:]
         return self.messages
     
+
     def get_messages_for_llm(self, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """获取适用于LLM API的消息格式"""
-        messages = self.get_messages(limit)
-        return [msg.to_dict() for msg in messages]
-    
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        history = self.get_messages(limit)
+        for msg in history:
+            if msg.role in ("user", "assistant"):
+                messages.append(msg.to_dict())
+        return messages
+
+    def get_conversation_history(self, limit: Optional[int] = None) -> List[Dict[str, str]]:
+        """获取纯对话历史（不含 system prompt）"""
+        history = self.get_messages(limit)
+        return [msg.to_dict() for msg in history if msg.role in ("user", "assistant")]
+
     def get_last_message(self) -> Optional[Message]:
         """获取最后一条消息"""
         return self.messages[-1] if self.messages else None

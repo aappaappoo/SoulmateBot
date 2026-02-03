@@ -3,7 +3,7 @@ Main bot entry point - Async Version
 """
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from loguru import logger
-
+import sys
 from config import settings
 from src.database import init_async_db, close_async_db
 from src.handlers.commands import (
@@ -45,6 +45,21 @@ from src.handlers.agent_integration import (
     get_skill_callback_handler
 )
 
+logger.remove()
+
+# 控制台
+logger.add(
+    sys.stdout,
+    level=settings.console_log_level,
+    colorize=True
+)
+
+# 文件
+logger.add(
+    "logs/{time}.log",
+    level=settings.file_log_level,
+    rotation="1 day"
+)
 
 class SoulmateBot:
     """
