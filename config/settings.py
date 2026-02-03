@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     telegram_bot_token: Optional[str] = None
     telegram_webhook_url: Optional[str] = None
 
+    # Proxy Configuration (代理配置)
+    http_proxy: Optional[str] = "http://127.0.0.1:7890"
+    https_proxy: Optional[str] = "http://127.0.0.1:7890"
+
     # AI Provider Configuration
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4"

@@ -28,39 +28,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Bot类型模板
 BOT_TEMPLATES: Dict[str, Dict[str, Any]] = {
-    "companion": {
-        "description": "情感陪伴类机器人",
-        "traits": ["温柔耐心", "高度共情", "稳定可靠", "真诚自然"],
-        "features": ["emotional_support", "daily_companion", "mood_tracking", "conversation_memory"],
-        "temperature": 0.8,
-        "agent": "EmotionalAgent",
-    },
     "assistant": {
         "description": "通用助手类机器人",
         "traits": ["高效专业", "逻辑清晰", "知识渊博", "有耐心"],
         "features": ["general_qa", "task_assistance", "information_lookup", "conversation_memory"],
         "temperature": 0.7,
-        "agent": "TechAgent",
-    },
-    "expert": {
-        "description": "领域专家类机器人",
-        "traits": ["专业严谨", "深度分析", "细致入微", "权威可信"],
-        "features": ["domain_expertise", "detailed_analysis", "professional_advice", "conversation_memory"],
-        "temperature": 0.6,
-        "agent": "TechAgent",
-    },
-    "creative": {
-        "description": "创意类机器人",
-        "traits": ["想象力丰富", "幽默风趣", "感性细腻", "灵感充沛"],
-        "features": ["creative_writing", "brainstorming", "content_creation", "conversation_memory"],
-        "temperature": 0.9,
-        "agent": "EmotionalAgent",
-    },
-    "research": {
-        "description": "研究助手类机器人",
-        "traits": ["严谨求实", "善于分析", "知识渊博", "逻辑清晰"],
-        "features": ["paper_analysis", "research_summary", "web_search", "conversation_memory"],
-        "temperature": 0.5,
         "agent": "TechAgent",
     },
 }

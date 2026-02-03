@@ -126,7 +126,7 @@ class UnifiedContextBuilder:
         
         # 1. 分割对话历史
         short_term, mid_term = self._split_history(conversation_history)
-        logger.debug(f"历史分割: 短期={len(short_term)}条, 中期={len(mid_term)}条")
+        logger.debug(f"分割对话历史: 短期={len(short_term)}条, 中期={len(mid_term)}条")
         
         # 2. 生成中期摘要（如果有中期对话）
         mid_term_summary = None
@@ -136,7 +136,7 @@ class UnifiedContextBuilder:
                 use_llm=self.config.use_llm_summary,
                 max_summary_length=self.config.max_summary_length
             )
-            logger.debug(f"中期摘要: {mid_term_summary.summary_text[:50]}...")
+            logger.debug(f"生成中期摘要: {mid_term_summary.summary_text[:50]}...")
         
         # 3. 格式化长期记忆
         memory_context = self._format_memories(user_memories)
