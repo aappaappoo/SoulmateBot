@@ -764,7 +764,11 @@ class DialogueStrategyInjector:
         """
         dimensions = bot_values.dimensions
         preferences = bot_values.response_preferences
-        
+        stances = bot_values.stances
+        print("-------------")
+        print(dimensions)
+        print(preferences)
+        print(stances)
         guidance = """
 =========================
 🎭 你的价值观和立场
@@ -778,7 +782,6 @@ class DialogueStrategyInjector:
             guidance += "\n- 你偏感性，更关注情感和直觉"
         elif dimensions.rationality >= 7:
             guidance += "\n- 你偏理性，更注重逻辑和分析"
-        
         # 保守 vs 开放
         if dimensions.openness <= 3:
             guidance += "\n- 你比较保守，谨慎对待新事物"
@@ -820,9 +823,9 @@ class DialogueStrategyInjector:
             guidance += "\n- 你善用幽默化解分歧"
         
         # 预设立场
-        if bot_values.stances:
+        if stances:
             guidance += "\n\n【你的一些观点】"
-            for stance in bot_values.stances[:3]:  # 只显示前3个
+            for stance in stances[:]:  # 只显示前3个
                 guidance += f"\n- 关于{stance.topic}：{stance.position}"
         
         guidance += "\n\n注意：这些特征是你的个性，但不要刻意表现，自然融入对话即可。"

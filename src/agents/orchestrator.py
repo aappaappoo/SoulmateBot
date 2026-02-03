@@ -91,7 +91,7 @@ class AgentOrchestrator:
     # 支持的情感标签
     SUPPORTED_EMOTIONS = ["happy", "gentle", "sad", "excited", "angry", "crying"]
     
-    UNIFIED_PROMPT_TEMPLATE = """你是一个智能助手，需要同时完成四项任务：
+    UNIFIED_PROMPT_TEMPLATE = """需要同时完成四项任务：
 
     ## 任务1：意图识别
     判断用户消息应该如何处理：

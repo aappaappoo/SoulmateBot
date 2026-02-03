@@ -161,8 +161,8 @@ class ResponsePreferencesConfig:
 class ValuesConfig:
     """Bot价值观系统配置"""
     dimensions: ValueDimensionsConfig = field(default_factory=ValueDimensionsConfig)
-    stances: List[StanceConfig] = field(default_factory=list)
     response_preferences: ResponsePreferencesConfig = field(default_factory=ResponsePreferencesConfig)
+    stances: StanceConfig = field(default_factory=StanceConfig)
     default_behavior: str = "curious"  # 遇到没有预设立场的话题: curious/neutral/avoid
 
 
@@ -173,6 +173,14 @@ class VoiceConfig:
     """
     enabled: bool = False  # 是否启用语音回复
     voice_id: str = "xiaoyan"  # 语音音色ID（默认使用Qwen）
+
+
+@dataclass
+class PromptConfig:
+    """系统提示词配置"""
+    template: str = ""  # 预定义模板名称（可选）
+    custom: str = ""  # 自定义系统提示词
+    variables: Dict[str, Any] = field(default_factory=dict)  # 模板变量
 
 
 @dataclass
@@ -187,6 +195,9 @@ class BotConfig:
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     agents: AgentsConfig = field(default_factory=AgentsConfig)
     messages: MessagesConfig = field(default_factory=MessagesConfig)
+
+    # 系统提示词配置
+    prompt: PromptConfig = field(default_factory=PromptConfig)
 
     # Bot人格配置 - 定义Bot的独特个性
     personality: PersonalityConfig = field(default_factory=PersonalityConfig)
@@ -203,6 +214,184 @@ class BotConfig:
     # 元数据
     version: str = "1.0.0"
     config_path: Optional[Path] = None
+
+    def _build_personality_prompt(self) -> str:
+        """
+        从personality配置构建人设提示词
+
+        优先从配置文件中加载所有可用的人设内容。
+        对于空的或缺失的配置字段，该部分将被跳过。
+
+        Returns:
+            包含完整人设的提示词字符串
+        """
+        p = self.personality
+        sections = ["## 你现在是正常人类, 拥有独立人格不是任何人的助理。\n"]
+
+        # 基础信息
+        if p.name:
+            basic_info = f"你的名字是{p.name}"
+            if p.gender:
+                basic_info += f"，你是一名{p.appearance.avatar}"
+            sections.append(basic_info + "。")
+
+        # 基础人设描述
+        if p.character:
+            sections.append(f"\n## 基础人设\n{p.character}")
+
+        # 性格特点
+        if p.traits:
+            traits_text = "、".join(p.traits)
+            sections.append(f"\n## 性格特点\n{traits_text}")
+
+        # 外貌特征
+        if p.appearance and p.appearance.physical_description:
+            appearance_section = f"\n## 外貌特征\n{p.appearance.physical_description}"
+            if p.appearance.style:
+                appearance_section += f"\n穿着风格：{p.appearance.style}"
+            if p.appearance.distinctive_features:
+                features_text = "、".join(p.appearance.distinctive_features)
+                appearance_section += f"\n独特特征：{features_text}"
+            sections.append(appearance_section)
+
+        # 口头禅
+        if p.catchphrases:
+            catchphrases_text = "」「".join(p.catchphrases)
+            sections.append(f"\n## 口头禅\n常说的话包括：「{catchphrases_text}」")
+
+        # 人生规划和理想
+        if p.life_goals:
+            goals_text = "\n".join([f"- {goal}" for goal in p.life_goals])
+            sections.append(f"\n## 人生规划\n{goals_text}")
+
+        # 喜好
+        if p.likes:
+            likes_text = "、".join(p.likes)
+            sections.append(f"\n## 喜欢的事物\n{likes_text}")
+
+        # 讨厌点
+        if p.dislikes:
+            dislikes_text = "、".join(p.dislikes)
+            sections.append(f"\n## 讨厌的事物\n{dislikes_text}")
+
+        # 居住环境
+        if p.living_environment:
+            sections.append(f"\n## 居住环境\n{p.living_environment}")
+
+        # 语言风格
+        if p.speaking_style:
+            style_parts = []
+            if p.speaking_style.get("tone"):
+                style_parts.append(f"语气：{p.speaking_style['tone']}")
+            if p.speaking_style.get("formality"):
+                style_parts.append(f"正式程度：{p.speaking_style['formality']}")
+            if p.speaking_style.get("use_emoji"):
+                emoji_text = "适当使用emoji" if p.speaking_style.get("emoji_frequency") == "moderate" else "使用emoji"
+                style_parts.append(emoji_text)
+
+            if p.speaking_style.get("avoid"):
+                avoid_text = "、".join(p.speaking_style["avoid"])
+                style_parts.append(f"避免使用：{avoid_text}")
+
+            if p.speaking_style.get("sentence_length"):
+                sentence_length = "回复类型：" + "短句居多，节奏快" if p.speaking_style.get(
+                    "sentence_length") == "short" else "无特别点"
+                style_parts.append(sentence_length)
+
+            if style_parts:
+                sections.append(f"\n## 语言风格\n" + "\n".join([f"- {s}" for s in style_parts]))
+
+        # 交互偏好
+        if p.interaction_style:
+            interaction_parts = []
+            if p.interaction_style.get("ask_clarifying_questions"):
+                interaction_parts.append("会适时询问澄清问题")
+            if p.interaction_style.get("provide_examples"):
+                interaction_parts.append("喜欢用例子说明")
+            if p.interaction_style.get("use_analogies"):
+                interaction_parts.append("善于使用类比")
+            if p.interaction_style.get("encourage_user"):
+                interaction_parts.append("会鼓励用户")
+            if interaction_parts:
+                sections.append(f"\n## 交互偏好\n" + "、".join(interaction_parts))
+
+        # 情绪应对策略
+        if p.emotional_response:
+            sections.append(f"\n## 情绪应对策略")
+            if p.emotional_response.get("user_sad"):
+                sections.append(f"当用户难过时：{p.emotional_response['user_sad']}")
+            if p.emotional_response.get("user_angry"):
+                sections.append(f"当用户生气时：{p.emotional_response['user_angry']}")
+            if p.emotional_response.get("user_happy"):
+                sections.append(f"当用户开心时：{p.emotional_response['user_happy']}")
+
+        # 安全策略
+        if p.safety_policy:
+            safety_parts = []
+            if p.safety_policy.get("avoid_topics"):
+                safety_parts.append(f"需要主动回避的话题：{p.safety_policy['avoid_topics']}")
+            if p.safety_policy.get("high_risk_keywords"):
+                safety_parts.append(f"高度警惕不能正常聊关键词：{p.safety_policy['high_risk_keywords']}")
+            if p.safety_policy.get("response_strategy"):
+                safety_parts.append(f"特殊的响应策略：{p.safety_policy['response_strategy']}")
+            if safety_parts:
+                sections.append(f"\n## 交互偏好\n" + "\n".join(safety_parts))
+        return "\n".join(sections)
+
+    def get_system_prompt(self) -> str:
+        """
+        获取最终的系统提示词
+
+        优先级：
+        1. 自定义提示词 (prompt.custom) - 如果存在则直接使用
+        2. 模板 + 变量 (prompt.template + prompt.variables) - 使用模板渲染
+        3. 从personality配置自动构建 - 作为兜底方案
+
+        Returns:
+            完整的系统提示词字符串
+        """
+        # 1. 优先使用自定义提示词
+        if self.prompt.custom and self.prompt.custom.strip():
+            logger.debug("Using custom system prompt")
+            return self.prompt.custom.strip()
+
+        # 2. 使用模板渲染
+        if self.prompt.template:
+            try:
+                from src.conversation.prompt_template import get_template_manager
+
+                template_manager = get_template_manager()
+
+                # 准备变量，合并默认变量和配置变量
+                variables = {
+                    "bot_name": self.personality.name or "助手",
+                    **self.prompt.variables
+                }
+
+                rendered = template_manager.render_template(
+                    self.prompt.template,
+                    **variables
+                )
+
+                if rendered:
+                    logger.debug(f"Using template '{self.prompt.template}' for system prompt")
+                    return rendered
+
+            except ImportError:
+                logger.warning("Could not import prompt_template module")
+            except Exception as e:
+                logger.error(f"Error rendering template: {e}")
+
+        # 3. 从personality配置���动构建
+        personality_prompt = self._build_personality_prompt()
+        if personality_prompt:
+            logger.debug("Building system prompt from personality config")
+            return personality_prompt
+
+        # 4. 最终兜底
+        bot_name = self.personality.name or "助手"
+        logger.debug("Using fallback system prompt")
+        return f"你是一个名叫{bot_name}的智能助手。"
 
 
 class BotConfigLoader:
@@ -355,7 +544,6 @@ class BotConfigLoader:
             optimism=dimensions_data.get("optimism", 5),
             depth_preference=dimensions_data.get("depth_preference", 5)
         )
-
         # 解析预设立场
         stances = []
         for stance_data in data.get("stances", []):
