@@ -688,3 +688,71 @@ class UserMemory(Base):
     
     def __repr__(self):
         return f"<UserMemory(id={self.id}, user_id={self.user_id}, importance={self.importance}, summary={self.event_summary[:50]}...)>"
+
+
+class ReminderStatus(str, enum.Enum):
+    """
+    提醒状态枚举
+    Reminder status enumeration
+    """
+    PENDING = "pending"      # 待发送
+    SENT = "sent"            # 已发送
+    FAILED = "failed"        # 发送失败
+    CANCELLED = "cancelled"  # 已取消
+
+
+class Reminder(Base):
+    """
+    提醒模型 - 存储用户设置的定时提醒
+    Reminder model for storing user scheduled reminders
+    
+    设计说明：
+    - 支持用户设置定时提醒，如"1小时后提醒我做某事"
+    - Bot 会在指定时间主动发送提醒消息给用户
+    - 支持按用户和 Bot 管理提醒
+    
+    并发控制说明：
+    - 使用复合索引优化按状态和时间查询待发送提醒
+    """
+    __tablename__ = "reminders"
+
+    # 主键和标识符
+    id = Column(Integer, primary_key=True, index=True, comment="内部自增主键")
+    uuid = Column(String(36), unique=True, index=True, default=generate_uuid, nullable=False, comment="外部引用UUID")
+    
+    # 关联关系
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="关联的用户ID")
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="SET NULL"), nullable=True, index=True, comment="关联的机器人ID")
+    
+    # Telegram 信息
+    telegram_user_id = Column(BigInteger, nullable=False, index=True, comment="Telegram 用户 ID，用于发送提醒")
+    chat_id = Column(BigInteger, nullable=False, comment="Telegram 聊天 ID，用于发送提醒")
+    
+    # 提醒内容
+    reminder_text = Column(Text, nullable=False, comment="提醒内容")
+    original_message = Column(Text, nullable=True, comment="用户设置提醒时的原始消息")
+    
+    # 时间信息
+    remind_at = Column(DateTime, nullable=False, index=True, comment="提醒触发时间")
+    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+    sent_at = Column(DateTime, nullable=True, comment="实际发送时间")
+    
+    # 状态
+    status = Column(String(20), default=ReminderStatus.PENDING.value, index=True, comment="提醒状态：pending/sent/failed/cancelled")
+    retry_count = Column(Integer, default=0, comment="重试次数")
+    error_message = Column(Text, nullable=True, comment="发送失败时的错误信息")
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    bot = relationship("Bot", foreign_keys=[bot_id])
+    
+    # 索引和约束
+    __table_args__ = (
+        # 复合索引：优化查询待发送的提醒
+        Index('idx_reminder_pending', 'status', 'remind_at'),
+        # 复合索引：优化按用户查询提醒
+        Index('idx_reminder_user', 'user_id', 'status', 'remind_at'),
+    )
+    
+    def __repr__(self):
+        return f"<Reminder(id={self.id}, user_id={self.user_id}, remind_at={self.remind_at}, status={self.status})>"

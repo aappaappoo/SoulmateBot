@@ -34,30 +34,25 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 获取当前语音状态
         is_voice_enabled = voice_preference_service.is_voice_enabled(user.id, bot_username)
-        voice_status = "✅ 已开启" if is_voice_enabled else "❌ 已关闭"
         voice_button_text = "📝 关闭语音" if is_voice_enabled else "🎤 开启语音"
 
-        welcome_message = f"""
+        # 获取 bot_config 用于个性化欢迎消息
+        bot_config = context.bot_data.get("bot_config")
+        
+        if bot_config:
+            # 使用 YAML 配置中的个性信息生成欢迎消息
+            welcome_message = _build_personalized_welcome(user.first_name, bot_config)
+        else:
+            # 使用默认欢迎消息
+            welcome_message = f"""
 👋 你好 {user.first_name}！
 
-欢迎来到情感陪伴机器人 Solin！
+欢迎来到情感陪伴机器人！
 
 我是你的情感陪伴助手，随时准备倾听你的心声，陪伴你度过每一天。
 
-🌟 我能做么：
-• 💬 和你聊天，提供情感支持
-• 🎤 用语音回复你的消息
-
-🎙️ 语音回复状态: {voice_status}
-
-📝 可用命令：
-/start - 开始使用
-/help - 查看帮助
-/status - 查看订阅状态
-/voice - 语音设置
-
 💝 现在就开始和我聊天吧！
-        """
+            """
 
         # 创建语音开关按钮
         keyboard = [
@@ -77,6 +72,77 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     finally:
         db.close()
+
+
+def _build_personalized_welcome(user_first_name: str, bot_config) -> str:
+    """
+    根据 bot_config 中的人格配置构建个性化欢迎消息
+    
+    Args:
+        user_first_name: 用户名
+        bot_config: Bot 配置对象
+        
+    Returns:
+        个性化欢迎消息
+    """
+    # 配置常量
+    MAX_PERSONALITY_ITEMS = 4  # 最多显示的性格/爱好项数
+    MAX_IDEALS_LENGTH = 100    # 理想描述的最大字符数
+    
+    bot_name = bot_config.name
+    description = bot_config.description or ""
+    personality = bot_config.personality
+    
+    # 构建性格特点部分
+    traits_text = ""
+    if personality.traits:
+        traits_list = personality.traits[:MAX_PERSONALITY_ITEMS]
+        traits_text = "、".join(traits_list)
+    
+    # 构建爱好部分
+    likes_text = ""
+    if personality.likes:
+        likes_list = personality.likes[:MAX_PERSONALITY_ITEMS]
+        likes_text = "、".join(likes_list)
+    
+    # 构建理想部分
+    ideals_text = personality.ideals.strip() if personality.ideals else ""
+    
+    # 构建口头禅
+    catchphrase = ""
+    if personality.catchphrases:
+        catchphrase = personality.catchphrases[0]  # 使用第一个口头禅
+    
+    # 根据信息量构建欢迎消息
+    welcome_lines = [f"👋 嘿，{user_first_name}！", ""]
+    
+    # 自我介绍
+    welcome_lines.append(f"我是 {bot_name}！{description}")
+    welcome_lines.append("")
+    
+    # 性格特点
+    if traits_text:
+        welcome_lines.append(f"🎭 *我的性格*：{traits_text}")
+    
+    # 爱好
+    if likes_text:
+        welcome_lines.append(f"❤️ *我喜欢*：{likes_text}")
+    
+    # 理想
+    if ideals_text:
+        # 只取理想的前MAX_IDEALS_LENGTH个字符避免太长
+        short_ideals = ideals_text[:MAX_IDEALS_LENGTH] + "..." if len(ideals_text) > MAX_IDEALS_LENGTH else ideals_text
+        welcome_lines.append(f"🌟 *我的理想*：{short_ideals}")
+    
+    welcome_lines.append("")
+    
+    # 使用口头禅或默认结束语
+    if catchphrase:
+        welcome_lines.append(f"💬 {catchphrase}")
+    else:
+        welcome_lines.append("💬 快来和我聊天吧！")
+    
+    return "\n".join(welcome_lines)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
