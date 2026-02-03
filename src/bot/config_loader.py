@@ -19,6 +19,7 @@ class AIConfig:
     max_tokens: int = 1000
     context_window: int = 4096
 
+
 @dataclass
 class RoutingConfig:
     """消息路由配置"""
@@ -85,7 +86,6 @@ class AppearanceConfig:
     distinctive_features: List[str] = field(default_factory=list)  # 独特特征
 
 
-
 @dataclass
 class PersonalityConfig:
     """
@@ -128,6 +128,7 @@ class PersonalityConfig:
 
     # 安全策略
     safety_policy: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class ValueDimensionsConfig:
