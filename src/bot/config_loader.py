@@ -286,22 +286,54 @@ class BotConfig:
     version: str = "1.0.0"
     config_path: Optional[Path] = None
     
+    def _get_gender_text(self, gender: str) -> str:
+        """
+        将性别代码转换为中文显示文本
+        
+        Args:
+            gender: 性别代码 (male/female/其他)
+            
+        Returns:
+            中文性别文本
+        """
+        gender_map = {
+            "male": "男生",
+            "female": "女生"
+        }
+        return gender_map.get(gender, gender)
+    
     def _build_personality_prompt(self) -> str:
         """
         从personality配置构建人设提示词
         
-        优先从配置文件中加载所有可用的人设内容
+        优先从配置文件中加载所有可用的人设内容。
+        对于空的或缺失的配置字段，该部分将被跳过不会出现在最终提示词中。
+        
+        Returns:
+            包含以下部分的完整人设提示词字符串（如果配置存在）：
+            - 基础信息：名称和性别
+            - 基础人设：character描述
+            - 性格特点：traits列表
+            - 外貌特征：appearance配置
+            - 口头禅：catchphrases列表
+            - 理想和人生规划：ideals和life_goals
+            - 爱好和讨厌点：likes和dislikes
+            - 居住环境：living_environment
+            - 语言风格：speaking_style配置
+            - 交互偏好：interaction_style配置
+            - 情绪应对策略：emotional_response配置
+            - 安全策略：safety_policy配置
         """
         p = self.personality
         sections = []
         
         # 基础信息
         if p.name:
-            sections.append(f"你是{p.name}")
+            intro = f"你是{p.name}"
             if p.gender:
-                gender_text = "男生" if p.gender == "male" else "女生" if p.gender == "female" else p.gender
-                sections[-1] += f"，一个{gender_text}"
-            sections[-1] += "。"
+                intro += f"，一个{self._get_gender_text(p.gender)}"
+            intro += "。"
+            sections.append(intro)
         
         # 基础人设描述
         if p.character:
@@ -358,15 +390,18 @@ class BotConfig:
         # 语言风格
         if p.speaking_style:
             style_parts = []
-            if p.speaking_style.get("tone"):
-                style_parts.append(f"语气：{p.speaking_style['tone']}")
-            if p.speaking_style.get("formality"):
-                style_parts.append(f"正式程度：{p.speaking_style['formality']}")
+            tone = p.speaking_style.get("tone")
+            if tone:
+                style_parts.append(f"语气：{tone}")
+            formality = p.speaking_style.get("formality")
+            if formality:
+                style_parts.append(f"正式程度：{formality}")
             if p.speaking_style.get("use_emoji"):
                 emoji_freq = p.speaking_style.get("emoji_frequency", "medium")
                 style_parts.append(f"使用emoji：{emoji_freq}")
-            if p.speaking_style.get("avoid"):
-                avoid_text = "、".join(p.speaking_style["avoid"])
+            avoid_list = p.speaking_style.get("avoid")
+            if avoid_list:
+                avoid_text = "、".join(avoid_list)
                 style_parts.append(f"避免：{avoid_text}")
             if style_parts:
                 sections.append(f"\n=========================\n💬 语言风格\n=========================\n" + "\n".join(style_parts))
@@ -385,11 +420,13 @@ class BotConfig:
         # 情绪应对策略
         if p.emotional_response:
             emotion_parts = []
-            if p.emotional_response.get("priority"):
-                priority_text = "\n".join([f"- {item}" for item in p.emotional_response["priority"]])
+            priority_list = p.emotional_response.get("priority")
+            if priority_list:
+                priority_text = "\n".join([f"- {item}" for item in priority_list])
                 emotion_parts.append(f"优先策略：\n{priority_text}")
-            if p.emotional_response.get("avoid_actions"):
-                avoid_text = "\n".join([f"- {item}" for item in p.emotional_response["avoid_actions"]])
+            avoid_actions = p.emotional_response.get("avoid_actions")
+            if avoid_actions:
+                avoid_text = "\n".join([f"- {item}" for item in avoid_actions])
                 emotion_parts.append(f"避免行为：\n{avoid_text}")
             if emotion_parts:
                 sections.append(f"\n=========================\n😊 情绪应对策略\n=========================\n" + "\n".join(emotion_parts))
@@ -397,14 +434,17 @@ class BotConfig:
         # 安全策略
         if p.safety_policy:
             safety_parts = []
-            if p.safety_policy.get("avoid_topics"):
-                avoid_topics = "、".join(p.safety_policy["avoid_topics"])
-                safety_parts.append(f"避免话题：{avoid_topics}")
-            if p.safety_policy.get("high_risk_keywords"):
-                keywords = "、".join(p.safety_policy["high_risk_keywords"])
-                safety_parts.append(f"高风险关键词：{keywords}")
-            if p.safety_policy.get("response_strategy"):
-                strategy_text = "\n".join([f"- {item}" for item in p.safety_policy["response_strategy"]])
+            avoid_topics = p.safety_policy.get("avoid_topics")
+            if avoid_topics:
+                avoid_topics_text = "、".join(avoid_topics)
+                safety_parts.append(f"避免话题：{avoid_topics_text}")
+            high_risk_keywords = p.safety_policy.get("high_risk_keywords")
+            if high_risk_keywords:
+                keywords_text = "、".join(high_risk_keywords)
+                safety_parts.append(f"高风险关键词：{keywords_text}")
+            response_strategy = p.safety_policy.get("response_strategy")
+            if response_strategy:
+                strategy_text = "\n".join([f"- {item}" for item in response_strategy])
                 safety_parts.append(f"应对策略：\n{strategy_text}")
             if safety_parts:
                 sections.append(f"\n=========================\n🚧 安全策略\n=========================\n" + "\n".join(safety_parts))
@@ -423,11 +463,12 @@ class BotConfig:
         
         # 首先尝试从personality配置构建人设提示词
         personality_prompt = self._build_personality_prompt()
+        has_personality_prompt = bool(personality_prompt)
         
         if self.prompt.custom:
             # 如果有自定义prompt，将personality_prompt作为补充
             base_prompt = self.prompt.custom
-            if personality_prompt and personality_prompt not in base_prompt:
+            if has_personality_prompt:
                 # 将人设信息添加到自定义prompt之前
                 base_prompt = personality_prompt + "\n\n" + base_prompt
         elif self.prompt.template:
@@ -441,9 +482,9 @@ class BotConfig:
             )
             if result:
                 base_prompt = result
-                if personality_prompt:
+                if has_personality_prompt:
                     base_prompt = personality_prompt + "\n\n" + base_prompt
-        elif personality_prompt:
+        elif has_personality_prompt:
             # 使用personality配置构建的提示词
             base_prompt = personality_prompt
         else:
