@@ -114,6 +114,11 @@ class PersonalityConfig:
     
     包含性格、外貌、口头禅、理想、爱好等个人特征
     """
+    # 基础信息（从personality配置中加载）
+    name: str = ""  # Bot名称
+    gender: str = ""  # 性别
+    language: str = "zh"  # 语言
+    
     # 性格特点
     character: str = ""  # 基础人设描述
     traits: List[str] = field(default_factory=list)  # 性格特点列表
@@ -281,12 +286,191 @@ class BotConfig:
     version: str = "1.0.0"
     config_path: Optional[Path] = None
     
+    def _get_gender_text(self, gender: str) -> str:
+        """
+        将性别代码转换为中文显示文本
+        
+        Args:
+            gender: 性别代码 (male/female/其他)
+            
+        Returns:
+            中文性别文本
+        """
+        gender_map = {
+            "male": "男生",
+            "female": "女生"
+        }
+        return gender_map.get(gender, gender)
+    
+    def _build_personality_prompt(self) -> str:
+        """
+        从personality配置构建人设提示词
+        
+        优先从配置文件中加载所有可用的人设内容。
+        对于空的或缺失的配置字段，该部分将被跳过不会出现在最终提示词中。
+        
+        Returns:
+            包含以下部分的完整人设提示词字符串（如果配置存在）：
+            - 基础信息：名称和性别
+            - 基础人设：character描述
+            - 性格特点：traits列表
+            - 外貌特征：appearance配置
+            - 口头禅：catchphrases列表
+            - 理想和人生规划：ideals和life_goals
+            - 爱好和讨厌点：likes和dislikes
+            - 居住环境：living_environment
+            - 语言风格：speaking_style配置
+            - 交互偏好：interaction_style配置
+            - 情绪应对策略：emotional_response配置
+            - 安全策略：safety_policy配置
+        """
+        p = self.personality
+        sections = []
+        
+        # 基础信息
+        if p.name:
+            intro = f"你是{p.name}"
+            if p.gender:
+                intro += f"，一个{self._get_gender_text(p.gender)}"
+            intro += "。"
+            sections.append(intro)
+        
+        # 基础人设描述
+        if p.character:
+            sections.append(f"\n=========================\n🎭 基础人设\n=========================\n{p.character.strip()}")
+        
+        # 性格特点
+        if p.traits:
+            traits_text = "、".join(p.traits)
+            sections.append(f"\n=========================\n✨ 性格特点\n=========================\n{traits_text}")
+        
+        # 外貌特征
+        if p.appearance and (p.appearance.physical_description or p.appearance.style or p.appearance.distinctive_features):
+            appearance_parts = []
+            if p.appearance.physical_description:
+                appearance_parts.append(p.appearance.physical_description.strip())
+            if p.appearance.style:
+                appearance_parts.append(f"穿着风格：{p.appearance.style}")
+            if p.appearance.distinctive_features:
+                features_text = "、".join(p.appearance.distinctive_features)
+                appearance_parts.append(f"独特特征：{features_text}")
+            if appearance_parts:
+                sections.append(f"\n=========================\n🎨 外貌特征\n=========================\n" + "\n".join(appearance_parts))
+        
+        # 口头禅
+        if p.catchphrases:
+            catchphrases_text = "\n".join([f"- {cp}" for cp in p.catchphrases])
+            sections.append(f"\n=========================\n💬 口头禅\n=========================\n{catchphrases_text}")
+        
+        # 理想和人生规划
+        if p.ideals or p.life_goals:
+            goals_parts = []
+            if p.ideals:
+                goals_parts.append(f"理想：{p.ideals.strip()}")
+            if p.life_goals:
+                goals_text = "\n".join([f"- {goal}" for goal in p.life_goals])
+                goals_parts.append(f"人生规划：\n{goals_text}")
+            sections.append(f"\n=========================\n🌟 理想和人生规划\n=========================\n" + "\n".join(goals_parts))
+        
+        # 爱好和讨厌点
+        if p.likes or p.dislikes:
+            prefs_parts = []
+            if p.likes:
+                likes_text = "、".join(p.likes)
+                prefs_parts.append(f"喜欢：{likes_text}")
+            if p.dislikes:
+                dislikes_text = "、".join(p.dislikes)
+                prefs_parts.append(f"讨厌：{dislikes_text}")
+            sections.append(f"\n=========================\n❤️ 爱好和讨厌点\n=========================\n" + "\n".join(prefs_parts))
+        
+        # 居住环境
+        if p.living_environment:
+            sections.append(f"\n=========================\n🏠 居住环境\n=========================\n{p.living_environment.strip()}")
+        
+        # 语言风格
+        if p.speaking_style:
+            style_parts = []
+            tone = p.speaking_style.get("tone")
+            if tone:
+                style_parts.append(f"语气：{tone}")
+            formality = p.speaking_style.get("formality")
+            if formality:
+                style_parts.append(f"正式程度：{formality}")
+            if p.speaking_style.get("use_emoji"):
+                emoji_freq = p.speaking_style.get("emoji_frequency", "medium")
+                style_parts.append(f"使用emoji：{emoji_freq}")
+            avoid_list = p.speaking_style.get("avoid")
+            if avoid_list:
+                avoid_text = "、".join(avoid_list)
+                style_parts.append(f"避免：{avoid_text}")
+            if style_parts:
+                sections.append(f"\n=========================\n💬 语言风格\n=========================\n" + "\n".join(style_parts))
+        
+        # 交互偏好
+        if p.interaction_style:
+            interaction_parts = []
+            for key, value in p.interaction_style.items():
+                if isinstance(value, bool):
+                    interaction_parts.append(f"- {key}: {'是' if value else '否'}")
+                else:
+                    interaction_parts.append(f"- {key}: {value}")
+            if interaction_parts:
+                sections.append(f"\n=========================\n🤝 交互偏好\n=========================\n" + "\n".join(interaction_parts))
+        
+        # 情绪应对策略
+        if p.emotional_response:
+            emotion_parts = []
+            priority_list = p.emotional_response.get("priority")
+            if priority_list:
+                priority_text = "\n".join([f"- {item}" for item in priority_list])
+                emotion_parts.append(f"优先策略：\n{priority_text}")
+            avoid_actions = p.emotional_response.get("avoid_actions")
+            if avoid_actions:
+                avoid_text = "\n".join([f"- {item}" for item in avoid_actions])
+                emotion_parts.append(f"避免行为：\n{avoid_text}")
+            if emotion_parts:
+                sections.append(f"\n=========================\n😊 情绪应对策略\n=========================\n" + "\n".join(emotion_parts))
+        
+        # 安全策略
+        if p.safety_policy:
+            safety_parts = []
+            avoid_topics = p.safety_policy.get("avoid_topics")
+            if avoid_topics:
+                avoid_topics_text = "、".join(avoid_topics)
+                safety_parts.append(f"避免话题：{avoid_topics_text}")
+            high_risk_keywords = p.safety_policy.get("high_risk_keywords")
+            if high_risk_keywords:
+                keywords_text = "、".join(high_risk_keywords)
+                safety_parts.append(f"高风险关键词：{keywords_text}")
+            response_strategy = p.safety_policy.get("response_strategy")
+            if response_strategy:
+                strategy_text = "\n".join([f"- {item}" for item in response_strategy])
+                safety_parts.append(f"应对策略：\n{strategy_text}")
+            if safety_parts:
+                sections.append(f"\n=========================\n🚧 安全策略\n=========================\n" + "\n".join(safety_parts))
+        
+        return "\n".join(sections)
+    
     def get_system_prompt(self) -> str:
-        """获取系统提示词"""
+        """
+        获取系统提示词
+        
+        优先从配置文件中的personality配置构建完整的人设提示词，
+        如果有自定义prompt则使用自定义prompt，
+        否则使用模板或默认提示词
+        """
         base_prompt = ""
         
+        # 首先尝试从personality配置构建人设提示词
+        personality_prompt = self._build_personality_prompt()
+        has_personality_prompt = bool(personality_prompt)
+        
         if self.prompt.custom:
+            # 如果有自定义prompt，将personality_prompt作为补充
             base_prompt = self.prompt.custom
+            if has_personality_prompt:
+                # 将人设信息添加到自定义prompt之前
+                base_prompt = personality_prompt + "\n\n" + base_prompt
         elif self.prompt.template:
             # 使用模板
             from src.conversation.prompt_template import get_template_manager
@@ -298,8 +482,12 @@ class BotConfig:
             )
             if result:
                 base_prompt = result
-        
-        if not base_prompt:
+                if has_personality_prompt:
+                    base_prompt = personality_prompt + "\n\n" + base_prompt
+        elif has_personality_prompt:
+            # 使用personality配置构建的提示词
+            base_prompt = personality_prompt
+        else:
             # 默认提示词
             base_prompt = f"你是一个名叫{self.name}的智能助手。{self.description}"
         
@@ -418,6 +606,11 @@ class BotConfigLoader:
         appearance_data = data.get("appearance", {})
         
         return PersonalityConfig(
+            # 基础信息
+            name=data.get("name", ""),
+            gender=data.get("gender", ""),
+            language=data.get("language", "zh"),
+            
             # 性格特点
             character=data.get("character", ""),
             traits=data.get("traits", []),
@@ -559,13 +752,18 @@ class BotConfigLoader:
                 data = yaml.safe_load(f)
             
             bot_data = data.get("bot", {})
+            personality_data = data.get("personality", {})
+            
+            # 优先从personality配置中获取基础信息，向后兼容bot配置
+            name = personality_data.get("name") or bot_data.get("name") or bot_id
+            language = personality_data.get("language") or bot_data.get("language") or "zh"
             
             config = BotConfig(
-                name=bot_data.get("name", bot_id),
+                name=name,
                 description=bot_data.get("description", ""),
                 username=bot_data.get("username", ""),
                 bot_type=bot_data.get("type", "assistant"),
-                language=bot_data.get("language", "zh"),
+                language=language,
                 is_public=bot_data.get("is_public", True),
                 
                 ai=self._parse_ai_config(data.get("ai", {})),
@@ -576,7 +774,7 @@ class BotConfigLoader:
                 messages=self._parse_messages_config(data.get("messages", {})),
                 
                 # Bot人格配置 - 包含性格、外貌、口头禅、理想、爱好等
-                personality=self._parse_personality_config(data.get("personality", {})),
+                personality=self._parse_personality_config(personality_data),
                 
                 # Bot技能配置 - 与Agent能力对应
                 skills=self._parse_skills_config(data.get("skills", {})),
