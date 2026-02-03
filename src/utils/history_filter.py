@@ -274,8 +274,9 @@ class HistoryFilter:
             存储文件路径
         """
         try:
-            # 生成文件名
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            # 生成文件名 - 使用单一时间戳确保一致性
+            current_time = datetime.now(timezone.utc)
+            timestamp = current_time.strftime("%Y%m%d_%H%M%S")
             identifier = f"{chat_id or 'unknown'}_{user_id or 'unknown'}"
             hash_suffix = hashlib.md5(identifier.encode()).hexdigest()[:8]
             filename = f"filtered_{timestamp}_{hash_suffix}.json"
@@ -286,7 +287,7 @@ class HistoryFilter:
             storage_data = {
                 "chat_id": chat_id,
                 "user_id": user_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": current_time.isoformat(),
                 "filtered_count": len(filtered_out),
                 "items": [asdict(item) for item in filtered_out]
             }
