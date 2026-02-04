@@ -285,14 +285,39 @@ class AgentOrchestrator:
                 context=None  # context 已经在 system prompt 中
             )
 
+            # 验证响应不为空
+            if not response:
+                logger.error(f"❌ [Orchestrator] LLM returned empty response! Messages count: {len(messages)}")
+                logger.debug(f"📝 [Orchestrator] Last message content preview: {messages[-1].get('content', '')[:200]}...")
+                raise ValueError("LLM returned empty response")
+            
             # 解析 JSON
             response_text = response.strip()
+            
+            # 检查响应是否为空字符串
+            if not response_text:
+                logger.error(f"❌ [Orchestrator] LLM response is empty after strip! Original response: {repr(response)}")
+                raise ValueError("LLM response is empty after processing")
+            
+            logger.debug(f"📤 [Orchestrator] Raw LLM response (first 500 chars): {response_text[:500]}...")
+            
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0]
             elif "```" in response_text:
                 response_text = response_text.split("```")[1].split("```")[0]
+            
+            # 再次验证提取后的JSON不为空
+            response_text = response_text.strip()
+            if not response_text:
+                logger.error(f"❌ [Orchestrator] Extracted JSON content is empty! Full response: {response[:500]}...")
+                raise ValueError("Extracted JSON content is empty")
 
-            data = json.loads(response_text.strip())
+            try:
+                data = json.loads(response_text)
+            except json.JSONDecodeError as je:
+                logger.error(f"❌ [Orchestrator] JSON parse error: {je}")
+                logger.error(f"📝 [Orchestrator] Failed JSON text: {response_text[:500]}...")
+                raise
 
             intent = IntentType(data.get("intent", "direct_response"))
             agents = [a for a in data.get("agents", []) if a in self.agents]
@@ -340,7 +365,11 @@ class AgentOrchestrator:
             return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis
 
         except Exception as e:
-            logger.error(f"统一分析出错: {e}")
+            import traceback
+            logger.error(f"❌ 统一分析出错: {e}")
+            logger.error(f"📝 错误类型: {type(e).__name__}")
+            logger.debug(f"📝 完整堆栈: {traceback.format_exc()}")
+            logger.info(f"⚠️ 回退到规则模式，selected_by_confidence has {len(selected_by_confidence) if selected_by_confidence else 0} agents")
             if selected_by_confidence:
                 return IntentType.SINGLE_AGENT, [
                     selected_by_confidence[0][0].name], {}, IntentSource.FALLBACK, None, None

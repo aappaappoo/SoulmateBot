@@ -14,6 +14,7 @@ Unified Context Builder - 统一上下文构建器
 - 整合所有上下文
 - 构建最终消息列表
 - Token 预算管理
+- 历史对话过滤（URL、简单寒暄等）
 """
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ from .proactive_strategy import (
     UserProfile,
     TopicAnalysis
 )
+from src.utils.history_filter import HistoryFilter, get_history_filter
 
 
 @dataclass
@@ -53,6 +55,11 @@ class ContextConfig:
     
     # 主动策略
     enable_proactive_strategy: bool = True  # 是否启用主动策略
+    
+    # 历史过滤选项
+    enable_history_filter: bool = True  # 是否启用历史过滤（过滤URL、简单寒暄等）
+    filter_urls: bool = True  # 是否过滤URL主导的内容
+    filter_trivial: bool = True  # 是否过滤简单寒暄
 
 
 @dataclass
@@ -77,12 +84,14 @@ class UnifiedContextBuilder:
     3. 构建增强的 System Prompt
     4. 整合所有组件到最终消息列表
     5. 管理 token 预算
+    6. 过滤不重要的历史内容（URL、简单寒暄等）
     """
     
     def __init__(
         self,
         summary_service: Optional[ConversationSummaryService] = None,
         proactive_analyzer: Optional[ProactiveDialogueStrategyAnalyzer] = None,
+        history_filter: Optional[HistoryFilter] = None,
         config: Optional[ContextConfig] = None
     ):
         """
@@ -91,11 +100,20 @@ class UnifiedContextBuilder:
         Args:
             summary_service: 摘要服务（可选，默认创建）
             proactive_analyzer: 主动策略分析器（可选，默认创建）
+            history_filter: 历史过滤器（可选，默认使用全局实例）
             config: 配置（可选，使用默认配置）
         """
         self.summary_service = summary_service or ConversationSummaryService()
         self.proactive_analyzer = proactive_analyzer or ProactiveDialogueStrategyAnalyzer()
         self.config = config or ContextConfig()
+        
+        # 初始化历史过滤器
+        if history_filter:
+            self.history_filter = history_filter
+        elif self.config.enable_history_filter:
+            self.history_filter = get_history_filter()
+        else:
+            self.history_filter = None
         
         logger.debug("UnifiedContextBuilder 初始化完成")
     
@@ -106,7 +124,9 @@ class UnifiedContextBuilder:
         current_message: str,
         user_memories: Optional[List[Dict[str, Any]]] = None,
         dialogue_strategy: Optional[str] = None,
-        llm_generated_summary: Optional[Dict] = None  # 新增参数
+        llm_generated_summary: Optional[Dict] = None,  # 新增参数
+        chat_id: Optional[str] = None,  # 用于历史过滤存储
+        user_id: Optional[str] = None  # 用于历史过滤存储
     ) -> BuilderResult:
         """
         构建完整的对话上下文
@@ -118,11 +138,26 @@ class UnifiedContextBuilder:
             user_memories: 用户长期记忆列表（可选）
             dialogue_strategy: 已生成的对话策略（可选，如果提供则不重新生成）
             llm_generated_summary: LLM 生成的对话摘要（可选）
+            chat_id: 对话ID（可选，用于历史过滤存储）
+            user_id: 用户ID（可选，用于历史过滤存储）
             
         Returns:
             BuilderResult: 包含消息列表和元数据
         """
         logger.debug(f"开始构建上下文，历史消息数: {len(conversation_history)}")
+        
+        # 0. 应用历史过滤（过滤URL、简单寒暄等）
+        filtered_count = 0
+        if self.history_filter and self.config.enable_history_filter:
+            filter_result = self.history_filter.filter_history(
+                conversation_history,
+                chat_id=chat_id,
+                user_id=user_id
+            )
+            conversation_history = filter_result.filtered_history
+            filtered_count = len(filter_result.filtered_out)
+            if filtered_count > 0:
+                logger.debug(f"🔍 过滤了 {filtered_count} 条不重要的历史消息")
         
         # 1. 分割对话历史
         short_term, mid_term = self._split_history(conversation_history)
@@ -174,7 +209,7 @@ class UnifiedContextBuilder:
             messages = self._truncate_messages(messages)
             token_estimate = self._estimate_tokens(messages)
         
-        logger.info(f"上下文构建完成: {len(messages)}条消息, 估算token={token_estimate}")
+        logger.info(f"上下文构建完成: {len(messages)}条消息, 估算token={token_estimate}, 过滤了{filtered_count}条")
         
         return BuilderResult(
             messages=messages,
@@ -184,7 +219,9 @@ class UnifiedContextBuilder:
                 "mid_term_count": len(mid_term),
                 "has_mid_term_summary": mid_term_summary is not None,
                 "memory_count": len(user_memories) if user_memories else 0,
-                "has_proactive_guidance": bool(proactive_guidance)
+                "has_proactive_guidance": bool(proactive_guidance),
+                "filtered_history_count": filtered_count,
+                "history_filter_enabled": self.config.enable_history_filter
             }
         )
     
