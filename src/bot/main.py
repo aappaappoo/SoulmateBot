@@ -40,9 +40,6 @@ from src.handlers.feedback import (
 )
 from src.handlers.agent_integration import (
     handle_message_with_agents,
-    handle_skill_callback,
-    handle_skills_command,
-    get_skill_callback_handler
 )
 
 logger.remove()
@@ -95,12 +92,6 @@ class SoulmateBot:
         # 反馈命令
         self.app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
         self.app.add_handler(CommandHandler("my_feedback", my_feedback_command))
-        
-        # Skills命令 - Agent技能选择（支持工具调用能力）
-        self.app.add_handler(CommandHandler("skills", handle_skills_command))
-
-        # 回调查询处理器
-        self.app.add_handler(get_skill_callback_handler())  # 技能选择回调
 
         # 消息处理器 - 使用Agent集成版本
         # 注意：这是对原有handle_message的替代，会自动分析用户消息并选择合适的Agent处理

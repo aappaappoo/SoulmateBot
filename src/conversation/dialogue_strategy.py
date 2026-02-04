@@ -80,72 +80,6 @@ EMOTION_KEYWORDS = {
 }
 
 
-# 多消息回复指令
-# Multi-message reply instruction for more human-like responses
-MULTI_MESSAGE_INSTRUCTION = """
-请严格按以下JSON格式回复：
-```json
-{{
-    "intent": "direct_response" | "single_agent" | "multi_agent",
-    "agents": [],
-    "reasoning": "判断理由",
-    
-    "conversation_summary": {{
-        "summary_text": "综合整个对话的摘要文本（100字以内）",
-        "key_elements": {{
-            "time": ["时间点1", "时间点2"],
-            "place": ["地点1", "地点2"],
-            "people": ["人物1", "人物2"],
-            "events": ["事件1", "事件2"],
-            "emotions": ["情绪1", "情绪2"]
-        }},
-        "topics": ["话题1", "话题2", "话题3"],
-        "user_state": "用户当前状态描述"
-    }},
-    
-    "direct_reply": "纯文本回复内容，不包含语气标注",
-    "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
-    "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
-    "memory": {{
-        "is_important": false,
-        "importance_level": "low" | "medium" | "high" | null,
-        "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
-        "event_summary": "事件摘要" | null,
-        "keywords": [],
-        "event_date": "YYYY-MM-DD" | null,
-        "raw_date_expression": "原始时间表达" | null
-    }}
-}}
-```
-=========================
-📝 纯文本回复内容，格式说明
-=========================
-为了让对话更加自然，你可以日常使用1句话来回复，但偶尔选择将回复分成多条消息发送。
-
-格式要求：
-- 如果你认为回复应该分成多条消息，请使用 [MSG_SPLIT] 标记分隔
-- 每个分隔的部分会作为独立的消息发送给用户
-- 分隔要自然，就像真人聊天时会分多次发送一样
-- 不要刻意分割，只在自然需要时使用（比如：先回应情绪，再提问；或者分享不同的想法）
-- 最多分成3条消息
-
-示例1（单条回复）：
-我懂你的感受，这种时候确实很不容易呢 💕
-
-示例2（多条回复）：
-哎呀，听起来今天遇到了不少事情呢
-[MSG_SPLIT]
-不过别担心，有什么想说的都可以告诉我~
-
-示例3（多条回复）：
-你说的这个我特别理解
-[MSG_SPLIT]
-对了，你平时一般怎么放松自己呀？
-
-注意：[MSG_SPLIT] 标记只用于分隔消息，不要在回复内容中提及或解释这个标记。
-"""
-
-
 # 策略指导模板
 # Strategy guidance templates for different response types
 STRATEGY_TEMPLATES = {
@@ -771,11 +705,7 @@ class DialogueStrategyInjector:
         
         # 添加对话策略指导
         enhanced_prompt += f"\n\n{strategy_guidance}"
-        
-        # 添加多消息回复指令
-        # Add multi-message reply instruction
-        enhanced_prompt += f"\n\n{MULTI_MESSAGE_INSTRUCTION}"
-        
+
         logger.info(
             f"🫙 [Dialogue-Strategy] applied: phase={phase.value}, "
             f"emotion={emotion_type}/{emotion_intensity}, "

@@ -27,7 +27,7 @@ from src.handlers import (
     feedback_stats_command, my_feedback_command
 )
 from src.handlers.agent_integration import (
-    handle_message_with_agents, handle_skills_command, get_skill_callback_handler
+    handle_message_with_agents
 )
 
 
@@ -160,7 +160,6 @@ class MultiBotLauncher:
         token = bot_db.bot_token
 
         logger.info(f"Starting bot: @{bot_username} (ID: {bot_id})")
-
         try:
             # 使用智能查找配置（不会产生多余警告）
             bot_config = self.find_bot_config(bot_username)
@@ -271,9 +270,7 @@ class MultiBotLauncher:
         app.add_handler(CommandHandler("config_bot", config_bot_command))
         app.add_handler(CommandHandler("feedback_stats", feedback_stats_command))
         app.add_handler(CommandHandler("my_feedback", my_feedback_command))
-        app.add_handler(CommandHandler("skills", handle_skills_command))
         app.add_handler(get_chat_member_handler())
-        app.add_handler(get_skill_callback_handler())
 
         # ===== 消息处理器 =====
         app.add_handler(MessageHandler(

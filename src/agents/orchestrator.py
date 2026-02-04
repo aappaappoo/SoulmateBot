@@ -92,7 +92,6 @@ class AgentOrchestrator:
     SUPPORTED_EMOTIONS = ["happy", "gentle", "sad", "excited", "angry", "crying"]
     
     UNIFIED_PROMPT_TEMPLATE = """需要同时完成四项任务：
-
     ## 任务1：意图识别
     判断用户消息应该如何处理：
     - "direct_response": 日常闲聊、问候、简单问答，由你直接回复
@@ -120,6 +119,31 @@ class AgentOrchestrator:
     - "开心、轻快，语速稍快，语调上扬"
     - "温柔、轻声，语调柔和"
     - "兴奋、活跃，富有感染力"
+    
+    **重要：当intent为direct_response时，纯文本回复内容格式说明如下**
+    为了让对话更加自然，你可以日常使用1句话来回复，但偶尔选择将回复分成多条消息发送。
+    
+    格式要求：
+    - 如果你认为回复应该分成多条消息，请使用 [MSG_SPLIT] 标记分隔
+    - 每个分隔的部分会作为独立的消息发送给用户
+    - 分隔要自然，就像真人聊天时会分多次发送一样
+    - 不要刻意分割，只在自然需要时使用（比如：先回应情绪，再提问；或者分享不同的想法）
+    - 最好分成消息的信息条数不超过3条
+    
+    示例1（单条回复）：
+    我懂你的感受，这种时候确实很不容易呢 💕
+    
+    示例2（多条回复）：
+    哎呀，听起来今天遇到了不少事情呢
+    [MSG_SPLIT]
+    不过别担心，有什么想说的都可以告诉我~
+    
+    示例3（多条回复）：
+    你说的这个我特别理解
+    [MSG_SPLIT]
+    对了，你平时一般怎么放松自己呀？
+    
+    注意：[MSG_SPLIT] 标记只用于分隔消息，不要在回复内容中提及或解释这个标记。
 
     ## 任务3：对话摘要生成（重要！）
     请根据【对话历史】和当前消息，生成一个累积的对话摘要。
@@ -143,8 +167,10 @@ class AgentOrchestrator:
 
     当前时间：{current_time}
     用户消息：{user_message}
-
-    请严格按以下JSON格式回复：
+    '=========================\n'
+    '      强制格式要求 \n'
+    '=========================\n'
+    示例格式：
     ```
     {{
         "intent": "direct_response" | "single_agent" | "multi_agent",
@@ -164,7 +190,7 @@ class AgentOrchestrator:
             "user_state": "用户当前状态描述"
         }},
         
-        "direct_reply": "纯文本回复内容，不包含语气标注",
+        "direct_reply": "纯文本回复内容，按照上面回复内容格式说明进行",
         "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
         "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
         "memory": {{
@@ -176,7 +202,8 @@ class AgentOrchestrator:
             "event_date": "YYYY-MM-DD" | null,
             "raw_date_expression": "原始时间表达" | null
         }}
-    }}```"""
+    }}```
+    """
     def __init__(
         self,
         agents: List[BaseAgent],
