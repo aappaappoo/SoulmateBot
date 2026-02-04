@@ -234,19 +234,39 @@ class AgentOrchestrator:
                                                 selected_by_confidence], {}, IntentSource.RULE_BASED, None, None
 
         try:
-            # ========== 修复：构建完整的消息列表 ==========
+            # ========== 构建完整的消息列表 ==========
             messages = []
             
-            # 1. System Prompt（已经包含人设 + 记忆 + 摘要 + 策略）
-            if context and context.system_prompt:
-                messages.append({
-                    "role": "system",
-                    "content": context.system_prompt
-                })
+            # 1. 构建增强的 System Prompt
+            # 包含：Bot人设 + 用户记忆 + 对话策略 + UNIFIED_PROMPT_TEMPLATE任务要求 + 返回格式
+            base_system_prompt = context.system_prompt if context and context.system_prompt else ""
+            
+            # 将 UNIFIED_PROMPT_TEMPLATE 整合到 System Prompt 中
+            unified_task_prompt = self.UNIFIED_PROMPT_TEMPLATE.format(
+                agent_capabilities=self._get_capabilities_prompt(),
+                system_prompt=base_system_prompt,  # 完整的人设已在此处
+                current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"),
+                user_message=message.content
+            )
+            
+            # 组合完整的 System Prompt
+            # base_system_prompt 已包含：人设 + 记忆 + 策略 + 对话历史提示
+            # unified_task_prompt 包含：任务要求 + 返回格式
+            enhanced_system_prompt = f"""{base_system_prompt}
 
-            # 2. 短期对话历史（最近 3-5 轮，即 6-10 条消息）
+=========================
+📋 任务指令
+=========================
+{unified_task_prompt}"""
+            
+            messages.append({
+                "role": "system",
+                "content": enhanced_system_prompt
+            })
+
+            # 2. 短期对话历史（最近 5 轮，即 10 条消息）
             if context and context.conversation_history:
-                recent_history = context.conversation_history[-10:]  # 最多10条
+                recent_history = context.conversation_history[-10:]  # 最多10条（5轮对话）
                 for hist_msg in recent_history:
                     if hasattr(hist_msg, 'content') and hasattr(hist_msg, 'user_id'):
                         # 判断是用户还是助手
@@ -263,13 +283,7 @@ class AgentOrchestrator:
                         # 如果已经是 dict 格式，直接使用
                         messages.append(hist_msg)
             
-            # 3. 当前用户消息 + 统一 Prompt 模板
-            prompt = self.UNIFIED_PROMPT_TEMPLATE.format(
-                agent_capabilities=self._get_capabilities_prompt(),
-                system_prompt="",  # 已经在 system 消息中了
-                current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"),
-                user_message=message.content
-            )
+            # 3. 当前用户消息（纯用户消息，任务指令已在 system prompt 中）
             messages.append({
                 "role": "user",
                 "content": message.content

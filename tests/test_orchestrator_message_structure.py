@@ -94,10 +94,13 @@ class TestOrchestratorMessageStructure:
         assert messages[4]["role"] == "assistant", "第5条应该是assistant消息"
         assert messages[4]["content"] == "今天天气很好，阳光明媚", "内容应该匹配历史回复"
         
-        # 验证最后一条是当前用户消息（包含统一prompt模板）
+        # 验证最后一条是当前用户消息（纯用户消息，任务模板已在system中）
         assert messages[5]["role"] == "user", "最后一条应该是user消息"
-        assert "我想知道明天的计划" in messages[5]["content"], "应该包含当前用户消息"
-        assert "任务1：意图识别" in messages[5]["content"], "应该包含统一prompt模板"
+        assert messages[5]["content"] == "我想知道明天的计划", "应该是纯用户消息"
+        
+        # 验证任务模板现在在 system prompt 中
+        assert "任务1：意图识别" in messages[0]["content"], "system消息应该包含统一prompt模板"
+        assert "📋 任务指令" in messages[0]["content"], "system消息应该包含任务指令标题"
     
     @pytest.mark.asyncio
     async def test_message_structure_without_history(self):
