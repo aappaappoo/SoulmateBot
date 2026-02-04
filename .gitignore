@@ -74,3 +74,4 @@ docker-compose.override.yml
 data/agent_memory/
 data/agent_memory.db
 verify_voice_service.py
+data/filtered_history/
