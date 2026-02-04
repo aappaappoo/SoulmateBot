@@ -242,9 +242,11 @@ class AgentOrchestrator:
             base_system_prompt = context.system_prompt if context and context.system_prompt else ""
             
             # 将 UNIFIED_PROMPT_TEMPLATE 整合到 System Prompt 中
+            # 注意：system_prompt 参数设为空字符串，避免与 base_system_prompt 重复
+            # 因为 base_system_prompt 已经包含了完整的人设信息
             unified_task_prompt = self.UNIFIED_PROMPT_TEMPLATE.format(
                 agent_capabilities=self._get_capabilities_prompt(),
-                system_prompt=base_system_prompt,  # 完整的人设已在此处
+                system_prompt="（参见上方的人设设定）",  # 避免重复，指向上方已有的人设
                 current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"),
                 user_message=message.content
             )
