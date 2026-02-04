@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import json
 import asyncio
+import re
 from loguru import logger
 
 from .base_agent import BaseAgent
@@ -167,11 +168,14 @@ class AgentOrchestrator:
 
     当前时间：{current_time}
     用户消息：{user_message}
-    '=========================\n'
-    '      强制格式要求 \n'
-    '=========================\n'
-    示例格式：
-    ```
+    
+    =========================
+          强制格式要求 
+    =========================
+    
+    **你必须严格按照以下JSON格式返回，不要返回任何其他内容：**
+    
+    ```json
     {{
         "intent": "direct_response" | "single_agent" | "multi_agent",
         "agents": [],
@@ -202,7 +206,8 @@ class AgentOrchestrator:
             "event_date": "YYYY-MM-DD" | null,
             "raw_date_expression": "原始时间表达" | null
         }}
-    }}```
+    }}
+    ```
     """
     def __init__(
         self,
@@ -344,22 +349,43 @@ class AgentOrchestrator:
             
             logger.debug(f"📤 [Orchestrator] Raw LLM response (first 500 chars): {response_text[:500]}...")
             
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0]
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0]
+            # 尝试多种方式提取JSON
+            json_text = None
             
-            # 再次验证提取后的JSON不为空
-            response_text = response_text.strip()
-            if not response_text:
+            # 方式1: 从 ```json 代码块提取
+            if "```json" in response_text:
+                json_text = response_text.split("```json")[1].split("```")[0].strip()
+            # 方式2: 从 ``` 代码块提取
+            elif "```" in response_text:
+                json_text = response_text.split("```")[1].split("```")[0].strip()
+            # 方式3: 使用正则表达式查找JSON对象
+            else:
+                # 查找以 { 开头、以 } 结尾的JSON对象
+                json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
+                matches = json_pattern.findall(response_text)
+                # 尝试找到包含 "intent" 字段的JSON
+                for match in matches:
+                    if '"intent"' in match:
+                        json_text = match
+                        break
+                # 如果没找到包含intent的，取最长的匹配
+                if not json_text and matches:
+                    json_text = max(matches, key=len)
+            
+            # 如果仍未找到，尝试直接解析（可能响应本身就是JSON）
+            if not json_text:
+                json_text = response_text.strip()
+            
+            # 验证提取后的JSON不为空
+            if not json_text:
                 logger.error(f"❌ [Orchestrator] Extracted JSON content is empty! Full response: {response[:500]}...")
                 raise ValueError("Extracted JSON content is empty")
 
             try:
-                data = json.loads(response_text)
+                data = json.loads(json_text)
             except json.JSONDecodeError as je:
                 logger.error(f"❌ [Orchestrator] JSON parse error: {je}")
-                logger.error(f"📝 [Orchestrator] Failed JSON text: {response_text[:500]}...")
+                logger.error(f"📝 [Orchestrator] Failed JSON text: {json_text[:500]}...")
                 raise
 
             intent = IntentType(data.get("intent", "direct_response"))
