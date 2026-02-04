@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import json
 import asyncio
-import re
 from loguru import logger
 
 from .base_agent import BaseAgent
@@ -358,19 +357,23 @@ class AgentOrchestrator:
             # 方式2: 从 ``` 代码块提取
             elif "```" in response_text:
                 json_text = response_text.split("```")[1].split("```")[0].strip()
-            # 方式3: 使用正则表达式查找JSON对象
+            # 方式3: 查找JSON对象（使用括号匹配而非正则）
             else:
-                # 查找以 { 开头、以 } 结尾的JSON对象
-                json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
-                matches = json_pattern.findall(response_text)
-                # 尝试找到包含 "intent" 字段的JSON
-                for match in matches:
-                    if '"intent"' in match:
-                        json_text = match
-                        break
-                # 如果没找到包含intent的，取最长的匹配
-                if not json_text and matches:
-                    json_text = max(matches, key=len)
+                # 尝试找到平衡的 {} 括号对
+                start_idx = response_text.find('{')
+                if start_idx != -1:
+                    depth = 0
+                    end_idx = start_idx
+                    for i, char in enumerate(response_text[start_idx:], start_idx):
+                        if char == '{':
+                            depth += 1
+                        elif char == '}':
+                            depth -= 1
+                            if depth == 0:
+                                end_idx = i
+                                break
+                    if depth == 0:
+                        json_text = response_text[start_idx:end_idx + 1].strip()
             
             # 如果仍未找到，尝试直接解析（可能响应本身就是JSON）
             if not json_text:
