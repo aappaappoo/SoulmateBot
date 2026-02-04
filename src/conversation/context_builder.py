@@ -114,9 +114,8 @@ class UnifiedContextBuilder:
             self.history_filter = get_history_filter()
         else:
             self.history_filter = None
-        
-        logger.debug("UnifiedContextBuilder 初始化完成")
-    
+
+
     async def build_context(
         self,
         bot_system_prompt: str,
@@ -144,7 +143,7 @@ class UnifiedContextBuilder:
         Returns:
             BuilderResult: 包含消息列表和元数据
         """
-        logger.debug(f"开始构建上下文，历史消息数: {len(conversation_history)}")
+        logger.debug(f"🔍 开始构建上下文，历史消息数: {len(conversation_history)}")
         
         # 0. 应用历史过滤（过滤URL、简单寒暄等）
         filtered_count = 0

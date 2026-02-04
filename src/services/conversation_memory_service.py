@@ -470,7 +470,7 @@ class ConversationMemoryService:
     """
 
     # 用于判断重要性的系统提示词（更新以支持更灵活的日期提取）
-    IMPORTANCE_ANALYSIS_PROMPT = """请帮我判断是否包含值得记住的重要事件。
+    IMPORTANCE_ANALYSIS_PROMPT = """需要判断是否包含值得记住的重要事件。
 
     重要事件包括（以下的事件重要度为中等以及以上）：
     - 个人信息：生日、年龄、职业、家庭成员、居住地等
@@ -1170,7 +1170,6 @@ AI回复: {bot_response}
     ) -> List[UserMemory]:
         """
         使用向量相似度检索记忆
-
         1. 生成查询消息的向量嵌入
         2. 从数据库获取用户的所有有embedding的记忆
         3. 计算相似度并排序
@@ -1231,15 +1230,14 @@ AI回复: {bot_response}
         similarity_start = time.perf_counter()
 
         scored_memories: List[Tuple[UserMemory, float]] = []
-        for memory in memories:
+        for num, memory in enumerate(memories):
             if memory.embedding:
                 memory_embedding = np.array(memory.embedding, dtype=np.float32)
                 similarity = self._cosine_similarity(query_embedding, memory_embedding)
-
                 logger.debug(
                     f"🔢 [Memory-VectorSearch][{trace_id}] Memory {memory.id}: "
                     f"similarity={similarity:.4f} | threshold={self.similarity_threshold} | "
-                    f"preview={memory.event_summary[:50]}..."
+                    f"preview={memory.event_summary[:30]}..."
                 )
 
                 if similarity >= self.similarity_threshold:
@@ -1359,10 +1357,9 @@ AI回复: {bot_response}
         )
 
         if memories:
-            logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Retrieved memories:")
             for i, memory in enumerate(memories):
                 logger.debug(
-                    f"  [{i + 1}] id={memory.id} | importance={memory.importance} | "
+                    f" 📋 [Memory-MetadataSearch][{trace_id}] Memory {memory.id} | importance={memory.importance} | "
                     f"type={memory.event_type} | summary={memory.event_summary[:60]}..."
                 )
 
@@ -1384,7 +1381,21 @@ AI回复: {bot_response}
 
     @staticmethod
     def _cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
-        """计算两个向量的余弦相似度"""
+        """
+        计算两个向量的余弦相似度
+
+        公式: cos(θ) = (A·B) / (||A|| × ||B||)
+
+        示例:
+        vec1 = [0.23, 0.41, 0.67]  (查询向量)
+        vec2 = [0.45, 0.32, 0.88]  (记忆向量)
+
+        点积 = 0.23×0.45 + 0.41×0.32 + 0.67×0.88 = 0.8243
+        ||vec1|| = √(0.23² + 0.41² + 0.67²) = 0.82
+        ||vec2|| = √(0.45² + 0.32² + 0.88²) = 1.05
+
+        similarity = 0.8243 / (0.82 × 1.05) = 0.96
+        """
         dot_product = np.dot(vec1, vec2)
         norm1 = np.linalg.norm(vec1)
         norm2 = np.linalg.norm(vec2)

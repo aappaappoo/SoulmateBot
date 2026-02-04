@@ -382,10 +382,9 @@ class BotConfig:
             except Exception as e:
                 logger.error(f"Error rendering template: {e}")
 
-        # 3. 从personality配置���动构建
+        # 3. 从personality配置中动态构建
         personality_prompt = self._build_personality_prompt()
         if personality_prompt:
-            logger.debug("Building system prompt from personality config")
             return personality_prompt
 
         # 4. 最终兜底

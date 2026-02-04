@@ -222,7 +222,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     )
                     return
 
-            # 🔔 检查是否是提醒请求
+            # 🔔 检查是否是提醒请求（用于定时任务）
             if db_user:
                 reminder_service = ReminderService(db)
                 reminder = await reminder_service.parse_and_create_reminder(
@@ -543,84 +543,3 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 f"抱歉，我遇到了一些问题：{str(e)}\n\n"
                 "请稍后再试，或联系管理员。"
             )
-
-
-async def handle_skill_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    处理技能选择回调
-    
-    当用户点击技能按钮后，执行相应的Agent。
-    """
-    query = update.callback_query
-    await query.answer()
-    callback_data = query.data
-    if not callback_data.startswith("skill:"):
-        return
-    skill_id = callback_data.split(":", 1)[1]
-    logger.info(f"🔘 Skill callback: {skill_id}")
-    # 处理取消
-    if skill_id == "cancel":
-        await query.edit_message_text("已取消操作。")
-        return
-    # 处理返回主菜单
-    if skill_id == "back_to_main":
-        buttons = skill_button_generator.generate_main_menu()
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"]) for btn in row]
-            for row in buttons
-        ])
-        await query.edit_message_text("请选择服务：", reply_markup=keyboard)
-        return
-    # 获取原始消息
-    original_message = context.user_data.get("pending_skill_message", "")
-    chat_id = context.user_data.get("pending_skill_chat_id", 0)
-    user_id = str(update.effective_user.id) if update.effective_user else "anonymous"
-    # 更新消息提示正在处理
-    await query.edit_message_text(f"⏳ 正在使用 {skill_id} 处理您的请求...")
-    try:
-        # 查找技能对应的Agent
-        skill = skill_registry.get(skill_id)
-        agent_name = skill.agent_name if skill else skill_id
-        # 创建消息和上下文
-        agent_message = AgentMessage(
-            content=original_message,
-            user_id=user_id,
-            chat_id=str(chat_id)
-        )
-        chat_context = ChatContext(chat_id=str(chat_id))
-        # 执行技能回调
-        orchestrator = get_orchestrator()
-        result = await orchestrator.process_skill_callback(
-            skill_name=agent_name,
-            message=agent_message,
-            context=chat_context
-        )
-        # 发送结果
-        await query.edit_message_text(result.final_response)
-        # 清理临时数据
-        context.user_data.pop("pending_skill_message", None)
-        context.user_data.pop("pending_skill_chat_id", None)
-    except Exception as e:
-        logger.error(f"❌ Error in skill callback: {e}", exc_info=True)
-        await query.edit_message_text(f"抱歉，处理请求时发生错误：{str(e)}")
-
-
-async def handle_skills_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    处理 /skills 命令，显示可用技能菜单
-    """
-    buttons = skill_button_generator.generate_main_menu()
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"]) for btn in row]
-        for row in buttons
-    ])
-    await update.message.reply_text(
-        "🔧 **可用技能**\n\n"
-        "请选择您需要的服务：",
-        reply_markup=keyboard
-    )
-
-
-def get_skill_callback_handler() -> CallbackQueryHandler:
-    """获取技能回调处理器，用于注册到Bot"""
-    return CallbackQueryHandler(handle_skill_callback, pattern=r"^skill:")

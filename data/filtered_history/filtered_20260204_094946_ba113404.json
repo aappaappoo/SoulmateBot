@@ -1,0 +1,29 @@
+{
+  "chat_id": null,
+  "user_id": null,
+  "timestamp": "2026-02-04T09:49:46.422155+00:00",
+  "filtered_count": 3,
+  "items": [
+    {
+      "original_content": "你是谁呀",
+      "filter_reason": "too_short",
+      "extracted_urls": [],
+      "timestamp": "2026-02-04T09:49:46.422029+00:00",
+      "placeholder": ""
+    },
+    {
+      "original_content": "你是谁",
+      "filter_reason": "too_short",
+      "extracted_urls": [],
+      "timestamp": "2026-02-04T09:49:46.422061+00:00",
+      "placeholder": ""
+    },
+    {
+      "original_content": "你好呀",
+      "filter_reason": "too_short",
+      "extracted_urls": [],
+      "timestamp": "2026-02-04T09:49:46.422081+00:00",
+      "placeholder": ""
+    }
+  ]
+}

@@ -320,29 +320,29 @@ class ConversationTypeAnalyzer:
         # 检测情绪倾诉（优先级最高，需要特殊对待）
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.EMOTIONAL_VENT]:
             if keyword in message:
-                logger.debug(f"Detected EMOTIONAL_VENT: keyword={keyword}")
+                logger.debug(f"🫙 [Dialogue-Strategy] Detected EMOTIONAL_VENT: keyword={keyword}")
                 return ConversationType.EMOTIONAL_VENT
         
         # 检测决策咨询
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.DECISION_CONSULTING]:
             if keyword in message:
-                logger.debug(f"Detected DECISION_CONSULTING: keyword={keyword}")
+                logger.debug(f"🫙 [Dialogue-Strategy] Detected DECISION_CONSULTING: keyword={keyword}")
                 return ConversationType.DECISION_CONSULTING
         
         # 检测观点讨论
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.OPINION_DISCUSSION]:
             if keyword in message:
-                logger.debug(f"Detected OPINION_DISCUSSION: keyword={keyword}")
+                logger.debug(f"🫙 [Dialogue-Strategy] Detected OPINION_DISCUSSION: keyword={keyword}")
                 return ConversationType.OPINION_DISCUSSION
         
         # 检测信息需求
         for keyword in CONVERSATION_TYPE_SIGNALS[ConversationType.INFO_REQUEST]:
             if keyword in message:
-                logger.debug(f"Detected INFO_REQUEST: keyword={keyword}")
+                logger.debug(f"🫙 [Dialogue-Strategy] Detected INFO_REQUEST: keyword={keyword}")
                 return ConversationType.INFO_REQUEST
         
         # 默认为日常闲聊
-        logger.debug("Default to CASUAL_CHAT")
+        logger.debug("🫙 [Dialogue-Strategy] Not Detected Using Default CASUAL_CHATT")
         return ConversationType.CASUAL_CHAT
 
 
@@ -777,7 +777,7 @@ class DialogueStrategyInjector:
         enhanced_prompt += f"\n\n{MULTI_MESSAGE_INSTRUCTION}"
         
         logger.info(
-            f"Dialogue strategy applied: phase={phase.value}, "
+            f"🫙 [Dialogue-Strategy] applied: phase={phase.value}, "
             f"emotion={emotion_type}/{emotion_intensity}, "
             f"conversation_type={conversation_type.value}, "
             f"response_type={response_type.value}"

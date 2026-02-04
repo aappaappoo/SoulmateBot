@@ -174,7 +174,7 @@ class HistoryFilter:
             )
         
         logger.info(
-            f"🔍 [HistoryFilter] Filtered {len(filtered_out)} messages from "
+            f"📁 [HistoryFilter] Filtered {len(filtered_out)} messages from "
             f"{len(conversation_history)} total. Remaining: {len(filtered_history)}"
         )
         
