@@ -125,7 +125,7 @@ class VLLMProvider(AIProvider):
             "model": self.model,
             "messages": full_messages,
             "temperature": 0.8,
-            "max_tokens": 1000
+            "max_tokens": 1000,
         }
 
         # 记录请求日志

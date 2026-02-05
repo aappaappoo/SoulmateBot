@@ -445,6 +445,7 @@ class UnifiedContextBuilder:
         if dialogue_strategy:
             components.append(dialogue_strategy)
 
+<<<<<<< Updated upstream
         # 添加对话历史（嵌入在 system prompt 中，带特殊标记）
         if short_term_history:
             history_text = self._format_history_for_system_prompt(short_term_history)
@@ -455,6 +456,8 @@ class UnifiedContextBuilder:
         json_format_instruction = self._get_json_format_instruction()
         components.append(json_format_instruction)
 
+=======
+>>>>>>> Stashed changes
         # 用双换行符连接所有组件
         enhanced_prompt = "\n\n".join(components)
         

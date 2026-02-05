@@ -226,7 +226,7 @@ class BotConfig:
             包含完整人设的提示词字符串
         """
         p = self.personality
-        sections = ["## 你现在是正常人类, 拥有独立人格不是任何人的助理。\n"]
+        sections = ["【 你现在是拥有独立人格的人不是任何人的助理。】\n"]
 
         # 基础信息
         if p.name:
@@ -237,16 +237,16 @@ class BotConfig:
 
         # 基础人设描述
         if p.character:
-            sections.append(f"\n## 基础人设\n{p.character}")
+            sections.append(f"\n【基础人设】\n{p.character}")
 
         # 性格特点
         if p.traits:
             traits_text = "、".join(p.traits)
-            sections.append(f"\n## 性格特点\n{traits_text}")
+            sections.append(f"\n【性格特点】\n{traits_text}")
 
         # 外貌特征
         if p.appearance and p.appearance.physical_description:
-            appearance_section = f"\n## 外貌特征\n{p.appearance.physical_description}"
+            appearance_section = f"\n【外貌特征】\n{p.appearance.physical_description}"
             if p.appearance.style:
                 appearance_section += f"\n穿着风格：{p.appearance.style}"
             if p.appearance.distinctive_features:
@@ -257,26 +257,26 @@ class BotConfig:
         # 口头禅
         if p.catchphrases:
             catchphrases_text = "」「".join(p.catchphrases)
-            sections.append(f"\n## 口头禅\n常说的话包括：「{catchphrases_text}」")
+            sections.append(f"\n【 口头禅】\n常说的话包括：「{catchphrases_text}」")
 
         # 人生规划和理想
         if p.life_goals:
             goals_text = "\n".join([f"- {goal}" for goal in p.life_goals])
-            sections.append(f"\n## 人生规划\n{goals_text}")
+            sections.append(f"\n【 人生规划】\n{goals_text}")
 
         # 喜好
         if p.likes:
             likes_text = "、".join(p.likes)
-            sections.append(f"\n## 喜欢的事物\n{likes_text}")
+            sections.append(f"\n【 喜欢的事物】\n{likes_text}")
 
         # 讨厌点
         if p.dislikes:
             dislikes_text = "、".join(p.dislikes)
-            sections.append(f"\n## 讨厌的事物\n{dislikes_text}")
+            sections.append(f"\n【 讨厌的事物】\n{dislikes_text}")
 
         # 居住环境
         if p.living_environment:
-            sections.append(f"\n## 居住环境\n{p.living_environment}")
+            sections.append(f"\n【 居住环境】\n{p.living_environment}")
 
         # 语言风格
         if p.speaking_style:
@@ -299,7 +299,7 @@ class BotConfig:
                 style_parts.append(sentence_length)
 
             if style_parts:
-                sections.append(f"\n## 语言风格\n" + "\n".join([f"- {s}" for s in style_parts]))
+                sections.append(f"\n【 语言风格】\n" + "\n".join([f"- {s}" for s in style_parts]))
 
         # 交互偏好
         if p.interaction_style:
@@ -313,11 +313,11 @@ class BotConfig:
             if p.interaction_style.get("encourage_user"):
                 interaction_parts.append("会鼓励用户")
             if interaction_parts:
-                sections.append(f"\n## 交互偏好\n" + "、".join(interaction_parts))
+                sections.append(f"\n【 交互偏好】\n" + "、".join(interaction_parts))
 
         # 情绪应对策略
         if p.emotional_response:
-            sections.append(f"\n## 情绪应对策略")
+            sections.append(f"\n【 情绪应对策略】")
             if p.emotional_response.get("user_sad"):
                 sections.append(f"当用户难过时：{p.emotional_response['user_sad']}")
             if p.emotional_response.get("user_angry"):
@@ -335,7 +335,7 @@ class BotConfig:
             if p.safety_policy.get("response_strategy"):
                 safety_parts.append(f"特殊的响应策略：{p.safety_policy['response_strategy']}")
             if safety_parts:
-                sections.append(f"\n## 交互偏好\n" + "\n".join(safety_parts))
+                sections.append(f"\n【 交互偏好】\n" + "\n".join(safety_parts))
         return "\n".join(sections)
 
     def get_system_prompt(self) -> str:
