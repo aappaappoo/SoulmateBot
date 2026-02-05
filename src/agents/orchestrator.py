@@ -90,124 +90,158 @@ class AgentOrchestrator:
     """
     # 支持的情感标签
     SUPPORTED_EMOTIONS = ["happy", "gentle", "sad", "excited", "angry", "crying"]
-    
-    UNIFIED_PROMPT_TEMPLATE = """需要同时完成四项任务：
-    ## 任务1：意图识别
-    判断用户消息应该如何处理：
-    - "direct_response": 日常闲聊、问候、简单问答，由你直接回复
-    - "single_agent": 需要单个专业Agent处理
-    - "multi_agent": 需要多个Agent协作处理
 
-    可用的Agent能力：
-    {agent_capabilities}
+    UNIFIED_PROMPT_TEMPLATE = """
+请根据规则完成任务，并【只输出合法 JSON】。
+=========================
+【最高优先级硬约束】
+=========================
+1. 你【只能】输出 JSON，不允许包含任何解释性文字、标点或注释
+2. JSON 必须能被标准 json.loads 直接解析
+3. 除 direct_reply 字段外，禁止生成任何自然语言回复
+4. 严格按照“强制格式要求”中的字段返回，不得增减字段
 
-    ## 任务2：生成回复（仅当 intent 为 direct_response 时）
-    根据以下人设直接回复用户：
-    {system_prompt}
-    
-    **重要：回复内容（direct_reply）中不要包含语气标注，直接输出纯文本回复。情感信息通过emotion和emotion_description字段单独返回。**
-    
-    情感标签示例（填入emotion字段）：
-    - happy: 用于表达高兴、愉快的情绪
-    - excited: 用于表达激动、热情的情绪
-    - gentle: 用于表达温暖、关怀的情绪
-    - sad: 用于表达悲伤、失落的情绪
-    - angry: 用于表达愤怒的情绪
-    - crying: 用于表达委屈的情绪
-    
-    情感描述示例（填入emotion_description字段）：
-    - "开心、轻快，语速稍快，语调上扬"
-    - "温柔、轻声，语调柔和"
-    - "兴奋、活跃，富有感染力"
-    
-    **重要：当intent为direct_response时，纯文本回复内容格式说明如下**
-    为了让对话更加自然，你可以日常使用1句话来回复，但偶尔选择将回复分成多条消息发送。
-    
-    格式要求：
-    - 如果你认为回复应该分成多条消息，请使用 [MSG_SPLIT] 标记分隔
-    - 每个分隔的部分会作为独立的消息发送给用户
-    - 分隔要自然，就像真人聊天时会分多次发送一样
-    - 不要刻意分割，只在自然需要时使用（比如：先回应情绪，再提问；或者分享不同的想法）
-    - 最好分成消息的信息条数不超过3条
-    
-    示例1（单条回复）：
-    我懂你的感受，这种时候确实很不容易呢 💕
-    
-    示例2（多条回复）：
-    哎呀，听起来今天遇到了不少事情呢
-    [MSG_SPLIT]
-    不过别担心，有什么想说的都可以告诉我~
-    
-    示例3（多条回复）：
-    你说的这个我特别理解
-    [MSG_SPLIT]
-    对了，你平时一般怎么放松自己呀？
-    
-    注意：[MSG_SPLIT] 标记只用于分隔消息，不要在回复内容中提及或解释这个标记。
+=========================
+【任务总览】
+=========================
+你需要同时完成 4 个任务：
+1. 意图识别
+2. 回复生成（仅在特定条件下）
+3. 对话摘要生成
+4. 记忆分析
 
-    ## 任务3：对话摘要生成（重要！）
-    请根据【对话历史】和当前消息，生成一个累积的对话摘要。
-    
-    摘要要求：
-    1. **综合整个对话**，不只是当前这一轮
-    2. 提取关键要素：
-       - 时间：对话中提到的时间点（如"今天"、"下班后"、"昨天"、或者具体的年月日等）
-       - 地点：提到的地点（如"公司"、"家里"、"学校"等）
-       - 人物：涉及的人物（如"用户"、"领导"、"朋友"、"家人"等）
-       - 事件：发生的事情或讨论的话题
-       - 情绪：用户表达的情绪状态
-    3. 记录对话的核心话题
-    4. 描述用户当前的状态
-    
-    这个摘要将用于后续对话的上下文理解，请确保信息完整且准确。
+=========================
+【任务 1：意图识别】
+=========================
+判断用户消息应如何处理，intent 只能是以下三种之一：
 
-    ## 任务4：记忆分析
-    判断对话是否包含值得记住的重要信息（个人信息、偏好、目标、重要事件等）。
-    日常寒暄（你好、谢谢等）不需要记录，同时如果和历史记录存在完成重复的事项不需要记录。
+- "direct_response"：
+  日常闲聊、问候、简单问答，你可以直接回复用户
 
-    当前时间：{current_time}
-    用户消息：{user_message}
-    
-    =========================
-          强制格式要求 
-    =========================
-    
-    **你必须严格按照以下JSON格式返回，不要返回任何其他内容：**
-    
-    ```json
+- "single_agent"：
+  需要某一个专业 Agent 处理的问题
+
+- "multi_agent"：
+  需要多个 Agent 协作的问题
+
+可用 Agent 能力如下：
+{agent_capabilities}
+
+当 intent 为：
+- direct_response → agents 设为空数组 []
+- single_agent / multi_agent → agents 填写需要调用的 Agent 名称
+
+=========================
+【任务 2：生成回复】
+=========================
+⚠️【关键条件规则】⚠️
+
+- 仅当 intent == "direct_response" 时：
+  - 才允许在 direct_reply 中生成回复文本
+  - emotion / emotion_description 才允许填写
+
+- 当 intent != "direct_response" 时：
+  - direct_reply 必须为 ""
+  - emotion 必须为 null
+  - emotion_description 必须为 null
+
+回复生成规则：
+- 回复内容中【不要】包含情绪说明或语气描述
+- 回复必须是纯文本
+- 不要出现表情符号解释、情绪标签或括号说明
+
+多消息规则：
+- 如需拆分为多条消息，用 [MSG_SPLIT] 分隔
+- 最多拆分为 3 条
+- 仅在自然需要时拆分
+
+可用系统风格约束：
+{system_prompt}
+
+=========================
+【任务 3：对话摘要生成】
+=========================
+基于【完整对话历史 + 当前消息】生成一个“累积摘要”。
+
+摘要要求：
+- 描述的是“到目前为止的整体对话”
+- 不仅是当前这一轮
+- summary_text 控制在 100 字以内
+
+需提取的关键要素：
+- 时间（如：今天、昨天、具体日期）
+- 地点
+- 人物
+- 事件
+- 用户情绪
+
+同时给出：
+- topics：对话核心话题
+- user_state：用户当前状态的客观描述
+
+=========================
+【任务 4：记忆分析】
+=========================
+判断是否存在“值得长期记忆”的信息。
+
+不需要记忆的情况：
+- 日常寒暄
+- 已在历史中完整重复的信息
+
+需要记忆的情况示例：
+- 用户偏好
+- 长期目标
+- 重要情绪状态
+- 重要生活事件
+
+若 is_important 为 false：
+- 其余 memory 字段全部设为 null 或空数组
+
+=========================
+【当前时间】
+=========================
+{current_time}
+
+=========================
+【强制 JSON 输出格式】
+=========================
+
+你必须严格按以下格式输出：
+
+```json
     {{
-        "intent": "direct_response" | "single_agent" | "multi_agent",
-        "agents": [],
-        "reasoning": "判断理由",
-        
-        "conversation_summary": {{
-            "summary_text": "综合整个对话的摘要文本（100字以内）",
-            "key_elements": {{
-                "time": ["时间点1", "时间点2"],
-                "place": ["地点1", "地点2"],
-                "people": ["人物1", "人物2"],
-                "events": ["事件1", "事件2"],
-                "emotions": ["情绪1", "情绪2"]
-            }},
-            "topics": ["话题1", "话题2", "话题3"],
-            "user_state": "用户当前状态描述"
+    "intent": "direct_response" | "single_agent" | "multi_agent",
+    "agents": [],
+    "reasoning": "判断理由",
+    
+    "conversation_summary": {{
+        "summary_text": "综合整个对话的摘要文本（100字以内）",
+        "key_elements": {{
+            "time": ["时间点1", "时间点2"],
+            "place": ["地点1", "地点2"],
+            "people": ["人物1", "人物2"],
+            "events": ["事件1", "事件2"],
+            "emotions": ["情绪1", "情绪2"]
         }},
-        
-        "direct_reply": "纯文本回复内容，按照上面回复内容格式说明进行",
-        "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
-        "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
-        "memory": {{
-            "is_important": false,
-            "importance_level": "low" | "medium" | "high" | null,
-            "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
-            "event_summary": "事件摘要" | null,
-            "keywords": [],
-            "event_date": "YYYY-MM-DD" | null,
-            "raw_date_expression": "原始时间表达" | null
-        }}
+        "topics": ["话题1", "话题2", "话题3"],
+        "user_state": "用户当前状态描述"
+    }},
+    
+    "direct_reply": "纯文本回复内容，按照上面回复内容格式说明进行",
+    "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
+    "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
+    "memory": {{
+        "is_important": false,
+        "importance_level": "low" | "medium" | "high" | null,
+        "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
+        "event_summary": "事件摘要" | null,
+        "keywords": [],
+        "event_date": "YYYY-MM-DD" | null,
+        "raw_date_expression": "原始时间表达" | null
     }}
-    ```
-    """
+}}
+```
+"""
     def __init__(
         self,
         agents: List[BaseAgent],
@@ -273,25 +307,21 @@ class AgentOrchestrator:
             base_system_prompt = context.system_prompt if context and context.system_prompt else ""
             
             # 将 UNIFIED_PROMPT_TEMPLATE 整合到 System Prompt 中
-            # 注意：system_prompt 参数设为空字符串，避免与 base_system_prompt 重复
-            # 因为 base_system_prompt 已经包含了完整的人设信息
             unified_task_prompt = self.UNIFIED_PROMPT_TEMPLATE.format(
                 agent_capabilities=self._get_capabilities_prompt(),
-                system_prompt="（参见上方的人设设定）",  # 避免重复，指向上方已有的人设
+                system_prompt="（参见上方的人设设定）",
                 current_time=datetime.now().strftime("%Y年%m月%d日 %H:%M"),
-                user_message=message.content
             )
-            
             # 组合完整的 System Prompt
             # base_system_prompt 已包含：人设 + 记忆 + 策略 + 对话历史提示
             # unified_task_prompt 包含：任务要求 + 返回格式
             enhanced_system_prompt = f"""{base_system_prompt}
-
 =========================
 📋 任务指令
 =========================
 {unified_task_prompt}"""
-            
+            print("111111111")
+            print(enhanced_system_prompt)
             messages.append({
                 "role": "system",
                 "content": enhanced_system_prompt
