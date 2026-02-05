@@ -417,7 +417,12 @@ class UnifiedContextBuilder:
                 
                 summary_text = f"""【对话回顾】
 {llm_generated_summary.get('summary_text', '')}
-关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}，事件={format_list(key_elements.get('events', []))}，情绪={format_list(key_elements.get('emotions', []))}
+关键要素：
+- 时间={format_list(key_elements.get('time', []))}
+- 地点={format_list(key_elements.get('place', []))}
+- 人物={format_list(key_elements.get('people', []))}
+- 事件={format_list(key_elements.get('events', []))}
+- 情绪={format_list(key_elements.get('emotions', []))}
 话题：{format_list(llm_generated_summary.get('topics', []))}
 用户状态：{llm_generated_summary.get('user_state', '')}"""
                 components.append(summary_text.strip())
@@ -480,8 +485,10 @@ class UnifiedContextBuilder:
             if role == "user":
                 history_lines.append(f"User: {content}")
             elif role == "assistant":
-                # 标记为非JSON内容，仅用于上下文理解
-                history_lines.append(f"Assistant: [非JSON内容，仅为上下文理解]")
+                # 为助手回复添加简短摘要，保留上下文但防止 LLM 模仿完整格式
+                # 截取前30字符作为摘要，避免 token 浪费
+                summary = content[:30] + "..." if len(content) > 30 else content
+                history_lines.append(f"Assistant: {summary}")
         
         if not history_lines:
             return ""
@@ -516,7 +523,7 @@ class UnifiedContextBuilder:
     def _build_messages(
         self,
         system_prompt: str,
-        short_term_history: List[Dict[str, str]],
+        short_term_history: List[Dict[str, str]],  # 保留此参数用于向后兼容和接口一致性
         current_message: str
     ) -> List[Dict[str, str]]:
         """
@@ -526,16 +533,22 @@ class UnifiedContextBuilder:
         1. System message (包含所有上下文：人设、记忆、摘要、对话历史、JSON格式指令)
         2. 当前 user message（仅当前输入）
         
-        注意：短期历史已经嵌入到 system_prompt 中，不再作为单独消息
+        注意：短期历史已经嵌入到 system_prompt 中，不再作为单独消息。
+        short_term_history 参数保留用于：
+        1. 向后兼容 - 避免修改所有调用方代码
+        2. 接口一致性 - 与 build_context 调用模式保持一致
         
         Args:
             system_prompt: 增强的 system prompt（已包含对话历史）
-            short_term_history: 短期历史（此参数保留兼容性，但不再使用）
+            short_term_history: 短期历史（保留用于向后兼容，历史已嵌入 system_prompt）
             current_message: 当前消息
             
         Returns:
             仅包含2条消息的列表：[system, user]
         """
+        # short_term_history 在此不使用，历史已嵌入 system_prompt
+        _ = short_term_history  # 显式标记为已知未使用
+        
         messages = [
             {
                 "role": "system",
@@ -584,51 +597,13 @@ class UnifiedContextBuilder:
             messages: 原始消息列表
             
         Returns:
-            截断后的消息列表（可能未改变）
+            截断后的消息列表（在简化结构下返回原始消息）
         """
+        # 简化结构下，只有 system 和当前消息，无法在消息层面截断
+        # 历史已嵌入 system prompt，需要通过调整 short_term_rounds 配置来控制 token
         if len(messages) <= 2:
-            # 简化结构下，只有 system 和当前消息，无法再截断
-            # 历史已嵌入 system prompt，需要通过调整配置来控制 token
             logger.debug("简化结构下无法截断消息，请通过调整 short_term_rounds 配置来控制 token")
-            return messages
-        
-        # 以下是旧的多消息结构的截断逻辑（保留兼容性）
-        # 分离组件
-        system_msg = messages[0] if messages and messages[0].get("role") == "system" else None
-        current_msg = messages[-1] if messages and messages[-1].get("role") == "user" else None
-        history = messages[1:-1] if len(messages) > 2 else []
-        
-        # 逐步移除历史消息直到满足预算
-        budget = self.config.max_total_tokens - self.config.reserved_output_tokens
-        
-        # 构建测试消息列表
-        test_messages = []
-        if system_msg:
-            test_messages.append(system_msg)
-        test_messages.extend(history)
-        if current_msg:
-            test_messages.append(current_msg)
-        
-        while history and self._estimate_tokens(test_messages) > budget:
-            history.pop(0)
-            logger.debug(f"移除一条历史消息，剩余: {len(history)}")
-            # 重建测试消息列表
-            test_messages = []
-            if system_msg:
-                test_messages.append(system_msg)
-            test_messages.extend(history)
-            if current_msg:
-                test_messages.append(current_msg)
-        
-        # 重新组合
-        result = []
-        if system_msg:
-            result.append(system_msg)
-        result.extend(history)
-        if current_msg:
-            result.append(current_msg)
-        
-        return result
+        return messages
     
     def get_token_budget_info(self, result: BuilderResult) -> Dict[str, Any]:
         """

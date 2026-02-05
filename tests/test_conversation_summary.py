@@ -329,7 +329,7 @@ class TestContextBuilderWithSummary:
         # 验证system prompt包含LLM摘要
         system_prompt = result.messages[0]["content"]
         
-        # 简化后的格式检查
+        # 简化后的格式检查（多行格式）
         assert "【对话回顾】" in system_prompt
         assert "用户今天很开心，和Bot讨论了工作" in system_prompt
         assert "时间=今天" in system_prompt
