@@ -182,17 +182,18 @@ class UnifiedContextBuilder:
                 conversation_history, user_memories
             )
         
-        # 5. 构建增强的 System Prompt
+        # 5. 构建增强的 System Prompt（包含对话历史）
         enhanced_system_prompt = self._build_enhanced_system_prompt(
             bot_system_prompt=bot_system_prompt,
             memory_context=memory_context,
             mid_term_summary=mid_term_summary,
             llm_generated_summary=llm_generated_summary,  # 传递 LLM 摘要
             dialogue_strategy=dialogue_strategy,
-            proactive_guidance=proactive_guidance
+            proactive_guidance=proactive_guidance,
+            short_term_history=short_term  # 传递短期历史以嵌入 system prompt
         )
         
-        # 6. 构建最终消息列表
+        # 6. 构建最终消息列表（仅 system + user 两条消息）
         messages = self._build_messages(
             enhanced_system_prompt,
             short_term,
@@ -367,17 +368,20 @@ class UnifiedContextBuilder:
         mid_term_summary: Optional[ConversationSummary],
         llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
         dialogue_strategy: Optional[str] = None,
-        proactive_guidance: str = ""
+        proactive_guidance: str = "",
+        short_term_history: Optional[List[Dict[str, str]]] = None
     ) -> str:
         """
         构建增强的 System Prompt
         
-        结构：
-        1. 原始人设
-        2. 长期记忆
-        3. 中期对话摘要（优先使用LLM生成的摘要）
-        4. 对话策略
-        5. 主动策略
+        简化结构（仅包含 system + user 两条消息）:
+        1. 原始人设（角色设定）
+        2. 长期记忆（重要事件）
+        3. 中期对话摘要
+        4. 主动策略
+        5. 对话策略
+        6. 仅5轮对话历史（嵌入在 system prompt 中，带特殊标记防止 LLM 模仿格式）
+        7. 强制 JSON 格式输出指令
         
         Args:
             bot_system_prompt: 原始人设
@@ -386,13 +390,14 @@ class UnifiedContextBuilder:
             llm_generated_summary: LLM 生成的对话摘要（可选）
             dialogue_strategy: 对话策略
             proactive_guidance: 主动策略
+            short_term_history: 短期对话历史（最近5轮，可选）
             
         Returns:
             增强后的 system prompt
         """
         components = [bot_system_prompt]
         
-        # 添加长期记忆
+        # 添加长期记忆（重要事件）
         if memory_context:
             components.append(memory_context)
         
@@ -410,31 +415,20 @@ class UnifiedContextBuilder:
                 def format_list(items):
                     return ', '.join(items) if items else '无'
                 
-                summary_text = f"""
-【本次对话回顾】
+                summary_text = f"""【对话回顾】
 {llm_generated_summary.get('summary_text', '')}
-
-关键要素：
-- 时间：{format_list(key_elements.get('time', []))}
-- 地点：{format_list(key_elements.get('place', []))}
-- 人物：{format_list(key_elements.get('people', []))}
-- 事件：{format_list(key_elements.get('events', []))}
-- 情绪：{format_list(key_elements.get('emotions', []))}
-
+关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}，事件={format_list(key_elements.get('events', []))}，情绪={format_list(key_elements.get('emotions', []))}
 话题：{format_list(llm_generated_summary.get('topics', []))}
-用户状态：{llm_generated_summary.get('user_state', '')}
-"""
+用户状态：{llm_generated_summary.get('user_state', '')}"""
                 components.append(summary_text.strip())
             
         elif mid_term_summary:
             # 回退到规则摘要
-            summary_text = f"""
-【本次对话回顾】
+            summary_text = f"""【对话回顾】
 {mid_term_summary.summary_text}
-讨论话题：{', '.join(mid_term_summary.key_topics[:3])}
-"""
+讨论话题：{', '.join(mid_term_summary.key_topics[:3])}"""
             if mid_term_summary.emotion_trajectory:
-                summary_text += f"情绪变化：{mid_term_summary.emotion_trajectory}\n"
+                summary_text += f"\n情绪变化：{mid_term_summary.emotion_trajectory}"
             
             components.append(summary_text.strip())
         
@@ -446,12 +440,78 @@ class UnifiedContextBuilder:
         if dialogue_strategy:
             components.append(dialogue_strategy)
 
-        components.append("""【对话历史】\n以下是最近的对话记录，请结合上下文理解用户当前的状态和需求：""")
+        # 添加对话历史（嵌入在 system prompt 中，带特殊标记）
+        if short_term_history:
+            history_text = self._format_history_for_system_prompt(short_term_history)
+            if history_text:
+                components.append(history_text)
+        
+        # 添加强制 JSON 格式输出指令
+        json_format_instruction = self._get_json_format_instruction()
+        components.append(json_format_instruction)
 
         # 用双换行符连接所有组件
         enhanced_prompt = "\n\n".join(components)
         
         return enhanced_prompt
+    
+    def _format_history_for_system_prompt(
+        self,
+        short_term_history: List[Dict[str, str]]
+    ) -> str:
+        """
+        将短期对话历史格式化为嵌入 system prompt 的文本
+        
+        使用特殊标记防止 LLM 模仿此格式输出
+        
+        Args:
+            short_term_history: 短期对话历史
+            
+        Returns:
+            格式化的历史文本
+        """
+        if not short_term_history:
+            return ""
+        
+        history_lines = []
+        for msg in short_term_history:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role == "user":
+                history_lines.append(f"User: {content}")
+            elif role == "assistant":
+                # 标记为非JSON内容，仅用于上下文理解
+                history_lines.append(f"Assistant: [非JSON内容，仅为上下文理解]")
+        
+        if not history_lines:
+            return ""
+        
+        history_text = """【历史对话 - 仅参考，禁止模仿格式】
+<history>
+""" + "\n".join(history_lines) + """
+</history>
+
+⚠️ 注意：上方历史仅用于理解上下文，你的输出必须是JSON"""
+        
+        return history_text
+    
+    def _get_json_format_instruction(self) -> str:
+        """
+        获取强制 JSON 格式输出指令
+        
+        Returns:
+            JSON 格式指令文本
+        """
+        return """【强制JSON格式】
+你必须且只能返回以下JSON格式，不要添加任何其他文本：
+{
+    "response": "你的回复内容",
+    "emotion_info": {
+        "emotion_type": "情绪类型(happy/gentle/sad/excited/angry/crying/neutral)",
+        "intensity": "强度(high/medium/low)",
+        "tone_description": "语气描述"
+    }
+}"""
     
     def _build_messages(
         self,
@@ -460,36 +520,32 @@ class UnifiedContextBuilder:
         current_message: str
     ) -> List[Dict[str, str]]:
         """
-        构建最终消息列表
+        构建最终消息列表（简化版本，仅2条消息）
         
         结构：
-        1. System message (enhanced prompt)
-        2. Short-term history
-        3. Current user message
+        1. System message (包含所有上下文：人设、记忆、摘要、对话历史、JSON格式指令)
+        2. 当前 user message（仅当前输入）
+        
+        注意：短期历史已经嵌入到 system_prompt 中，不再作为单独消息
         
         Args:
-            system_prompt: 增强的 system prompt
-            short_term_history: 短期历史
+            system_prompt: 增强的 system prompt（已包含对话历史）
+            short_term_history: 短期历史（此参数保留兼容性，但不再使用）
             current_message: 当前消息
             
         Returns:
-            完整的消息列表
+            仅包含2条消息的列表：[system, user]
         """
-        messages = []
-        # 1. System prompt
-        messages.append({
-            "role": "system",
-            "content": system_prompt
-        })
-        # 2. Short-term history（过滤，只保留 user/assistant）
-        for msg in short_term_history:
-            if msg.get("role") in ("user", "assistant"):
-                messages.append(msg)
-        # 3. Current message
-        messages.append({
-            "role": "user",
-            "content": current_message
-        })
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": current_message
+            }
+        ]
         
         return messages
     
@@ -521,21 +577,22 @@ class UnifiedContextBuilder:
         """
         截断消息以适应 token 预算
         
-        策略：
-        1. 保留 system prompt
-        2. 保留当前用户消息
-        3. 从短期历史中移除最早的消息
+        注意：在简化结构（仅 system + user 两条消息）下，历史已嵌入 system prompt，
+        无法在消息层面进行截断。如需更严格的 token 控制，请调整 short_term_rounds 配置。
         
         Args:
             messages: 原始消息列表
             
         Returns:
-            截断后的消息列表
+            截断后的消息列表（可能未改变）
         """
         if len(messages) <= 2:
-            # 只有 system 和当前消息，无法再截断
+            # 简化结构下，只有 system 和当前消息，无法再截断
+            # 历史已嵌入 system prompt，需要通过调整配置来控制 token
+            logger.debug("简化结构下无法截断消息，请通过调整 short_term_rounds 配置来控制 token")
             return messages
         
+        # 以下是旧的多消息结构的截断逻辑（保留兼容性）
         # 分离组件
         system_msg = messages[0] if messages and messages[0].get("role") == "system" else None
         current_msg = messages[-1] if messages and messages[-1].get("role") == "user" else None
