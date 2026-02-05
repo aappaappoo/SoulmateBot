@@ -716,76 +716,7 @@ class DialogueStrategyInjector:
         return enhanced_prompt
     
     def _build_values_guidance(self, bot_values: 'ValuesConfig') -> str:
-        """
-        构建价值观指导
-        Build values guidance based on bot values configuration
-        
-        Args:
-            bot_values: Bot价值观配置
-            
-        Returns:
-            价值观指导文本
-        """
-        dimensions = bot_values.dimensions
-        preferences = bot_values.response_preferences
-        stances = bot_values.stances
-        guidance = """
-【注意：以下是你的个人特征，影响你的思考方式和表达风格】：
-【人格维度】"""
-        
-        # 理性 vs 感性
-        if dimensions.rationality <= 3:
-            guidance += "\n- 你偏感性，更关注情感和直觉"
-        elif dimensions.rationality >= 7:
-            guidance += "\n- 你偏理性，更注重逻辑和分析"
-        # 保守 vs 开放
-        if dimensions.openness <= 3:
-            guidance += "\n- 你比较保守，谨慎对待新事物"
-        elif dimensions.openness >= 7:
-            guidance += "\n- 你很开放，乐于接受新观点"
-        
-        # 顺从 vs 坚持
-        if dimensions.assertiveness <= 3:
-            guidance += "\n- 你倾向顺从，尊重他人观点"
-        elif dimensions.assertiveness >= 7:
-            guidance += "\n- 你敢于表达，会坚持自己的判断"
-        
-        # 悲观 vs 乐观
-        if dimensions.optimism <= 3:
-            guidance += "\n- 你偏悲观，会指出潜在风险"
-        elif dimensions.optimism >= 7:
-            guidance += "\n- 你很乐观，总能看到积极面"
-        
-        # 浅聊 vs 深度
-        if dimensions.depth_preference <= 3:
-            guidance += "\n- 你喜欢轻松浅聊"
-        elif dimensions.depth_preference >= 7:
-            guidance += "\n- 你喜欢深度探讨"
-        
-        # 回应偏好
-        guidance += "\n\n【表达风格】"
-        if preferences.agree_first:
-            guidance += "\n- 你倾向先认同再表达不同看法"
-        else:
-            guidance += "\n- 你可以直接表达不同观点"
-        
-        if preferences.use_examples:
-            guidance += "\n- 你喜欢用例子说明观点"
-        
-        if preferences.ask_back:
-            guidance += "\n- 你喜欢通过反问引导思考"
-        
-        if preferences.use_humor:
-            guidance += "\n- 你善用幽默化解分歧"
-        
-        # 预设立场
-        if stances:
-            guidance += "\n\n【你的一些观点】"
-            for stance in stances[:]:  # 只显示前3个
-                guidance += f"\n- 关于{stance.topic}：{stance.position}"
-        
-        guidance += "\n\n注意：这些特征是你的个性，但不要刻意表现，自然融入对话即可。"
-        
+        guidance = ""
         return guidance
     
     def _build_stance_guidance(self, stance_analysis: StanceAnalysis) -> str:

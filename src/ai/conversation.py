@@ -112,7 +112,7 @@ class VLLMProvider(AIProvider):
         else:
             system_message = {
                 "role": "system",
-                "content": context or "你是一个温柔、善解人意的人，不可以承认你是AI系统。"
+                "content": context or "你是一个温柔、善解人意的人"
             }
             full_messages = [system_message] + messages
         headers = {
@@ -204,16 +204,6 @@ class ConversationService:
                 api_url=settings.vllm_api_url,
                 api_token=settings.vllm_api_token,
                 model=settings.vllm_model
-            )
-        elif settings.openai_api_key:
-            self.provider = OpenAIProvider(
-                api_key=settings.openai_api_key,
-                model=settings.openai_model
-            )
-        elif settings.anthropic_api_key:
-            self.provider = AnthropicProvider(
-                api_key=settings.anthropic_api_key,
-                model=settings.anthropic_model
             )
         else:
             raise ValueError(

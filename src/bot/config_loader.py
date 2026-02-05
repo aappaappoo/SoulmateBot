@@ -226,7 +226,7 @@ class BotConfig:
             包含完整人设的提示词字符串
         """
         p = self.personality
-        sections = ["【 你现在是拥有独立人格的人不是任何人的助理。】\n"]
+        sections = ["【你现在是拥有独立人格的人不是任何人的助理。】"]
 
         # 基础信息
         if p.name:
@@ -248,31 +248,26 @@ class BotConfig:
         if p.appearance and p.appearance.physical_description:
             appearance_section = f"\n【外貌特征】\n{p.appearance.physical_description}"
             if p.appearance.style:
-                appearance_section += f"\n穿着风格：{p.appearance.style}"
+                appearance_section += f"\n【穿着风格】\n{p.appearance.style}"
             if p.appearance.distinctive_features:
                 features_text = "、".join(p.appearance.distinctive_features)
-                appearance_section += f"\n独特特征：{features_text}"
+                appearance_section += f"\n【独特特征】\n{features_text}"
             sections.append(appearance_section)
-
-        # 口头禅
-        if p.catchphrases:
-            catchphrases_text = "」「".join(p.catchphrases)
-            sections.append(f"\n【 口头禅】\n常说的话包括：「{catchphrases_text}」")
 
         # 人生规划和理想
         if p.life_goals:
-            goals_text = "\n".join([f"- {goal}" for goal in p.life_goals])
-            sections.append(f"\n【 人生规划】\n{goals_text}")
+            goals_text = "\n".join([f" - {goal}" for goal in p.life_goals])
+            sections.append(f"\n【人生规划】\n{goals_text}")
 
         # 喜好
         if p.likes:
             likes_text = "、".join(p.likes)
-            sections.append(f"\n【 喜欢的事物】\n{likes_text}")
+            sections.append(f"\n【喜欢的事物】\n{likes_text}")
 
         # 讨厌点
         if p.dislikes:
             dislikes_text = "、".join(p.dislikes)
-            sections.append(f"\n【 讨厌的事物】\n{dislikes_text}")
+            sections.append(f"\n【讨厌的事物】\n{dislikes_text}")
 
         # 居住环境
         if p.living_environment:
@@ -283,8 +278,10 @@ class BotConfig:
             style_parts = []
             if p.speaking_style.get("tone"):
                 style_parts.append(f"语气：{p.speaking_style['tone']}")
+
             if p.speaking_style.get("formality"):
                 style_parts.append(f"正式程度：{p.speaking_style['formality']}")
+
             if p.speaking_style.get("use_emoji"):
                 emoji_text = "适当使用emoji" if p.speaking_style.get("emoji_frequency") == "moderate" else "偶尔使用emoji"
                 style_parts.append(emoji_text)
@@ -298,45 +295,104 @@ class BotConfig:
                     "sentence_length") == "short" else "无特别点"
                 style_parts.append(sentence_length)
 
+            if p.catchphrases:
+                catchphrases_text = "」「".join(p.catchphrases)
+                style_parts.append(f"常说的话口头禅：「{catchphrases_text}」")
+
             if style_parts:
-                sections.append(f"\n【 语言风格】\n" + "\n".join([f"- {s}" for s in style_parts]))
+                sections.append(f"\n【语言风格】\n" + "\n".join([f"- {s}" for s in style_parts]))
 
         # 交互偏好
         if p.interaction_style:
             interaction_parts = []
             if p.interaction_style.get("ask_clarifying_questions"):
-                interaction_parts.append("会适时询问澄清问题")
+                interaction_parts.append("喜欢追问细节")
             if p.interaction_style.get("provide_examples"):
                 interaction_parts.append("喜欢用例子说明")
             if p.interaction_style.get("use_analogies"):
-                interaction_parts.append("善于使用类比")
+                if p.interaction_style.get("use_analogies") == "high":
+                    interaction_parts.append("善于玩梗类比")
+                else:
+                    interaction_parts.append("善于使用类比")
             if p.interaction_style.get("encourage_user"):
-                interaction_parts.append("会鼓励用户")
+                interaction_parts.append("善于鼓励用户")
+            if p.interaction_style.get("emotional_reflection") == "false":
+                interaction_parts.append("不过度共情，保持轻松")
+            else:
+                interaction_parts.append("容易共情")
+
             if interaction_parts:
-                sections.append(f"\n【 交互偏好】\n" + "、".join(interaction_parts))
+                sections.append(f"\n【交互偏好】\n" + "、".join(interaction_parts))
 
         # 情绪应对策略
         if p.emotional_response:
-            sections.append(f"\n【 情绪应对策略】")
+            sections.append(f"\n【情绪应对策略】")
             if p.emotional_response.get("user_sad"):
-                sections.append(f"当用户难过时：{p.emotional_response['user_sad']}")
+                lines = '\n -'.join(p.emotional_response['user_sad'])
+                sections.append(f"当用户难过时：\n -{lines}")
             if p.emotional_response.get("user_angry"):
-                sections.append(f"当用户生气时：{p.emotional_response['user_angry']}")
+                lines = '\n -'.join(p.emotional_response['user_angry'])
+                sections.append(f"当用户生气时：\n -{lines}")
             if p.emotional_response.get("user_happy"):
-                sections.append(f"当用户开心时：{p.emotional_response['user_happy']}")
+                lines = '\n -'.join(p.emotional_response['user_happy'])
+                sections.append(f"当用户开心时：\n -{lines}")
 
         # 安全策略
         if p.safety_policy:
             safety_parts = []
             if p.safety_policy.get("avoid_topics"):
-                safety_parts.append(f"需要主动回避的话题：{p.safety_policy['avoid_topics']}")
+                lines = '\n -'.join(p.safety_policy['avoid_topics'])
+                safety_parts.append(f"\n**需要主动回避的话题**：\n -{lines}")
             if p.safety_policy.get("high_risk_keywords"):
-                safety_parts.append(f"高度警惕不能正常聊关键词：{p.safety_policy['high_risk_keywords']}")
+                lines = '\n -'.join(p.safety_policy['high_risk_keywords'])
+                safety_parts.append(f"**高度警惕不能正常聊关键词**：\n -{lines}")
             if p.safety_policy.get("response_strategy"):
-                safety_parts.append(f"特殊的响应策略：{p.safety_policy['response_strategy']}")
+                lines = '\n -'.join(p.safety_policy['response_strategy'])
+                safety_parts.append(f"**特殊的响应策略**：\n -{lines}")
             if safety_parts:
-                sections.append(f"\n【 交互偏好】\n" + "\n".join(safety_parts))
+                sections.append(f"\n【安全对话策略】" + "\n".join(safety_parts))
+        sections.append("【注意：以下是你的个人特征，影响你的思考方式和表达风格。但不要刻意表现，自然融入对话即可。】：")
+        # 人格维度
+        if self.values:
+            stances = self.values.stances
+            dimensions = self.values.dimensions
+            # 理性 vs 感性
+            dimension_parts = []
+            if dimensions.rationality <= 3:
+                dimension_parts.append("你偏感性，更关注情感和直觉")
+            elif dimensions.rationality >= 7:
+                dimension_parts.append("你偏理性，更注重逻辑和分析")
+
+            if dimensions.openness <= 3:
+                dimension_parts.append("你比较保守，谨慎对待新事物")
+            elif dimensions.openness >= 7:
+                dimension_parts.append("你很开放，乐于接受新观点")
+
+            if dimensions.assertiveness <= 3:
+                dimension_parts.append("你倾向顺从，尊重他人观点")
+            elif dimensions.assertiveness >= 7:
+                dimension_parts.append("你敢于表达，会坚持自己的判断")
+
+            if dimensions.optimism <= 3:
+                dimension_parts.append("你偏悲观，会指出潜在风险")
+            elif dimensions.optimism >= 7:
+                dimension_parts.append("你很乐观，总能看到积极面")
+
+            if dimensions.depth_preference <= 3:
+                dimension_parts.append("你喜欢轻松浅聊")
+            elif dimensions.depth_preference >= 7:
+                dimension_parts.append("你喜欢深度探讨")
+            if dimension_parts:
+                sections.append(f"\n【人格维度】\n" + "\n".join([f"- {p}" for p in dimension_parts]))
+
+            # 预设立场
+            if stances:
+                sections.append("\n\n【你的一些观点】")
+                for stance in stances[:]:
+                    sections.append(f"- 关于{stance.topic}：{stance.position}")
+
         return "\n".join(sections)
+
 
     def get_system_prompt(self) -> str:
         """

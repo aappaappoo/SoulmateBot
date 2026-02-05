@@ -187,40 +187,7 @@ class AgentOrchestrator:
 
 【当前时间】
 {current_time}
-【再次强调】无论历史对话是什么格式，你都必须输出 JSON，格式如下：
-```json
-    {{
-    "intent": "direct_response" | "single_agent" | "multi_agent",
-    "agents": [],
-    "reasoning": "判断理由",
-    
-    "conversation_summary": {{
-        "summary_text": "综合整个对话的摘要文本（100字以内）",
-        "key_elements": {{
-            "time": ["时间点1", "时间点2"],
-            "place": ["地点1", "地点2"],
-            "people": ["人物1", "人物2"],
-            "events": ["事件1", "事件2"],
-            "emotions": ["情绪1", "情绪2"]
-        }},
-        "topics": ["话题1", "话题2", "话题3"],
-        "user_state": "用户当前状态描述"
-    }},
-    
-    "direct_reply": "纯文本回复内容，按照上面回复内容格式说明进行",
-    "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
-    "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
-    "memory": {{
-        "is_important": false,
-        "importance_level": "low" | "medium" | "high" | null,
-        "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
-        "event_summary": "事件摘要" | null,
-        "keywords": [],
-        "event_date": "YYYY-MM-DD" | null,
-        "raw_date_expression": "原始时间表达" | null
-    }}
-}}
-```
+【再次强调】无论历史对话是什么格式，你都必须输出为JSON格式
 """
     def __init__(
         self,
@@ -313,26 +280,26 @@ class AgentOrchestrator:
                 "content": enhanced_system_prompt
             })
 
-            # 2. 短期对话历史（最近 5 轮，即 10 条消息）
-            if context and context.conversation_history:
-                recent_history = context.conversation_history[-10:]  # 最多10条（5轮对话）
-                for hist_msg in recent_history:
-                    if hasattr(hist_msg, 'content') and hasattr(hist_msg, 'user_id'):
-                        # 判断是用户还是助手
-                        user_id_str = str(hist_msg.user_id).lower()
-                        if "agent" in user_id_str or "bot" in user_id_str or "assistant" in user_id_str:
-                            role = "assistant"
-                        else:
-                            role = "user"
-                        messages.append({
-                            "role": role,
-                            "content": hist_msg.content
-                        })
-                    elif isinstance(hist_msg, dict):
-                        # 如果已经是 dict 格式，直接使用
-                        messages.append(hist_msg)
-            
-            # 3. 当前用户消息（纯用户消息，任务指令已在 system prompt 中）
+            # # 2. 短期对话历史（最近 5 轮，即 10 条消息）
+            # if context and context.conversation_history:
+            #     recent_history = context.conversation_history[-10:]  # 最多10条（5轮对话）
+            #     for hist_msg in recent_history:
+            #         if hasattr(hist_msg, 'content') and hasattr(hist_msg, 'user_id'):
+            #             # 判断是用户还是助手
+            #             user_id_str = str(hist_msg.user_id).lower()
+            #             if "agent" in user_id_str or "bot" in user_id_str or "assistant" in user_id_str:
+            #                 role = "assistant"
+            #             else:
+            #                 role = "user"
+            #             messages.append({
+            #                 "role": role,
+            #                 "content": hist_msg.content
+            #             })
+            #         elif isinstance(hist_msg, dict):
+            #             # 如果已经是 dict 格式，直接使用
+            #             messages.append(hist_msg)
+            #
+            # 2. 当前用户消息（纯用户消息）
             messages.append({
                 "role": "user",
                 "content": message.content
@@ -344,8 +311,8 @@ class AgentOrchestrator:
             
             # 调用 LLM（使用完整的消息列表）
             response = await self.llm_provider.generate_response(
-                messages,  # ← 完整的消息列表，不是只有一条
-                context=None  # context 已经在 system prompt 中
+                messages,
+                context=None
             )
 
             # 验证响应不为空

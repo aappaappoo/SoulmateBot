@@ -23,9 +23,6 @@ from loguru import logger
 from .summary_service import ConversationSummaryService, ConversationSummary
 from .proactive_strategy import (
     ProactiveDialogueStrategyAnalyzer,
-    ProactiveAction,
-    UserProfile,
-    TopicAnalysis
 )
 from src.utils.history_filter import HistoryFilter, get_history_filter
 
@@ -41,21 +38,21 @@ class ContextConfig:
     short_term_rounds: int = 5  # 短期历史轮数（最近 N 轮）
     mid_term_start: int = 3  # 中期历史开始轮次
     mid_term_end: int = 20  # 中期历史结束轮次
-    
+
     # 长期记忆
     max_memories: int = 8  # 最多包含的长期记忆数量
-    
+
     # Token 预算
     max_total_tokens: int = 8000  # 总 token 预算
     reserved_output_tokens: int = 1000  # 为输出保留的 token
-    
+
     # 摘要选项
     use_llm_summary: bool = False  # 是否使用 LLM 摘要（消耗 token）
     max_summary_length: int = 200  # 摘要最大长度
-    
+
     # 主动策略
     enable_proactive_strategy: bool = True  # 是否启用主动策略
-    
+
     # 历史过滤选项
     enable_history_filter: bool = True  # 是否启用历史过滤（过滤URL、简单寒暄等）
     filter_urls: bool = True  # 是否过滤URL主导的内容
@@ -86,13 +83,13 @@ class UnifiedContextBuilder:
     5. 管理 token 预算
     6. 过滤不重要的历史内容（URL、简单寒暄等）
     """
-    
+
     def __init__(
-        self,
-        summary_service: Optional[ConversationSummaryService] = None,
-        proactive_analyzer: Optional[ProactiveDialogueStrategyAnalyzer] = None,
-        history_filter: Optional[HistoryFilter] = None,
-        config: Optional[ContextConfig] = None
+            self,
+            summary_service: Optional[ConversationSummaryService] = None,
+            proactive_analyzer: Optional[ProactiveDialogueStrategyAnalyzer] = None,
+            history_filter: Optional[HistoryFilter] = None,
+            config: Optional[ContextConfig] = None
     ):
         """
         初始化构建器
@@ -106,7 +103,7 @@ class UnifiedContextBuilder:
         self.summary_service = summary_service or ConversationSummaryService()
         self.proactive_analyzer = proactive_analyzer or ProactiveDialogueStrategyAnalyzer()
         self.config = config or ContextConfig()
-        
+
         # 初始化历史过滤器
         if history_filter:
             self.history_filter = history_filter
@@ -115,17 +112,16 @@ class UnifiedContextBuilder:
         else:
             self.history_filter = None
 
-
     async def build_context(
-        self,
-        bot_system_prompt: str,
-        conversation_history: List[Dict[str, str]],
-        current_message: str,
-        user_memories: Optional[List[Dict[str, Any]]] = None,
-        dialogue_strategy: Optional[str] = None,
-        llm_generated_summary: Optional[Dict] = None,  # 新增参数
-        chat_id: Optional[str] = None,  # 用于历史过滤存储
-        user_id: Optional[str] = None  # 用于历史过滤存储
+            self,
+            bot_system_prompt: str,
+            conversation_history: List[Dict[str, str]],
+            current_message: str,
+            user_memories: Optional[List[Dict[str, Any]]] = None,
+            dialogue_strategy: Optional[str] = None,
+            llm_generated_summary: Optional[Dict] = None,  # 新增参数
+            chat_id: Optional[str] = None,  # 用于历史过滤存储
+            user_id: Optional[str] = None  # 用于历史过滤存储
     ) -> BuilderResult:
         """
         构建完整的对话上下文
@@ -144,7 +140,7 @@ class UnifiedContextBuilder:
             BuilderResult: 包含消息列表和元数据
         """
         logger.debug(f"🔍 开始构建上下文，历史消息数: {len(conversation_history)}")
-        
+
         # 0. 应用历史过滤（过滤URL、简单寒暄等）
         filtered_count = 0
         if self.history_filter and self.config.enable_history_filter:
@@ -157,11 +153,11 @@ class UnifiedContextBuilder:
             filtered_count = len(filter_result.filtered_out)
             if filtered_count > 0:
                 logger.debug(f"🔍 过滤了 {filtered_count} 条不重要的历史消息")
-        
+
         # 1. 分割对话历史
         short_term, mid_term = self._split_history(conversation_history)
         logger.debug(f"分割对话历史: 短期={len(short_term)}条, 中期={len(mid_term)}条")
-        
+
         # 2. 生成中期摘要（如果有中期对话）
         mid_term_summary = None
         if mid_term:
@@ -171,17 +167,17 @@ class UnifiedContextBuilder:
                 max_summary_length=self.config.max_summary_length
             )
             logger.debug(f"生成中期摘要: {mid_term_summary.summary_text[:50]}...")
-        
+
         # 3. 格式化长期记忆
         memory_context = self._format_memories(user_memories)
-        
+
         # 4. 生成主动策略（如果启用）
         proactive_guidance = ""
         if self.config.enable_proactive_strategy:
             proactive_guidance = await self._generate_proactive_guidance(
                 conversation_history, user_memories
             )
-        
+
         # 5. 构建增强的 System Prompt（包含对话历史）
         enhanced_system_prompt = self._build_enhanced_system_prompt(
             bot_system_prompt=bot_system_prompt,
@@ -192,25 +188,25 @@ class UnifiedContextBuilder:
             proactive_guidance=proactive_guidance,
             short_term_history=short_term  # 传递短期历史以嵌入 system prompt
         )
-        
+
         # 6. 构建最终消息列表（仅 system + user 两条消息）
         messages = self._build_messages(
             enhanced_system_prompt,
             short_term,
             current_message
         )
-        
+
         # 7. 估算 token 使用
         token_estimate = self._estimate_tokens(messages)
-        
+
         # 8. 检查 token 预算
         if token_estimate > (self.config.max_total_tokens - self.config.reserved_output_tokens):
             logger.warning(f"Token 使用 ({token_estimate}) 超过预算，进行截断")
             messages = self._truncate_messages(messages)
             token_estimate = self._estimate_tokens(messages)
-        
+
         logger.info(f"上下文构建完成: {len(messages)}条消息, 估算token={token_estimate}, 过滤了{filtered_count}条")
-        
+
         return BuilderResult(
             messages=messages,
             token_estimate=token_estimate,
@@ -224,10 +220,10 @@ class UnifiedContextBuilder:
                 "history_filter_enabled": self.config.enable_history_filter
             }
         )
-    
+
     def _split_history(
-        self,
-        conversation_history: List[Dict[str, str]]
+            self,
+            conversation_history: List[Dict[str, str]]
     ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
         """
         分割对话历史为短期和中期
@@ -240,35 +236,35 @@ class UnifiedContextBuilder:
         """
         if not conversation_history:
             return [], []
-        
+
         # 计算短期历史的消息数量
         # 注意：一轮对话通常包含一条用户消息和一条助手消息
         # 但我们按实际消息数计算，不假设每轮恰好两条
         user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
         num_user_messages = len(user_messages)
-        
+
         # 短期：取最近 N 轮对话（基于用户消息数）
         if num_user_messages <= self.config.short_term_rounds:
             # 所有历史都是短期
             return conversation_history, []
-        
+
         # 找到倒数第 N 条用户消息的位置
         user_msg_indices = [i for i, msg in enumerate(conversation_history) if msg.get("role") == "user"]
         short_term_start_idx = user_msg_indices[-self.config.short_term_rounds]
-        
+
         # 短期历史从该位置到结尾
         short_term = conversation_history[short_term_start_idx:]
-        
+
         # 剩余的历史（不包括短期部分）
         remaining = conversation_history[:short_term_start_idx]
-        
+
         if not remaining:
             return short_term, []
-        
+
         # 计算中期范围（基于用户消息轮数）
         # 找到第 mid_term_start 轮到 mid_term_end 轮的消息
         remaining_user_indices = [i for i, msg in enumerate(remaining) if msg.get("role") == "user"]
-        
+
         # 如果有足够的历史，提取中期
         if len(remaining_user_indices) >= self.config.mid_term_start and self.config.mid_term_start > 0:
             start_idx = remaining_user_indices[self.config.mid_term_start - 1]
@@ -280,9 +276,9 @@ class UnifiedContextBuilder:
                 mid_term = []
         else:
             mid_term = []
-        
+
         return short_term, mid_term
-    
+
     def _format_memories(self, user_memories: Optional[List[Dict[str, Any]]]) -> str:
         """
         格式化长期记忆为文本
@@ -295,10 +291,10 @@ class UnifiedContextBuilder:
         """
         if not user_memories:
             return ""
-        
+
         # 最多取 max_memories 条
         memories_to_use = user_memories[:self.config.max_memories]
-        
+
         memory_lines = ["【关于这位用户的记忆】"]
         for memory in memories_to_use:
             summary = memory.get("event_summary", "")
@@ -310,11 +306,11 @@ class UnifiedContextBuilder:
             if event_summary not in memory_lines:
                 memory_lines.append(event_summary)
         return "\n".join(memory_lines)
-    
+
     async def _generate_proactive_guidance(
-        self,
-        conversation_history: List[Dict[str, str]],
-        user_memories: Optional[List[Dict[str, Any]]]
+            self,
+            conversation_history: List[Dict[str, str]],
+            user_memories: Optional[List[Dict[str, Any]]]
     ) -> str:
         """
         生成主动对话策略指导
@@ -331,20 +327,20 @@ class UnifiedContextBuilder:
             user_profile = self.proactive_analyzer.analyze_user_profile(
                 conversation_history, user_memories
             )
-            
+
             # 分析话题
             topic_analysis = self.proactive_analyzer.analyze_topic(
                 conversation_history, user_profile
             )
-            
+
             # 生成主动策略
             proactive_action = self.proactive_analyzer.generate_proactive_strategy(
                 user_profile, topic_analysis, conversation_history, user_memories
             )
-            
+
             # 格式化为文本
             guidance = self.proactive_analyzer.format_proactive_guidance(proactive_action)
-            
+
             # 添加用户画像信息
             profile_info = f"""
 【当前对话情境】
@@ -354,118 +350,111 @@ class UnifiedContextBuilder:
 - 用户兴趣：{', '.join(user_profile.interests[:3]) if user_profile.interests else '待探索'}
 - 可探索话题：{', '.join(topic_analysis.topics_to_explore[:3]) if topic_analysis.topics_to_explore else '无'}
 """
-            
+
             return profile_info + "\n" + guidance
-            
+
         except Exception as e:
             logger.warning(f"生成主动策略失败: {e}")
             return ""
-    
+
+    #
     def _build_enhanced_system_prompt(
-        self,
-        bot_system_prompt: str,
-        memory_context: str,
-        mid_term_summary: Optional[ConversationSummary],
-        llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
-        dialogue_strategy: Optional[str] = None,
-        proactive_guidance: str = "",
-        short_term_history: Optional[List[Dict[str, str]]] = None
+            self,
+            bot_system_prompt: str,
+            memory_context: str,
+            mid_term_summary: Optional[ConversationSummary],
+            llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
+            dialogue_strategy: Optional[str] = None,
+            proactive_guidance: str = "",
+            short_term_history: Optional[List[Dict[str, str]]] = None
     ) -> str:
         """
         构建增强的 System Prompt
-        
-        简化结构（仅包含 system + user 两条消息）:
-        1. 原始人设（角色设定）
-        2. 长期记忆（重要事件）
-        3. 中期对话摘要
-        4. 主动策略
-        5. 对话策略
-        6. 仅5轮对话历史（嵌入在 system prompt 中，带特殊标记防止 LLM 模仿格式）
-        7. 强制 JSON 格式输出指令
-        
-        Args:
-            bot_system_prompt: 原始人设
-            memory_context: 长期记忆文本
-            mid_term_summary: 中期摘要
-            llm_generated_summary: LLM 生成的对话摘要（可选）
-            dialogue_strategy: 对话策略
-            proactive_guidance: 主动策略
-            short_term_history: 短期对话历史（最近5轮，可选）
-            
-        Returns:
-            增强后的 system prompt
         """
         components = [bot_system_prompt]
-        
-        # 添加长期记忆（重要事件）
+
+        # ==================== 新增：整合所有记忆到一个块 ====================
+        memory_sections = []
+
+        # 1. 历史重要记忆（复用 _format_memories 的结果，但去掉标题）
         if memory_context:
-            components.append(memory_context)
-        
-        # 添加对话摘要（优先使用 LLM 生成的）
-        if llm_generated_summary:
-            # 验证摘要结构
-            if not isinstance(llm_generated_summary, dict):
-                logger.warning("llm_generated_summary should be a dict, skipping")
-            else:
-                key_elements = llm_generated_summary.get('key_elements', {})
-                if not isinstance(key_elements, dict):
-                    key_elements = {}
-                
-                # 辅助函数：处理空列表显示
-                def format_list(items):
-                    return ', '.join(items) if items else '无'
-                
-                summary_text = f"""【对话回顾】
+            # memory_context 已经是 "【关于这位用户的记忆】\n- xxx\n- xxx" 格式
+            # 去掉原有标题，只保留内容
+            memory_lines = memory_context.split('\n')
+            if memory_lines and memory_lines[0].startswith('【'):
+                memory_lines = memory_lines[1:]  # 去掉第一行标题
+            if memory_lines:
+                memory_sections.append("【历史重要记忆】\n" + '\n'.join(memory_lines))
+
+        # 2. 中期摘要记忆（复用现有逻辑）
+        summary_text = ""
+        if llm_generated_summary and isinstance(llm_generated_summary, dict):
+            key_elements = llm_generated_summary.get('key_elements', {})
+            if not isinstance(key_elements, dict):
+                key_elements = {}
+
+            def format_list(items):
+                return ', '.join(items) if items else '无'
+
+            summary_text = f"""【中期摘要记忆】
 {llm_generated_summary.get('summary_text', '')}
-关键要素：
-- 时间={format_list(key_elements.get('time', []))}
-- 地点={format_list(key_elements.get('place', []))}
-- 人物={format_list(key_elements.get('people', []))}
-- 事件={format_list(key_elements.get('events', []))}
-- 情绪={format_list(key_elements.get('emotions', []))}
+关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}
 话题：{format_list(llm_generated_summary.get('topics', []))}
 用户状态：{llm_generated_summary.get('user_state', '')}"""
-                components.append(summary_text.strip())
-            
         elif mid_term_summary:
-            # 回退到规则摘要
-            summary_text = f"""【对话回顾】
-{mid_term_summary.summary_text}
-讨论话题：{', '.join(mid_term_summary.key_topics[:3])}"""
+            summary_text = f"""【中期摘要记忆】
+        {mid_term_summary.summary_text}
+        讨论话题：{', '.join(mid_term_summary.key_topics[:3])}"""
             if mid_term_summary.emotion_trajectory:
                 summary_text += f"\n情绪变化：{mid_term_summary.emotion_trajectory}"
-            
-            components.append(summary_text.strip())
-        
-        # 添加主动策略（在对话策略之前）
-        if proactive_guidance:
-            components.append(proactive_guidance)
-        
-        # 添加对话策略（如果提供）
-        if dialogue_strategy:
-            components.append(dialogue_strategy)
 
-<<<<<<< Updated upstream
-        # 添加对话历史（嵌入在 system prompt 中，带特殊标记）
+        if summary_text:
+            memory_sections.append(summary_text.strip())
+
+        # 3. 近5轮对话记录（复用 _format_history_for_system_prompt，但修改标题）
         if short_term_history:
             history_text = self._format_history_for_system_prompt(short_term_history)
             if history_text:
-                components.append(history_text)
-        
-        # 添加强制 JSON 格式输出指令
+                # 替换原有标题为统一格式
+                history_text = history_text.replace(
+                    "【历史对话 - 仅参考，禁止模仿格式】",
+                    "【近期对话记录】"
+                )
+                memory_sections.append(history_text)
+
+        # 整合所有记忆到一个块
+        if memory_sections:
+            unified_memory_block = """
+=========================
+对话相关记忆
+=========================
+""" + "\n\n".join(memory_sections)
+            components.append(unified_memory_block)
+
+        # ==================== 对话策略管理（整合块） ====================
+        strategy_sections = []
+
+        # 1. 当前对话情境（从 proactive_guidance 中提取）
+        if proactive_guidance:
+            strategy_sections.append(proactive_guidance.strip())
+
+        if dialogue_strategy:
+            strategy_sections.append(dialogue_strategy.strip())
+        if strategy_sections:
+            unified_strategy_block = """
+=========================
+对话策略管理
+=========================
+""" + "\n\n".join(strategy_sections)
+            components.append(unified_strategy_block)
         json_format_instruction = self._get_json_format_instruction()
         components.append(json_format_instruction)
-
-=======
->>>>>>> Stashed changes
-        # 用双换行符连接所有组件
         enhanced_prompt = "\n\n".join(components)
-        
         return enhanced_prompt
-    
+
     def _format_history_for_system_prompt(
-        self,
-        short_term_history: List[Dict[str, str]]
+            self,
+            short_term_history: List[Dict[str, str]]
     ) -> str:
         """
         将短期对话历史格式化为嵌入 system prompt 的文本
@@ -480,31 +469,28 @@ class UnifiedContextBuilder:
         """
         if not short_term_history:
             return ""
-        
+
         history_lines = []
         for msg in short_term_history:
-            role = msg.get("role", "")
+            role = msg.get("role", "").lower()
             content = msg.get("content", "")
             if role == "user":
                 history_lines.append(f"User: {content}")
             elif role == "assistant":
-                # 为助手回复添加简短摘要，保留上下文但防止 LLM 模仿完整格式
-                # 截取前30字符作为摘要，避免 token 浪费
-                summary = content[:30] + "..." if len(content) > 30 else content
-                history_lines.append(f"Assistant: {summary}")
-        
+                history_lines.append(f"Assistant: {content}")
+
         if not history_lines:
             return ""
-        
+
         history_text = """【历史对话 - 仅参考，禁止模仿格式】
 <history>
 """ + "\n".join(history_lines) + """
 </history>
 
 ⚠️ 注意：上方历史仅用于理解上下文，你的输出必须是JSON"""
-        
+
         return history_text
-    
+
     def _get_json_format_instruction(self) -> str:
         """
         获取强制 JSON 格式输出指令
@@ -512,22 +498,51 @@ class UnifiedContextBuilder:
         Returns:
             JSON 格式指令文本
         """
-        return """【强制JSON格式】
+        return """
+=========================
+强制输出格式
+=========================   
 你必须且只能返回以下JSON格式，不要添加任何其他文本：
-{
-    "response": "你的回复内容",
-    "emotion_info": {
-        "emotion_type": "情绪类型(happy/gentle/sad/excited/angry/crying/neutral)",
-        "intensity": "强度(high/medium/low)",
-        "tone_description": "语气描述"
-    }
-}"""
+```json
+    {{
+    "intent": "direct_response" | "single_agent" | "multi_agent",
+    "agents": [],
+    "reasoning": "判断理由",
     
+    "conversation_summary": {{
+        "summary_text": "综合整个对话的摘要文本（100字以内）",
+        "key_elements": {{
+            "time": ["时间点1", "时间点2"],
+            "place": ["地点1", "地点2"],
+            "people": ["人物1", "人物2"],
+            "events": ["事件1", "事件2"],
+            "emotions": ["情绪1", "情绪2"]
+        }},
+        "topics": ["话题1", "话题2", "话题3"],
+        "user_state": "用户当前状态描述"
+    }},
+    
+    "direct_reply": "纯文本回复内容，按照上面回复内容格式说明进行",
+    "emotion": "happy" | "gentle" | "sad" | "excited" | "angry" | "crying" | null,
+    "emotion_description": "详细的语气描述，如：开心、轻快，语速稍快，语调上扬" | null,
+    "memory": {{
+        "is_important": false,
+        "importance_level": "low" | "medium" | "high" | null,
+        "event_type": "preference" | "birthday" | "goal" | "emotion" | "life_event" | null,
+        "event_summary": "事件摘要" | null,
+        "keywords": [],
+        "event_date": "YYYY-MM-DD" | null,
+        "raw_date_expression": "原始时间表达" | null
+    }}
+}}
+```
+"""
+
     def _build_messages(
-        self,
-        system_prompt: str,
-        short_term_history: List[Dict[str, str]],  # 保留此参数用于向后兼容和接口一致性
-        current_message: str
+            self,
+            system_prompt: str,
+            short_term_history: List[Dict[str, str]],  # 保留此参数用于向后兼容和接口一致性
+            current_message: str
     ) -> List[Dict[str, str]]:
         """
         构建最终消息列表（简化版本，仅2条消息）
@@ -551,7 +566,7 @@ class UnifiedContextBuilder:
         """
         # short_term_history 在此不使用，历史已嵌入 system_prompt
         _ = short_term_history  # 显式标记为已知未使用
-        
+
         messages = [
             {
                 "role": "system",
@@ -562,9 +577,9 @@ class UnifiedContextBuilder:
                 "content": current_message
             }
         ]
-        
+
         return messages
-    
+
     def _estimate_tokens(self, messages: List[Dict[str, str]]) -> int:
         """
         估算消息列表的 token 数
@@ -573,22 +588,22 @@ class UnifiedContextBuilder:
         使用 round() 以避免截断导致的低估
         """
         total_tokens = 0
-        
+
         for msg in messages:
             content = msg.get("content", "")
-            
+
             # 统计中文字符
             chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
             other_chars = len(content) - chinese_chars
-            
+
             # 估算（使用 round 避免截断）
             tokens = round(chinese_chars / 1.5 + other_chars / 4)
-            
+
             # 消息格式开销
             total_tokens += tokens + 4
-        
+
         return total_tokens
-    
+
     def _truncate_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         截断消息以适应 token 预算
@@ -607,7 +622,7 @@ class UnifiedContextBuilder:
         if len(messages) <= 2:
             logger.debug("简化结构下无法截断消息，请通过调整 short_term_rounds 配置来控制 token")
         return messages
-    
+
     def get_token_budget_info(self, result: BuilderResult) -> Dict[str, Any]:
         """
         获取 token 预算使用情况
@@ -623,5 +638,6 @@ class UnifiedContextBuilder:
             "max_tokens": self.config.max_total_tokens,
             "reserved_for_output": self.config.reserved_output_tokens,
             "available_for_context": self.config.max_total_tokens - self.config.reserved_output_tokens,
-            "usage_percentage": (result.token_estimate / (self.config.max_total_tokens - self.config.reserved_output_tokens)) * 100
+            "usage_percentage": (result.token_estimate / (
+                    self.config.max_total_tokens - self.config.reserved_output_tokens)) * 100
         }

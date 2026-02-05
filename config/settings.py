@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     # Application Configuration
     app_env: Environment = Environment.DEVELOPMENT
     debug: bool = True
-    log_level: str = "DEBUG"
     sql_echo: bool = False  # Enable to show SQLAlchemy SQL statements in logs
 
     # Subscription Configuration
