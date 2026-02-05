@@ -96,8 +96,6 @@ class AgentOrchestrator:
 不要输出解释、不要输出 markdown 代码块标记，直接输出 JSON。
 1. 你【只能】输出 JSON，不允许包含任何解释性文字、标点或注释
 2. JSON 必须能被标准 json.loads 直接解析
-3. 除 direct_reply 字段外，禁止生成任何自然语言回复
-4. 严格按照“强制格式要求”中的字段返回，不得增减字段
 
 【任务总览】
 你需要同时完成 4 个任务：
@@ -130,25 +128,22 @@ class AgentOrchestrator:
 
 - 仅当 intent == "direct_response" 时：
   - 才允许在 direct_reply 中生成回复文本
+    **回复样式**：
+    - 为了更贴合日常朋友聊天需要根据语境进行消息拆分
+    - 最多拆分为 3 条
+    **回复生成规则**：
+    - 回复内容中【不要】包含情绪说明或语气描述
+    - 回复必须是纯文本
+    - 不要出现表情符号解释、情绪标签或括号说明
+    **多消息规则**：
+    - 如需拆分为多条消息，用 [MSG_SPLIT] 分隔
+    
   - emotion / emotion_description 才允许填写
 
 - 当 intent != "direct_response" 时：
   - direct_reply 必须为 ""
   - emotion 必须为 null
   - emotion_description 必须为 null
-
-回复生成规则：
-- 回复内容中【不要】包含情绪说明或语气描述
-- 回复必须是纯文本
-- 不要出现表情符号解释、情绪标签或括号说明
-
-多消息规则：
-- 如需拆分为多条消息，用 [MSG_SPLIT] 分隔
-- 最多拆分为 3 条
-- 仅在自然需要时拆分
-
-可用系统风格约束：
-{system_prompt}
 
 【任务 3：对话摘要生成】
 基于【完整对话历史 + 当前消息】生成一个“累积摘要”。
@@ -187,7 +182,8 @@ class AgentOrchestrator:
 
 【当前时间】
 {current_time}
-【再次强调】无论历史对话是什么格式，你都必须输出为JSON格式
+【再次强调】
+无论历史对话是什么格式，你都必须输出为JSON格式
 """
     def __init__(
         self,
