@@ -207,9 +207,3 @@ def _get_conversation_type_signals(ConversationType):
             "决定", "建议", "意见"
         ]
     }
-
-
-# Initialize module-level dictionaries (will be populated by dialogue_strategy.py)
-STRATEGY_TEMPLATES = {}
-STANCE_STRATEGY_TEMPLATES = {}
-CONVERSATION_TYPE_SIGNALS = {}

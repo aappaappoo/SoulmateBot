@@ -75,11 +75,6 @@ STRATEGY_TEMPLATES = strategy_config._get_strategy_templates(ResponseType)
 STANCE_STRATEGY_TEMPLATES = strategy_config._get_stance_strategy_templates(StanceStrategy)
 CONVERSATION_TYPE_SIGNALS = strategy_config._get_conversation_type_signals(ConversationType)
 
-# Also update the module-level variables in strategy_config for re-export compatibility
-strategy_config.STRATEGY_TEMPLATES = STRATEGY_TEMPLATES
-strategy_config.STANCE_STRATEGY_TEMPLATES = STANCE_STRATEGY_TEMPLATES
-strategy_config.CONVERSATION_TYPE_SIGNALS = CONVERSATION_TYPE_SIGNALS
-
 
 class ConversationTypeAnalyzer:
     """
