@@ -498,9 +498,60 @@ class DialogueStrategyInjector:
         
         return enhanced_prompt
     
+    @staticmethod
+    def _format_list(items: list) -> str:
+        """格式化列表为换行文本"""
+        return '\n -'.join(items)
+
     def _build_values_guidance(self, bot_values: 'ValuesConfig') -> str:
-        guidance = ""
-        return guidance
+        """
+        构建价值观、情绪应对和安全策略指导
+        Build values, emotional response and safety policy guidance
+
+        Args:
+            bot_values: Bot价值观配置
+
+        Returns:
+            价值观和策略指导文本
+        """
+        sections = []
+
+        # 情绪应对策略
+        emotional_response = bot_values.emotional_response
+        if emotional_response:
+            parts = ["\n【情绪应对策略】"]
+            field_labels = {
+                "user_sad": "当用户难过时",
+                "user_angry": "当用户生气时",
+                "user_happy": "当用户开心时",
+                "priority": "优先级",
+                "avoid_actions": "避免行为",
+            }
+            for key, label in field_labels.items():
+                items = emotional_response.get(key)
+                if items:
+                    parts.append(f"{label}：\n -{self._format_list(items)}")
+            # parts[0] 是标题，只有存在实际内容时才添加
+            if len(parts) > 1:
+                sections.append("\n".join(parts))
+
+        # 安全策略
+        safety_policy = bot_values.safety_policy
+        if safety_policy:
+            safety_parts = []
+            safety_fields = {
+                "avoid_topics": "\n**需要主动回避的话题**",
+                "high_risk_keywords": "**高度警惕不能正常聊关键词**",
+                "response_strategy": "**特殊的响应策略**",
+            }
+            for key, label in safety_fields.items():
+                items = safety_policy.get(key)
+                if items:
+                    safety_parts.append(f"{label}：\n -{self._format_list(items)}")
+            if safety_parts:
+                sections.append(f"\n【安全对话策略】" + "\n".join(safety_parts))
+
+        return "\n".join(sections)
     
     def _build_stance_guidance(self, stance_analysis: StanceAnalysis) -> str:
         """

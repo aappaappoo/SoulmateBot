@@ -123,12 +123,6 @@ class PersonalityConfig:
     # 交互偏好
     interaction_style: Dict[str, Any] = field(default_factory=dict)
 
-    # 情绪应对策略
-    emotional_response: Dict[str, Any] = field(default_factory=dict)
-
-    # 安全策略
-    safety_policy: Dict[str, Any] = field(default_factory=dict)
-
 
 @dataclass
 class ValueDimensionsConfig:
@@ -164,6 +158,12 @@ class ValuesConfig:
     response_preferences: ResponsePreferencesConfig = field(default_factory=ResponsePreferencesConfig)
     stances: List[StanceConfig] = field(default_factory=list)
     default_behavior: str = "curious"  # 遇到没有预设立场的话题: curious/neutral/avoid
+
+    # 情绪应对策略
+    emotional_response: Dict[str, Any] = field(default_factory=dict)
+
+    # 安全策略
+    safety_policy: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -324,33 +324,6 @@ class BotConfig:
             if interaction_parts:
                 sections.append(f"\n【交互偏好】\n" + "、".join(interaction_parts))
 
-        # 情绪应对策略
-        if p.emotional_response:
-            sections.append(f"\n【情绪应对策略】")
-            if p.emotional_response.get("user_sad"):
-                lines = '\n -'.join(p.emotional_response['user_sad'])
-                sections.append(f"当用户难过时：\n -{lines}")
-            if p.emotional_response.get("user_angry"):
-                lines = '\n -'.join(p.emotional_response['user_angry'])
-                sections.append(f"当用户生气时：\n -{lines}")
-            if p.emotional_response.get("user_happy"):
-                lines = '\n -'.join(p.emotional_response['user_happy'])
-                sections.append(f"当用户开心时：\n -{lines}")
-
-        # 安全策略
-        if p.safety_policy:
-            safety_parts = []
-            if p.safety_policy.get("avoid_topics"):
-                lines = '\n -'.join(p.safety_policy['avoid_topics'])
-                safety_parts.append(f"\n**需要主动回避的话题**：\n -{lines}")
-            if p.safety_policy.get("high_risk_keywords"):
-                lines = '\n -'.join(p.safety_policy['high_risk_keywords'])
-                safety_parts.append(f"**高度警惕不能正常聊关键词**：\n -{lines}")
-            if p.safety_policy.get("response_strategy"):
-                lines = '\n -'.join(p.safety_policy['response_strategy'])
-                safety_parts.append(f"**特殊的响应策略**：\n -{lines}")
-            if safety_parts:
-                sections.append(f"\n【安全对话策略】" + "\n".join(safety_parts))
         sections.append("【注意：以下是你的个人特征，影响你的思考方式和表达风格。但不要刻意表现，自然融入对话即可。】：")
         # 人格维度
         if self.values:
@@ -565,12 +538,6 @@ class BotConfigLoader:
 
             # 交互偏好
             interaction_style=data.get("interaction_style", {}),
-
-            # 情绪应对策略
-            emotional_response=data.get("emotional_response", {}),
-
-            # 安全策略
-            safety_policy=data.get("safety_policy", {})
         )
 
     def _parse_voice_config(self, data: Dict) -> VoiceConfig:
@@ -621,7 +588,9 @@ class BotConfigLoader:
             dimensions=dimensions,
             stances=stances,
             response_preferences=response_preferences,
-            default_behavior=data.get("default_behavior", "curious")
+            default_behavior=data.get("default_behavior", "curious"),
+            emotional_response=data.get("emotional_response", {}),
+            safety_policy=data.get("safety_policy", {})
         )
 
     def load_config(self, bot_id: str) -> Optional[BotConfig]:
@@ -643,6 +612,16 @@ class BotConfigLoader:
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
+
+            # Bot价值观系统配置 - 价值观和立场
+            values_data = data.get("values", {}) or data.get("personality", {}).get("values", {})
+            # 向后兼容：如果 emotional_response/safety_policy 仍在 personality 下，合并到 values
+            personality_data = data.get("personality", {})
+            if personality_data.get("emotional_response") and not values_data.get("emotional_response"):
+                values_data["emotional_response"] = personality_data["emotional_response"]
+            if personality_data.get("safety_policy") and not values_data.get("safety_policy"):
+                values_data["safety_policy"] = personality_data["safety_policy"]
+
             config = BotConfig(
                 # Bot人格配置 - 包含性格、外貌、口头禅、理想、爱好等
                 personality=self._parse_personality_config(data.get("personality", {})),
@@ -658,8 +637,7 @@ class BotConfigLoader:
                 limits=self._parse_limits_config(data.get("limits", {})),
                 # 元数据
                 version=data.get("metadata", {}).get("version", "1.0.0"),
-                # Bot价值观系统配置 - 价值观和立场
-                values=self._parse_values_config(data.get("values", {}) or data.get("personality", {}).get("values", {})),
+                values=self._parse_values_config(values_data),
                 config_path=config_path,
                 messages=self._parse_messages_config(data.get("messages", {})),
                 agents=self._parse_agents_config(data.get("agents", {}))
