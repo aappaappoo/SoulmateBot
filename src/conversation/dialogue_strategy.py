@@ -498,6 +498,11 @@ class DialogueStrategyInjector:
         
         return enhanced_prompt
     
+    @staticmethod
+    def _format_list(items: list) -> str:
+        """格式化列表为换行文本"""
+        return '\n -'.join(items)
+
     def _build_values_guidance(self, bot_values: 'ValuesConfig') -> str:
         """
         构建价值观、情绪应对和安全策略指导
@@ -515,21 +520,18 @@ class DialogueStrategyInjector:
         emotional_response = bot_values.emotional_response
         if emotional_response:
             parts = ["\n【情绪应对策略】"]
-            if emotional_response.get("user_sad"):
-                lines = '\n -'.join(emotional_response['user_sad'])
-                parts.append(f"当用户难过时：\n -{lines}")
-            if emotional_response.get("user_angry"):
-                lines = '\n -'.join(emotional_response['user_angry'])
-                parts.append(f"当用户生气时：\n -{lines}")
-            if emotional_response.get("user_happy"):
-                lines = '\n -'.join(emotional_response['user_happy'])
-                parts.append(f"当用户开心时：\n -{lines}")
-            if emotional_response.get("priority"):
-                lines = '\n -'.join(emotional_response['priority'])
-                parts.append(f"优先级：\n -{lines}")
-            if emotional_response.get("avoid_actions"):
-                lines = '\n -'.join(emotional_response['avoid_actions'])
-                parts.append(f"避免行为：\n -{lines}")
+            field_labels = {
+                "user_sad": "当用户难过时",
+                "user_angry": "当用户生气时",
+                "user_happy": "当用户开心时",
+                "priority": "优先级",
+                "avoid_actions": "避免行为",
+            }
+            for key, label in field_labels.items():
+                items = emotional_response.get(key)
+                if items:
+                    parts.append(f"{label}：\n -{self._format_list(items)}")
+            # parts[0] 是标题，只有存在实际内容时才添加
             if len(parts) > 1:
                 sections.append("\n".join(parts))
 
@@ -537,15 +539,15 @@ class DialogueStrategyInjector:
         safety_policy = bot_values.safety_policy
         if safety_policy:
             safety_parts = []
-            if safety_policy.get("avoid_topics"):
-                lines = '\n -'.join(safety_policy['avoid_topics'])
-                safety_parts.append(f"\n**需要主动回避的话题**：\n -{lines}")
-            if safety_policy.get("high_risk_keywords"):
-                lines = '\n -'.join(safety_policy['high_risk_keywords'])
-                safety_parts.append(f"**高度警惕不能正常聊关键词**：\n -{lines}")
-            if safety_policy.get("response_strategy"):
-                lines = '\n -'.join(safety_policy['response_strategy'])
-                safety_parts.append(f"**特殊的响应策略**：\n -{lines}")
+            safety_fields = {
+                "avoid_topics": "\n**需要主动回避的话题**",
+                "high_risk_keywords": "**高度警惕不能正常聊关键词**",
+                "response_strategy": "**特殊的响应策略**",
+            }
+            for key, label in safety_fields.items():
+                items = safety_policy.get(key)
+                if items:
+                    safety_parts.append(f"{label}：\n -{self._format_list(items)}")
             if safety_parts:
                 sections.append(f"\n【安全对话策略】" + "\n".join(safety_parts))
 
