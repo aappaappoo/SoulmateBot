@@ -36,11 +36,11 @@ class ContextConfig:
     """
     # 对话历史分层
     short_term_rounds: int = 5  # 短期历史轮数（最近 N 轮）
-    mid_term_start: int = 3  # 中期历史开始轮次
+    mid_term_start: int = 5  # 中期历史开始轮次
     mid_term_end: int = 20  # 中期历史结束轮次
 
     # 长期记忆
-    max_memories: int = 8  # 最多包含的长期记忆数量
+    max_memories: int = 10  # 最多包含的长期记忆数量
 
     # Token 预算
     max_total_tokens: int = 8000  # 总 token 预算
@@ -260,24 +260,22 @@ class UnifiedContextBuilder:
 
         if not remaining:
             return short_term, []
-
-        # 计算中期范围（基于用户消息轮数）
-        # 找到第 mid_term_start 轮到 mid_term_end 轮的消息
         remaining_user_indices = [i for i, msg in enumerate(remaining) if msg.get("role") == "user"]
+        num_remaining_users = len(remaining_user_indices)
+        # 我们应该从 remaining 的末尾开始
+        # 简化理解：中期就是 remaining 中最近的 (mid_term_end - short_term_rounds) 轮
+        mid_term_rounds = min(
+            self.config.mid_term_end - self.config.short_term_rounds,
+            num_remaining_users
+        )
 
-        # 如果有足够的历史，提取中期
-        if len(remaining_user_indices) >= self.config.mid_term_start and self.config.mid_term_start > 0:
-            start_idx = remaining_user_indices[self.config.mid_term_start - 1]
-            end_user_idx = min(self.config.mid_term_end - 1, len(remaining_user_indices) - 1)
-            if end_user_idx >= 0 and end_user_idx < len(remaining_user_indices):
-                end_idx = remaining_user_indices[end_user_idx]
-                mid_term = remaining[start_idx:end_idx + 1]
-            else:
-                mid_term = []
+        if mid_term_rounds > 0:
+            mid_term_start_idx = remaining_user_indices[-mid_term_rounds]
+            mid_term = remaining[mid_term_start_idx:]
         else:
             mid_term = []
-
         return short_term, mid_term
+
 
     def _format_memories(self, user_memories: Optional[List[Dict[str, Any]]]) -> str:
         """
@@ -292,15 +290,14 @@ class UnifiedContextBuilder:
         if not user_memories:
             return ""
 
-        # 最多取 max_memories 条
+        # 长期记忆提取逻辑
         memories_to_use = user_memories[:self.config.max_memories]
-
         memory_lines = ["【关于这位用户的记忆】"]
         for memory in memories_to_use:
             summary = memory.get("event_summary", "")
             event_date = memory.get("event_date")
             if event_date:
-                event_summary = f"- 用户在{event_date}表示{summary}"
+                event_summary = f"- 用户在{event_date}时间表示{summary}"
             else:
                 event_summary = f"- {summary}"
             if event_summary not in memory_lines:
@@ -373,10 +370,10 @@ class UnifiedContextBuilder:
         """
         components = [bot_system_prompt]
 
-        # ==================== 新增：整合所有记忆到一个块 ====================
+        # ====================  整合所有记忆到一个块 ====================
         memory_sections = []
 
-        # 1. 历史重要记忆（复用 _format_memories 的结果，但去掉标题）
+        # 1. 长期历史重要记忆
         if memory_context:
             # memory_context 已经是 "【关于这位用户的记忆】\n- xxx\n- xxx" 格式
             # 去掉原有标题，只保留内容
@@ -386,16 +383,14 @@ class UnifiedContextBuilder:
             if memory_lines:
                 memory_sections.append("【历史重要记忆】\n" + '\n'.join(memory_lines))
 
-        # 2. 中期摘要记忆（复用现有逻辑）
+        # 2. 中期摘要记忆
         summary_text = ""
         if llm_generated_summary and isinstance(llm_generated_summary, dict):
             key_elements = llm_generated_summary.get('key_elements', {})
             if not isinstance(key_elements, dict):
                 key_elements = {}
-
             def format_list(items):
                 return ', '.join(items) if items else '无'
-
             summary_text = f"""【中期摘要记忆】
 {llm_generated_summary.get('summary_text', '')}
 关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}
@@ -403,15 +398,14 @@ class UnifiedContextBuilder:
 用户状态：{llm_generated_summary.get('user_state', '')}"""
         elif mid_term_summary:
             summary_text = f"""【中期摘要记忆】
-        {mid_term_summary.summary_text}
-        讨论话题：{', '.join(mid_term_summary.key_topics[:3])}"""
+{mid_term_summary.summary_text}
+讨论话题：{', '.join(mid_term_summary.key_topics[:3])}"""
             if mid_term_summary.emotion_trajectory:
                 summary_text += f"\n情绪变化：{mid_term_summary.emotion_trajectory}"
-
         if summary_text:
             memory_sections.append(summary_text.strip())
 
-        # 3. 近5轮对话记录（复用 _format_history_for_system_prompt，但修改标题）
+        # 3. 近期对话记录
         if short_term_history:
             history_text = self._format_history_for_system_prompt(short_term_history)
             if history_text:
@@ -458,12 +452,9 @@ class UnifiedContextBuilder:
     ) -> str:
         """
         将短期对话历史格式化为嵌入 system prompt 的文本
-        
         使用特殊标记防止 LLM 模仿此格式输出
-        
         Args:
             short_term_history: 短期对话历史
-            
         Returns:
             格式化的历史文本
         """
@@ -477,18 +468,17 @@ class UnifiedContextBuilder:
             if role == "user":
                 history_lines.append(f"User: {content}")
             elif role == "assistant":
+                content = content.replace("[MSG_SPLIT]","")
                 history_lines.append(f"Assistant: {content}")
-
         if not history_lines:
             return ""
 
-        history_text = """【历史对话 - 仅参考，禁止模仿格式】
+        history_text = """
+【历史对话 - 仅参考，禁止模仿格式】
 <history>
 """ + "\n".join(history_lines) + """
 </history>
-
 ⚠️ 注意：上方历史仅用于理解上下文，你的输出必须是JSON"""
-
         return history_text
 
     def _get_json_format_instruction(self) -> str:

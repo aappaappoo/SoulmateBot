@@ -55,34 +55,18 @@ class HistoryFilter:
         r'(?:[a-zA-Z0-9.-]+\.(?:com|org|net|io|cn|co|info|edu|gov|app|dev)[^\s]*)'  # Domain-like patterns
     )
     
-    # 简单寒暄关键词（完全匹配或主要内容为这些）
+    # 无意义的语气词关键词
     TRIVIAL_PATTERNS = [
-        r'^好的[。！]?$',
-        r'^好[。！]?$',
-        r'^嗯[。！]?$',
-        r'^嗯嗯[。！]?$',
         r'^哦[。！]?$',
         r'^哦哦[。！]?$',
-        r'^谢谢[。！]?$',
-        r'^谢谢[你您][。！]?$',
-        r'^感谢[。！]?$',
-        r'^收到[。！]?$',
-        r'^明白[。！]?$',
-        r'^知道了[。！]?$',
-        r'^了解[。！]?$',
-        r'^行[。！]?$',
-        r'^可以[。！]?$',
-        r'^没问题[。！]?$',
-        r'^OK[。！]?$',
-        r'^ok[。！]?$',
-    ]
+        ]
     
     def __init__(
         self, 
         storage_dir: str = "data/filtered_history",
         enable_url_filter: bool = True,
         enable_trivial_filter: bool = True,
-        enable_disk_storage: bool = True,
+        enable_disk_storage: bool = True,  # 是否将过滤内容加入到磁盘json文件进行存储
         min_content_length: int = 5,  # 低于此长度的内容可能被视为不重要
         url_content_threshold: float = 0.7  # URL占内容比例超过此值时过滤
     ):

@@ -507,19 +507,16 @@ class ConversationMemoryService:
 
     # 用于检索相关记忆的系统提示词
     MEMORY_RETRIEVAL_PROMPT = """需要根据用户当前的消息，从历史记忆中找出最相关的记忆。
-
     请分析当前消息可能需要回忆的内容类型，例如：
     - 用户询问"你还记得我吗"时，需要回忆用户的基本信息
     - 用户提到生日相关话题时，需要回忆生日相关的记忆
     - 用户讨论工作时，需要回忆职业和工作目标相关的记忆
-
     请以JSON格式返回检索建议：
     {
         "should_retrieve": true/false,
         "relevance_keywords": ["关键词1", "关键词2"],
         "event_types": ["preference", "goal", "emotion"]
     }
-
     只返回JSON，不要其他内容。"""
 
     def __init__(
@@ -1139,8 +1136,8 @@ AI回复: {bot_response}
                 f"🔎 [Memory-Retrieve][{trace_id}] Skipping vector search | reasons={reasons}"
             )
 
-        # 回退到传统检索
         logger.debug(f"🔎 [Memory-Retrieve][{trace_id}] Using metadata-based retrieval...")
+        # 回退到传统检索
         memories = await self._retrieve_by_metadata(
             user_id=user_id,
             bot_id=bot_id,
@@ -1317,7 +1314,8 @@ AI回复: {bot_response}
             query = query.where(UserMemory.event_type.in_(event_types))
             logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Filtering by event_types: {event_types}")
 
-        # 如果有当前消息且有LLM，且未设置跳过标志，尝试智能匹配
+        # LLM 会分析这句话“该搜什么类型的信息”，并动态添加 event_type 过滤条件。
+        # 例如：用户问“我昨天买了什么？”，LLM 可能会建议只搜索 shopping 或 transaction 类型的记忆。
         if current_message and self.llm_provider and not skip_llm_analysis:
             try:
                 logger.debug(f"📋 [Memory-MetadataSearch][{trace_id}] Analyzing retrieval needs with LLM...")

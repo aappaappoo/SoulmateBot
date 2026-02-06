@@ -279,7 +279,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     db=db,
                     llm_provider=conversation_service.provider
                 )
-            # 🧠 检索用户的相关记忆
+            # 🧠 检索用户长期历史记忆
             user_memories = []
             if db_user and memory_service:
                 try:

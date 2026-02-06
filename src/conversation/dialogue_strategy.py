@@ -439,22 +439,17 @@ class StanceAnalyzer:
 class DialoguePhaseAnalyzer:
     """
     对话阶段分析器
-    Analyzes dialogue phase based on conversation history and user emotion
     """
     
     def analyze_phase(self, conversation_history: List[Dict[str, str]]) -> DialoguePhase:
         """
         根据对话轮次判断当前阶段
-        Determine current dialogue phase based on conversation turn count
-        
         Args:
             conversation_history: 对话历史记录 (不包含system prompt)
-            
         Returns:
             DialoguePhase: 当前对话阶段
         """
         # 计算用户消息轮数（只计算user角色的消息）
-        # Count user messages to determine conversation depth
         user_turn_count = sum(1 for msg in conversation_history if msg.get("role") == "user")
         
         if user_turn_count <= 2:
@@ -534,7 +529,6 @@ class DialoguePhaseAnalyzer:
         # Select strategy based on dialogue phase
         if phase == DialoguePhase.OPENING:
             # 开场阶段：主动倾听，建立信任
-            # Opening phase: Active listening to build trust
             return ResponseType.ACTIVE_LISTENING
             
         elif phase == DialoguePhase.LISTENING:
@@ -644,10 +638,7 @@ class DialogueStrategyInjector:
     ) -> str:
         """
         将策略指令追加到原有 system_prompt 后面
-        Append strategy guidance to original system prompt
-        
-        Key principle: APPEND, not REPLACE. Original personality remains intact.
-        
+        关键原则：添加，而非替换。保持原有个性不变。
         Args:
             original_prompt: 原始system prompt（包含完整人设）
             conversation_history: 对话历史（不包含system prompt）
@@ -662,33 +653,26 @@ class DialogueStrategyInjector:
         phase = self.analyzer.analyze_phase(conversation_history)
         
         # 分析用户情绪
-        # Analyze user emotion
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
         
         # 分析对话类型
-        # Analyze conversation type
         conversation_type = self.conversation_type_analyzer.analyze_type(current_message, conversation_history)
         
         # 建议回应类型（传入对话历史以判断是否应该主动追问）
-        # Suggest response type (pass conversation history to determine proactive inquiry)
         response_type = self.analyzer.suggest_response_type(
             phase, emotion_type, emotion_intensity, conversation_history
         )
         
         # 获取策略模板
-        # Get strategy template
         strategy_guidance = STRATEGY_TEMPLATES[response_type]
         
         # 追加策略到原prompt后面（保持原有人设不变）
-        # Append strategy to original prompt (preserving original personality)
-        # Handle None or empty original_prompt
         base_prompt = original_prompt if original_prompt else ""
         
         # 构建增强prompt
         enhanced_prompt = base_prompt
         
         # 如果提供了bot_values，添加价值观和立场策略
-        # If bot_values provided, add values and stance strategy
         if bot_values:
             # 注入价值观维度
             values_guidance = self._build_values_guidance(bot_values)
@@ -696,7 +680,6 @@ class DialogueStrategyInjector:
                 enhanced_prompt += f"\n\n{values_guidance}"
             
             # 如果是观点讨论类型，进行立场分析
-            # If conversation type is opinion discussion, analyze stance
             if conversation_type == ConversationType.OPINION_DISCUSSION:
                 stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
                 stance_guidance = self._build_stance_guidance(stance_analysis)
@@ -759,11 +742,7 @@ def enhance_prompt_with_strategy(
     bot_values: Optional['ValuesConfig'] = None
 ) -> str:
     """
-    便捷函数：根据对话历史增强prompt
-    Convenience function to enhance prompt with dialogue strategy
-    
-    This is the main entry point for using the dialogue strategy module.
-    Uses a module-level singleton to avoid creating new objects on every call.
+    便捷函数：根据对话历史增强prompt，它使用模块级单例模式，避免每次调用都创建新对象。
     
     Args:
         original_prompt: 原始system prompt
