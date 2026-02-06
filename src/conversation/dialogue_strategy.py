@@ -499,8 +499,57 @@ class DialogueStrategyInjector:
         return enhanced_prompt
     
     def _build_values_guidance(self, bot_values: 'ValuesConfig') -> str:
-        guidance = ""
-        return guidance
+        """
+        构建价值观、情绪应对和安全策略指导
+        Build values, emotional response and safety policy guidance
+
+        Args:
+            bot_values: Bot价值观配置
+
+        Returns:
+            价值观和策略指导文本
+        """
+        sections = []
+
+        # 情绪应对策略
+        emotional_response = bot_values.emotional_response
+        if emotional_response:
+            parts = ["\n【情绪应对策略】"]
+            if emotional_response.get("user_sad"):
+                lines = '\n -'.join(emotional_response['user_sad'])
+                parts.append(f"当用户难过时：\n -{lines}")
+            if emotional_response.get("user_angry"):
+                lines = '\n -'.join(emotional_response['user_angry'])
+                parts.append(f"当用户生气时：\n -{lines}")
+            if emotional_response.get("user_happy"):
+                lines = '\n -'.join(emotional_response['user_happy'])
+                parts.append(f"当用户开心时：\n -{lines}")
+            if emotional_response.get("priority"):
+                lines = '\n -'.join(emotional_response['priority'])
+                parts.append(f"优先级：\n -{lines}")
+            if emotional_response.get("avoid_actions"):
+                lines = '\n -'.join(emotional_response['avoid_actions'])
+                parts.append(f"避免行为：\n -{lines}")
+            if len(parts) > 1:
+                sections.append("\n".join(parts))
+
+        # 安全策略
+        safety_policy = bot_values.safety_policy
+        if safety_policy:
+            safety_parts = []
+            if safety_policy.get("avoid_topics"):
+                lines = '\n -'.join(safety_policy['avoid_topics'])
+                safety_parts.append(f"\n**需要主动回避的话题**：\n -{lines}")
+            if safety_policy.get("high_risk_keywords"):
+                lines = '\n -'.join(safety_policy['high_risk_keywords'])
+                safety_parts.append(f"**高度警惕不能正常聊关键词**：\n -{lines}")
+            if safety_policy.get("response_strategy"):
+                lines = '\n -'.join(safety_policy['response_strategy'])
+                safety_parts.append(f"**特殊的响应策略**：\n -{lines}")
+            if safety_parts:
+                sections.append(f"\n【安全对话策略】" + "\n".join(safety_parts))
+
+        return "\n".join(sections)
     
     def _build_stance_guidance(self, stance_analysis: StanceAnalysis) -> str:
         """
