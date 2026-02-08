@@ -341,7 +341,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     mid_term_end=20,
                     max_memories=8,
                     use_llm_summary=False,  # 使用规则摘要节省 token
-                    enable_proactive_strategy=True
+                    enable_proactive_strategy=True,
                 )
             )
             # 获取之前保存的 LLM 摘要

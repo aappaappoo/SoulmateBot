@@ -26,7 +26,6 @@ from .proactive_strategy import (
 )
 from src.utils.history_filter import HistoryFilter, get_history_filter
 
-
 @dataclass
 class ContextConfig:
     """
@@ -55,8 +54,6 @@ class ContextConfig:
 
     # 历史过滤选项
     enable_history_filter: bool = True  # 是否启用历史过滤（过滤URL、简单寒暄等）
-    filter_urls: bool = True  # 是否过滤URL主导的内容
-    filter_trivial: bool = True  # 是否过滤简单寒暄
 
 
 @dataclass
@@ -186,7 +183,8 @@ class UnifiedContextBuilder:
             llm_generated_summary=llm_generated_summary,  # 传递 LLM 摘要
             dialogue_strategy=dialogue_strategy,
             proactive_guidance=proactive_guidance,
-            short_term_history=short_term  # 传递短期历史以嵌入 system prompt
+            short_term_history=short_term,
+            persona=persona
         )
 
         # 6. 构建最终消息列表（仅 system + user 两条消息）
@@ -276,7 +274,6 @@ class UnifiedContextBuilder:
             mid_term = []
         return short_term, mid_term
 
-
     def _format_memories(self, user_memories: Optional[List[Dict[str, Any]]]) -> str:
         """
         格式化长期记忆为文本
@@ -363,7 +360,8 @@ class UnifiedContextBuilder:
             llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
             dialogue_strategy: Optional[str] = None,
             proactive_guidance: str = "",
-            short_term_history: Optional[List[Dict[str, str]]] = None
+            short_term_history: Optional[List[Dict[str, str]]] = None,
+            persona: Optional[Any] = None
     ) -> str:
         """
         构建增强的 System Prompt
@@ -389,8 +387,10 @@ class UnifiedContextBuilder:
             key_elements = llm_generated_summary.get('key_elements', {})
             if not isinstance(key_elements, dict):
                 key_elements = {}
+
             def format_list(items):
                 return ', '.join(items) if items else '无'
+
             summary_text = f"""【中期摘要记忆】
 {llm_generated_summary.get('summary_text', '')}
 关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}
@@ -434,12 +434,44 @@ class UnifiedContextBuilder:
 
         if dialogue_strategy:
             strategy_sections.append(dialogue_strategy.strip())
+        if persona and hasattr(persona, 'emotional_response') and persona.emotional_response:
+            p = persona
+            emotion_sections = []
+            emotion_sections.append("【情绪应对策略】")
+            if p.emotional_response.get("user_sad"):
+                lines = '\n - '.join(p.emotional_response['user_sad'])
+                emotion_sections.append(f"当用户难过时：\n - {lines}")
+            if p.emotional_response.get("user_angry"):
+                lines = '\n - '.join(p.emotional_response['user_angry'])
+                emotion_sections.append(f"当用户生气时：\n - {lines}")
+            if p.emotional_response.get("user_happy"):
+                lines = '\n - '.join(p.emotional_response['user_happy'])
+                emotion_sections.append(f"当用户开心时：\n - {lines}")
+            if len(emotion_sections) > 1:
+                strategy_sections.append('\n'.join(emotion_sections))
+
         if strategy_sections:
             unified_strategy_block = """
 =========================
 对话策略管理
 =========================
-""" + "\n\n".join(strategy_sections)
+'【安全对话策略】\n'
+'**需要主动回避的话题**：\n'
+' -政治话题\n'
+' -歧视内容\n'
+' -暴力内容\n'
+' -未成年性内容\n'
+' -人身攻击\n'
+'**高度警惕要求主动关闭话题的关键词**：\n'
+' -自杀\n'
+' -抑郁\n'
+' -伤害\n'
+'**特殊的响应策略**：\n'
+' -遇到严肃问题收起幽默\n'
+' -表达真诚的关心\n'
+' -不用幽默掩盖严重问题\n'
+"""
+            unified_strategy_block += "\n\n".join(strategy_sections)
             components.append(unified_strategy_block)
         json_format_instruction = self._get_json_format_instruction()
         components.append(json_format_instruction)
@@ -468,7 +500,7 @@ class UnifiedContextBuilder:
             if role == "user":
                 history_lines.append(f"User: {content}")
             elif role == "assistant":
-                content = content.replace("[MSG_SPLIT]","")
+                content = content.replace("[MSG_SPLIT]", "")
                 history_lines.append(f"Assistant: {content}")
         if not history_lines:
             return ""

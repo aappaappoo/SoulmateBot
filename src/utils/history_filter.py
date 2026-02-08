@@ -54,20 +54,13 @@ class HistoryFilter:
         r'(?:www\.[^\s<>"{}|\\^`\[\]]+)|'       # www URLs
         r'(?:[a-zA-Z0-9.-]+\.(?:com|org|net|io|cn|co|info|edu|gov|app|dev)[^\s]*)'  # Domain-like patterns
     )
-    
-    # 无意义的语气词关键词
-    TRIVIAL_PATTERNS = [
-        r'^哦[。！]?$',
-        r'^哦哦[。！]?$',
-        ]
+
     
     def __init__(
         self, 
         storage_dir: str = "data/filtered_history",
         enable_url_filter: bool = True,
-        enable_trivial_filter: bool = True,
-        enable_disk_storage: bool = True,  # 是否将过滤内容加入到磁盘json文件进行存储
-        min_content_length: int = 5,  # 低于此长度的内容可能被视为不重要
+        enable_disk_storage: bool = False,  # 是否将过滤内容加入到磁盘json文件进行存储
         url_content_threshold: float = 0.7  # URL占内容比例超过此值时过滤
     ):
         """
@@ -76,21 +69,14 @@ class HistoryFilter:
         Args:
             storage_dir: 过滤内容存储目录
             enable_url_filter: 是否启用URL过滤
-            enable_trivial_filter: 是否启用简单寒暄过滤
             enable_disk_storage: 是否启用磁盘存储
-            min_content_length: 最小内容长度阈值
             url_content_threshold: URL占比阈值，超过此值时过滤
         """
         self.storage_dir = Path(storage_dir)
         self.enable_url_filter = enable_url_filter
-        self.enable_trivial_filter = enable_trivial_filter
         self.enable_disk_storage = enable_disk_storage
-        self.min_content_length = min_content_length
         self.url_content_threshold = url_content_threshold
-        
-        # 预编译简单寒暄模式
-        self._trivial_compiled = [re.compile(p, re.IGNORECASE) for p in self.TRIVIAL_PATTERNS]
-        
+
         # 确保存储目录存在
         if enable_disk_storage:
             self.storage_dir.mkdir(parents=True, exist_ok=True)
@@ -183,14 +169,8 @@ class HistoryFilter:
             return True, "empty", {}
         
         content_stripped = content.strip()
-        
-        # 1. 检查简单寒暄（仅对短内容）
-        if self.enable_trivial_filter and len(content_stripped) <= 20:
-            for pattern in self._trivial_compiled:
-                if pattern.match(content_stripped):
-                    return True, "trivial", {}
-        
-        # 2. 检查URL占比
+
+        # 1. 检查URL占比
         if self.enable_url_filter:
             urls = self.URL_PATTERN.findall(content)
             if urls:
@@ -204,12 +184,6 @@ class HistoryFilter:
                     # 如果URL占比超过阈值，过滤该消息
                     if url_ratio >= self.url_content_threshold:
                         return True, "url_dominated", {"urls": urls}
-        
-        # 3. 检查内容长度（非常短的内容可能不重要）
-        if len(content_stripped) < self.min_content_length:
-            # 但不过滤助手的回复
-            if role == "user":
-                return True, "too_short", {}
         
         return False, "", {}
     

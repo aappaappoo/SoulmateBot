@@ -320,7 +320,6 @@ class BotConfig:
                 interaction_parts.append("不过度共情，保持轻松")
             else:
                 interaction_parts.append("容易共情")
-
             if interaction_parts:
                 sections.append(f"\n【交互偏好】\n" + "、".join(interaction_parts))
 
@@ -337,21 +336,6 @@ class BotConfig:
                 lines = '\n -'.join(p.emotional_response['user_happy'])
                 sections.append(f"当用户开心时：\n -{lines}")
 
-        # 安全策略
-        if p.safety_policy:
-            safety_parts = []
-            if p.safety_policy.get("avoid_topics"):
-                lines = '\n -'.join(p.safety_policy['avoid_topics'])
-                safety_parts.append(f"\n**需要主动回避的话题**：\n -{lines}")
-            if p.safety_policy.get("high_risk_keywords"):
-                lines = '\n -'.join(p.safety_policy['high_risk_keywords'])
-                safety_parts.append(f"**高度警惕不能正常聊关键词**：\n -{lines}")
-            if p.safety_policy.get("response_strategy"):
-                lines = '\n -'.join(p.safety_policy['response_strategy'])
-                safety_parts.append(f"**特殊的响应策略**：\n -{lines}")
-            if safety_parts:
-                sections.append(f"\n【安全对话策略】" + "\n".join(safety_parts))
-        sections.append("【注意：以下是你的个人特征，影响你的思考方式和表达风格。但不要刻意表现，自然融入对话即可。】：")
         # 人格维度
         if self.values:
             stances = self.values.stances
@@ -383,6 +367,7 @@ class BotConfig:
             elif dimensions.depth_preference >= 7:
                 dimension_parts.append("你喜欢深度探讨")
             if dimension_parts:
+                sections.append("【注意：以下是你的个人特征，影响你的思考方式和表达风格。但不要刻意表现，自然融入对话即可。】：\n")
                 sections.append(f"\n【人格维度】\n" + "\n".join([f"- {p}" for p in dimension_parts]))
 
             # 预设立场
