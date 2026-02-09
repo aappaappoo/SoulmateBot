@@ -78,7 +78,7 @@ strategy_templates:
     【当前对话策略：主动追问】
     本轮重点：
     - 主动询问用户的兴趣爱好、星座属性、心情状态等个人信息
-    - 通过自然的方式表达对用户的好奇和关心
+    - 通过自然的方式表达对用户的好奇和���心
     - 问题要轻松、不带压力，可以分享自己的喜好来引导话题
     - 根据对话情境选择合适的追问话题
 
@@ -115,7 +115,7 @@ stance_strategy_templates:
     - 用"不过"、"另外"等词语自然过渡
     - 温和地补充你的不同视角或额外信息
     - 避免让用户感觉被反驳
-    注意：你的人设和性格保持不变。
+    ��意：你的人设和性格保持不变。
 
   partial_agree: |
     【立场策略：部分同意】
@@ -137,7 +137,7 @@ stance_strategy_templates:
   challenge: |
     【立场策略：温和质疑】
     - 通过提问引导用户重新思考
-    - 指出用户观点中可能存在的矛盾或盲点
+    - 指出用户观点中可能存在的���盾或盲点
     - 用假设性问题启发思考："如果...会怎样？"
     - 保持好奇和探讨的态度，不是批判
     - 给用户空间自己得出结论
@@ -189,9 +189,97 @@ proactive_questions:
     - "对了，你之前提到过{memory_topic}，后来怎么样了？"
     - "记得你说过{memory_content}，最近还有在{activity}吗？"
     - "你上次说的{memory_topic}，我一直记得呢，现在情况怎么样？"
+  # >>> 新增：原先硬编码在 Python 中的 supportive / gentle_guide 模板 <<<
+  supportive:
+    - "我在这里陪着你"
+    - "你的感受是可以理解的"
+    - "有什么想说的都可以告诉我"
+  gentle_guide:
+    - "嗯嗯~"
+    - "我懂的"
+    - "有需要随时跟我说~"
 
 # ============================================================
-# 七、摘要服务关键词库 (summary_service.py)
+# 七、主动行动配置（★ 新增节 ★）
+# 将 _build_proactive_action 中的 suggestion / tone_guidance /
+# default_context / fallback_questions 全部外置
+# ============================================================
+proactive_action_config:
+  explore_interest:
+    suggestion: "主动询问用户的兴趣爱好、星座、心情等个人信息"
+    tone_guidance: "轻松、好奇、不带压力"
+    default_context:
+      category: "游戏、电影、音乐"
+    # suggestion_template 为 null 表示 suggestion 是固定文案，不含变量
+    suggestion_template: null
+    fallback_questions: null
+
+  deepen_topic:
+    suggestion_template: "深入探索用户对 {topic} 的兴趣"
+    tone_guidance: "感兴趣、追问细节、表达共鸣"
+    default_context:
+      topic: "这个话题"
+    fallback_questions: null
+
+  share_and_ask:
+    suggestion_template: "分享自己对 {topic} 的看法，然后提问"
+    tone_guidance: "分享个人观点、引导互动"
+    default_context:
+      topic: "这个话题"
+      interest: "喜欢"
+      detail: "相关内容"
+      opinion: "某个观点"
+    fallback_questions: null
+
+  find_common:
+    suggestion_template: "发现共同兴趣 {interest}，积极表达共鸣"
+    tone_guidance: "兴奋、建立连接、表达'我也是'"
+    default_context:
+      interest: ""
+      activity: "一起玩"
+      specific_activity: "玩"
+    # 当 common_interests 为空时使用的兜底文案
+    fallback_suggestion: "寻找与用户的共同点"
+    fallback_questions:
+      - "我也喜欢！"
+      - "咱们想到一起去了~"
+
+  show_curiosity:
+    suggestion: "对用户分享的内容表达好奇，鼓励继续"
+    tone_guidance: "好奇、鼓励、积极回应"
+    default_context: {}
+    # 直接使用 proactive_questions.show_curiosity，不需要额外模板变量
+    use_raw_templates: true
+    fallback_questions: null
+
+  recall_memory:
+    suggestion_template: "回忆用户之前提到的：{memory_topic}"
+    tone_guidance: "记得细节、表达关心"
+    default_context:
+      memory_topic: ""
+      memory_content: ""
+      activity: "做"
+    fallback_suggestion: "回忆之前的对话内容并追问"
+    fallback_questions:
+      - "对了，你之前提到..."
+      - "记得你说过..."
+
+  supportive:
+    suggestion: "倾听支持，少主动，多回应"
+    tone_guidance: "温暖、支持、不施压"
+    default_context: {}
+    use_raw_templates: true
+    fallback_questions: null
+
+  gentle_guide:
+    suggestion: "简短回应，不施压，保持温和"
+    tone_guidance: "温和、不追问、给空间"
+    default_context: {}
+    use_raw_templates: true
+    fallback_questions: null
+
+# ============================================================
+# 八、摘要服务关键词库 (summary_service.py)
 # ============================================================
 summary_keywords:
   emotion:
@@ -214,7 +302,7 @@ summary_keywords:
     鼓励: ["鼓励", "支持", "加油", "相信"]
 
 # ============================================================
-# 八、主动策略分析器内联关键词 (proactive_strategy.py 内联)
+# 九、主动策略分析器内联关键词 (proactive_strategy.py 内联)
 # ============================================================
 proactive_analysis_keywords:
   emotional_state:
