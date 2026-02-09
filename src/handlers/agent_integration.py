@@ -354,7 +354,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     current_message=message_text,
                     user_memories=user_memories,
                     dialogue_strategy=dialogue_strategy_text,
-                    llm_generated_summary=previous_summary  # 传递之前的摘要
+                    llm_generated_summary=previous_summary,  # 传递之前的摘要
+                    persona=bot_config.personality
                 )
                 # 提取构建好的消息列表
                 enhanced_messages = builder_result.messages

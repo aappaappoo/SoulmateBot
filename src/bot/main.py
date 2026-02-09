@@ -1,7 +1,7 @@
 """
 Main bot entry point - Async Version
 """
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from loguru import logger
 import sys
 from config import settings
@@ -30,11 +30,6 @@ from src.handlers.bot_commands import (
     config_bot_command
 )
 from src.handlers.feedback import (
-    handle_message_reaction,
-    handle_message_reaction_count,
-    handle_reply_interaction,
-    handle_pinned_message,
-    handle_forward,
     feedback_stats_command,
     my_feedback_command
 )

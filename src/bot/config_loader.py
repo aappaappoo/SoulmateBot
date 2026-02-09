@@ -271,7 +271,7 @@ class BotConfig:
 
         # 居住环境
         if p.living_environment:
-            sections.append(f"\n【 居住环境】\n{p.living_environment}")
+            sections.append(f"\n【居住环境】\n{p.living_environment}")
 
         # 语言风格
         if p.speaking_style:
@@ -323,19 +323,6 @@ class BotConfig:
             if interaction_parts:
                 sections.append(f"\n【交互偏好】\n" + "、".join(interaction_parts))
 
-        # 情绪应对策略
-        if p.emotional_response:
-            sections.append(f"\n【情绪应对策略】")
-            if p.emotional_response.get("user_sad"):
-                lines = '\n -'.join(p.emotional_response['user_sad'])
-                sections.append(f"当用户难过时：\n -{lines}")
-            if p.emotional_response.get("user_angry"):
-                lines = '\n -'.join(p.emotional_response['user_angry'])
-                sections.append(f"当用户生气时：\n -{lines}")
-            if p.emotional_response.get("user_happy"):
-                lines = '\n -'.join(p.emotional_response['user_happy'])
-                sections.append(f"当用户开心时：\n -{lines}")
-
         # 人格维度
         if self.values:
             stances = self.values.stances
@@ -368,7 +355,7 @@ class BotConfig:
                 dimension_parts.append("你喜欢深度探讨")
             if dimension_parts:
                 sections.append("【注意：以下是你的个人特征，影响你的思考方式和表达风格。但不要刻意表现，自然融入对话即可。】：\n")
-                sections.append(f"\n【人格维度】\n" + "\n".join([f"- {p}" for p in dimension_parts]))
+                sections.append(f"【人格维度】\n" + "\n".join([f"- {p}" for p in dimension_parts]))
 
             # 预设立场
             if stances:

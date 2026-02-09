@@ -118,7 +118,8 @@ class UnifiedContextBuilder:
             dialogue_strategy: Optional[str] = None,
             llm_generated_summary: Optional[Dict] = None,  # 新增参数
             chat_id: Optional[str] = None,  # 用于历史过滤存储
-            user_id: Optional[str] = None  # 用于历史过滤存储
+            user_id: Optional[str] = None,  # 用于历史过滤存储
+            persona: Optional[Any] = None  # ← 新增
     ) -> BuilderResult:
         """
         构建完整的对话上下文
@@ -186,7 +187,6 @@ class UnifiedContextBuilder:
             short_term_history=short_term,
             persona=persona
         )
-
         # 6. 构建最终消息列表（仅 system + user 两条消息）
         messages = self._build_messages(
             enhanced_system_prompt,
@@ -321,20 +321,16 @@ class UnifiedContextBuilder:
             user_profile = self.proactive_analyzer.analyze_user_profile(
                 conversation_history, user_memories
             )
-
             # 分析话题
             topic_analysis = self.proactive_analyzer.analyze_topic(
                 conversation_history, user_profile
             )
-
             # 生成主动策略
             proactive_action = self.proactive_analyzer.generate_proactive_strategy(
                 user_profile, topic_analysis, conversation_history, user_memories
             )
-
             # 格式化为文本
             guidance = self.proactive_analyzer.format_proactive_guidance(proactive_action)
-
             # 添加用户画像信息
             profile_info = f"""
 【当前对话情境】
@@ -344,7 +340,6 @@ class UnifiedContextBuilder:
 - 用户兴趣：{', '.join(user_profile.interests[:3]) if user_profile.interests else '待探索'}
 - 可探索话题：{', '.join(topic_analysis.topics_to_explore[:3]) if topic_analysis.topics_to_explore else '无'}
 """
-
             return profile_info + "\n" + guidance
 
         except Exception as e:
@@ -412,7 +407,7 @@ class UnifiedContextBuilder:
                 # 替换原有标题为统一格式
                 history_text = history_text.replace(
                     "【历史对话 - 仅参考，禁止模仿格式】",
-                    "【近期对话记录】"
+                    "【近期对话记录｜由下往上对应的时间是从远到近】"
                 )
                 memory_sections.append(history_text)
 
@@ -456,20 +451,20 @@ class UnifiedContextBuilder:
 对话策略管理
 =========================
 '【安全对话策略】\n'
-'**需要主动回避的话题**：\n'
-' -政治话题\n'
-' -歧视内容\n'
-' -暴力内容\n'
-' -未成年性内容\n'
-' -人身攻击\n'
-'**高度警惕要求主动关闭话题的关键词**：\n'
-' -自杀\n'
-' -抑郁\n'
-' -伤害\n'
-'**特殊的响应策略**：\n'
-' -遇到严肃问题收起幽默\n'
-' -表达真诚的关心\n'
-' -不用幽默掩盖严重问题\n'
+'**需要主动回避的话题**：'
+'-政治话题'
+'-歧视内容'
+'-暴力内容'
+'-未成年性内容'
+'-人身攻击'
+'**高度警惕要求主动关闭话题的关键词**：'
+'-自杀'
+'-抑郁'
+'-谋杀'
+'**特殊的响应策略**：'
+'-遇到严肃问题收起幽默'
+'-表达真诚的关心'
+'-不用幽默掩盖严重问题\n'
 """
             unified_strategy_block += "\n\n".join(strategy_sections)
             components.append(unified_strategy_block)

@@ -84,7 +84,28 @@ class ConversationSummaryService:
             llm_provider: LLM 提供者（可选，用于 LLM 摘要模式）
         """
         self.llm_provider = llm_provider
-    
+        config = self._load_summary_config()
+        self.EMOTION_KEYWORDS = config.get("emotion", {})
+        self.TOPIC_KEYWORDS = config.get("topic", {})
+        self.NEED_KEYWORDS = config.get("need", {})
+
+    @staticmethod
+    def _load_summary_config() -> Dict:
+        """从统一 YAML 加载摘要相关配置"""
+        from pathlib import Path
+        import yaml
+
+        config_path = Path(__file__).parent.parent.parent / "config" / "dialogue_strategy.yaml"
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            return config.get("summary_keywords", {})
+        except (FileNotFoundError, yaml.YAMLError) as e:
+            from loguru import logger
+            logger.error(f"❌ 摘要配置加载失败: {e}")
+            # 返回空字典，使用空关键词库（降级运行）
+            return {}
+
     async def summarize_conversations(
         self,
         conversations: List[Dict[str, str]],
@@ -93,7 +114,7 @@ class ConversationSummaryService:
     ) -> ConversationSummary:
         """
         对对话历史进行摘要
-        
+
         Args:
             conversations: 对话历史列表，格式 [{"role": "user", "content": "..."}, ...]
             use_llm: 是否使用 LLM 摘要（消耗 token）
