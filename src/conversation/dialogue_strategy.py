@@ -440,9 +440,9 @@ class DialogueStrategyInjector:
             str: 增强后的system prompt
         """
         # ========== 1. 统一分析层（只做一次，产出共享上下文） ==========
-        # 分析对话阶段
+        # 分析对话阶段（统计 user 消息轮数）
         phase = self.analyzer.analyze_phase(conversation_history)
-        # 分析用户情绪
+        # 分析用户情绪(emotion_type, emotion_intensity)
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
         # 分析对话类型
         conversation_type = self.conversation_type_analyzer.analyze_type(current_message, conversation_history)
@@ -477,7 +477,8 @@ class DialogueStrategyInjector:
         # ========== 3. 主动策略层（消费统一上下文，复用 phase） ==========
         if enable_proactive and conversation_history and user_profile:
             proactive_guidance = self._generate_proactive_guidance(
-                conversation_history, user_memories,
+                conversation_history,
+                user_memories,
                 user_profile=user_profile,
                 response_type=response_type
             )
