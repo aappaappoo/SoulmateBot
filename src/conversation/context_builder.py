@@ -419,17 +419,13 @@ class UnifiedContextBuilder:
         for msg in short_term_history:
             role = msg.get("role", "").lower()
             content = msg.get("content", "")
-            timestamp = msg.get("timestamp", "")
-            time_prefix = f"[{timestamp}] " if timestamp else ""
             if role == "user":
-                history_lines.append(f"{time_prefix}User: {content}")
+                history_lines.append(f"User: {content}")
             elif role == "assistant":
                 content = content.replace("[MSG_SPLIT]", "")
-                history_lines.append(f"{time_prefix}Assistant: {content}")
-
+                history_lines.append(f"Assistant: {content}")
         if not history_lines:
             return ""
-
         history_text = """
 【历史对话 - 仅参考，禁止模仿格式】
 <history>

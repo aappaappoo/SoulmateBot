@@ -17,7 +17,6 @@ from src.handlers.commands import (
     check_payment_command
 )
 from src.handlers.messages import (
-    handle_message,
     handle_photo,
     handle_sticker,
     error_handler
@@ -58,7 +57,6 @@ class SoulmateBot:
     SoulmateBot 主类
     负责初始化和运行Telegram Bot
     """
-
     def __init__(self):
         """初始化Bot实例"""
         self.app = None

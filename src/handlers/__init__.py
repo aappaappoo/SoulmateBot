@@ -12,7 +12,6 @@ from .commands import (
     check_payment_command
 )
 from .messages import (
-    handle_message,
     handle_photo,
     handle_sticker,
     error_handler
@@ -48,7 +47,6 @@ __all__ = [
     "pay_premium_command",
     "check_payment_command",
     # 消息处理
-    "handle_message",
     "handle_photo",
     "handle_sticker",
     "error_handler",
