@@ -312,9 +312,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 else:
                     conversation_history_for_builder.append({"role": "assistant", "content": conv.response})
 
-            # 应用动态对话策略（生成策略文本）
+            # 应用动态对话策略（生成策略文本）ot_config 中的 values 配置（如果存在）
             dialogue_strategy_text = None
-            # 获取 bot_config 中的 values 配置（如果存在）
             bot_values = get_bot_values(context)
             if conversation_history_for_builder:
                 try:
@@ -324,7 +323,9 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         original_prompt=base_system_prompt,
                         conversation_history=conversation_history_for_builder,
                         current_message=message_text,
-                        bot_values=bot_values
+                        bot_values=bot_values,
+                        user_memories=user_memories,
+                        enable_proactive=True
                     )
                     # 提取策略部分（去掉原始 system_prompt）
                     if base_system_prompt and enhanced_with_strategy.startswith(base_system_prompt):

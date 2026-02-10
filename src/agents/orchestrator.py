@@ -92,11 +92,6 @@ class AgentOrchestrator:
     SUPPORTED_EMOTIONS = ["happy", "gentle", "sad", "excited", "angry", "crying"]
 
     UNIFIED_PROMPT_TEMPLATE = """
-【重要】你必须且只能输出合法的 JSON 格式，不能有任何其他内容。
-不要输出解释、不要输出 markdown 代码块标记，直接输出 JSON。
-1. 你【只能】输出 JSON，不允许包含任何解释性文字、标点或注释
-2. JSON 必须能被标准 json.loads 直接解析
-
 【任务总览】
 你需要同时完成 4 个任务：
 1. 意图识别
@@ -138,7 +133,7 @@ class AgentOrchestrator:
     **多消息规则**：
     - 如需拆分为多条消息，用 [MSG_SPLIT] 分隔
     
-  - emotion / emotion_description 才允许填写
+  - 才允许填写emotion/emotion_description 
 
 - 当 intent != "direct_response" 时：
   - direct_reply 必须为 ""

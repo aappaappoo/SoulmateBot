@@ -19,12 +19,9 @@ Unified Context Builder - 统一上下文构建器
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from loguru import logger
-
 from .summary_service import ConversationSummaryService, ConversationSummary
-from .proactive_strategy import (
-    ProactiveDialogueStrategyAnalyzer,
-)
 from src.utils.history_filter import HistoryFilter, get_history_filter
+
 
 @dataclass
 class ContextConfig:
@@ -84,7 +81,6 @@ class UnifiedContextBuilder:
     def __init__(
             self,
             summary_service: Optional[ConversationSummaryService] = None,
-            proactive_analyzer: Optional[ProactiveDialogueStrategyAnalyzer] = None,
             history_filter: Optional[HistoryFilter] = None,
             config: Optional[ContextConfig] = None
     ):
@@ -93,12 +89,10 @@ class UnifiedContextBuilder:
         
         Args:
             summary_service: 摘要服务（可选，默认创建）
-            proactive_analyzer: 主动策略分析器（可选，默认创建）
             history_filter: 历史过滤器（可选，默认使用全局实例）
             config: 配置（可选，使用默认配置）
         """
         self.summary_service = summary_service or ConversationSummaryService()
-        self.proactive_analyzer = proactive_analyzer or ProactiveDialogueStrategyAnalyzer()
         self.config = config or ContextConfig()
 
         # 初始化历史过滤器
@@ -169,13 +163,6 @@ class UnifiedContextBuilder:
         # 3. 格式化长期记忆
         memory_context = self._format_memories(user_memories)
 
-        # 4. 生成主动策略（如果启用）
-        proactive_guidance = ""
-        if self.config.enable_proactive_strategy:
-            proactive_guidance = await self._generate_proactive_guidance(
-                conversation_history, user_memories
-            )
-
         # 5. 构建增强的 System Prompt（包含对话历史）
         enhanced_system_prompt = self._build_enhanced_system_prompt(
             bot_system_prompt=bot_system_prompt,
@@ -183,7 +170,6 @@ class UnifiedContextBuilder:
             mid_term_summary=mid_term_summary,
             llm_generated_summary=llm_generated_summary,  # 传递 LLM 摘要
             dialogue_strategy=dialogue_strategy,
-            proactive_guidance=proactive_guidance,
             short_term_history=short_term,
             persona=persona
         )
@@ -213,7 +199,6 @@ class UnifiedContextBuilder:
                 "mid_term_count": len(mid_term),
                 "has_mid_term_summary": mid_term_summary is not None,
                 "memory_count": len(user_memories) if user_memories else 0,
-                "has_proactive_guidance": bool(proactive_guidance),
                 "filtered_history_count": filtered_count,
                 "history_filter_enabled": self.config.enable_history_filter
             }
@@ -301,50 +286,7 @@ class UnifiedContextBuilder:
                 memory_lines.append(event_summary)
         return "\n".join(memory_lines)
 
-    async def _generate_proactive_guidance(
-            self,
-            conversation_history: List[Dict[str, str]],
-            user_memories: Optional[List[Dict[str, Any]]]
-    ) -> str:
-        """
-        生成主动对话策略指导
-        
-        Args:
-            conversation_history: 对话历史
-            user_memories: 用户记忆
-            
-        Returns:
-            主动策略文本
-        """
-        try:
-            # 构建用户画像
-            user_profile = self.proactive_analyzer.analyze_user_profile(
-                conversation_history, user_memories
-            )
-            # 分析话题
-            topic_analysis = self.proactive_analyzer.analyze_topic(
-                conversation_history, user_profile
-            )
-            # 生成主动策略
-            proactive_action = self.proactive_analyzer.generate_proactive_strategy(
-                user_profile, topic_analysis, conversation_history, user_memories
-            )
-            # 格式化为文本
-            guidance = self.proactive_analyzer.format_proactive_guidance(proactive_action)
-            # 添加用户画像信息
-            profile_info = f"""
-【当前对话情境】
-- 用户参与度：{user_profile.engagement_level.value}
-- 用户情绪：{user_profile.emotional_state}
-- 关系深度：{user_profile.relationship_depth}/5
-- 用户兴趣：{', '.join(user_profile.interests[:3]) if user_profile.interests else '待探索'}
-- 可探索话题：{', '.join(topic_analysis.topics_to_explore[:3]) if topic_analysis.topics_to_explore else '无'}
-"""
-            return profile_info + "\n" + guidance
 
-        except Exception as e:
-            logger.warning(f"生成主动策略失败: {e}")
-            return ""
 
     #
     def _build_enhanced_system_prompt(
@@ -354,7 +296,6 @@ class UnifiedContextBuilder:
             mid_term_summary: Optional[ConversationSummary],
             llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
             dialogue_strategy: Optional[str] = None,
-            proactive_guidance: str = "",
             short_term_history: Optional[List[Dict[str, str]]] = None,
             persona: Optional[Any] = None
     ) -> str:
@@ -362,30 +303,23 @@ class UnifiedContextBuilder:
         构建增强的 System Prompt
         """
         components = [bot_system_prompt]
-
         # ====================  整合所有记忆到一个块 ====================
         memory_sections = []
-
         # 1. 长期历史重要记忆
         if memory_context:
-            # memory_context 已经是 "【关于这位用户的记忆】\n- xxx\n- xxx" 格式
-            # 去掉原有标题，只保留内容
             memory_lines = memory_context.split('\n')
             if memory_lines and memory_lines[0].startswith('【'):
                 memory_lines = memory_lines[1:]  # 去掉第一行标题
             if memory_lines:
                 memory_sections.append("【历史重要记忆】\n" + '\n'.join(memory_lines))
-
         # 2. 中期摘要记忆
         summary_text = ""
         if llm_generated_summary and isinstance(llm_generated_summary, dict):
             key_elements = llm_generated_summary.get('key_elements', {})
             if not isinstance(key_elements, dict):
                 key_elements = {}
-
             def format_list(items):
                 return ', '.join(items) if items else '无'
-
             summary_text = f"""【中期摘要记忆】
 {llm_generated_summary.get('summary_text', '')}
 关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}
@@ -407,10 +341,9 @@ class UnifiedContextBuilder:
                 # 替换原有标题为统一格式
                 history_text = history_text.replace(
                     "【历史对话 - 仅参考，禁止模仿格式】",
-                    "【近期对话记录｜由下往上对应的时间是从远到近】"
+                    "【近期对话记录】"
                 )
                 memory_sections.append(history_text)
-
         # 整合所有记忆到一个块
         if memory_sections:
             unified_memory_block = """
@@ -419,14 +352,8 @@ class UnifiedContextBuilder:
 =========================
 """ + "\n\n".join(memory_sections)
             components.append(unified_memory_block)
-
         # ==================== 对话策略管理（整合块） ====================
         strategy_sections = []
-
-        # 1. 当前对话情境（从 proactive_guidance 中提取）
-        if proactive_guidance:
-            strategy_sections.append(proactive_guidance.strip())
-
         if dialogue_strategy:
             strategy_sections.append(dialogue_strategy.strip())
         if persona and hasattr(persona, 'emotional_response') and persona.emotional_response:
@@ -492,11 +419,14 @@ class UnifiedContextBuilder:
         for msg in short_term_history:
             role = msg.get("role", "").lower()
             content = msg.get("content", "")
+            timestamp = msg.get("timestamp", "")
+            time_prefix = f"[{timestamp}] " if timestamp else ""
             if role == "user":
-                history_lines.append(f"User: {content}")
+                history_lines.append(f"{time_prefix}User: {content}")
             elif role == "assistant":
                 content = content.replace("[MSG_SPLIT]", "")
-                history_lines.append(f"Assistant: {content}")
+                history_lines.append(f"{time_prefix}Assistant: {content}")
+
         if not history_lines:
             return ""
 
@@ -624,13 +554,10 @@ class UnifiedContextBuilder:
     def _truncate_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         截断消息以适应 token 预算
-        
         注意：在简化结构（仅 system + user 两条消息）下，历史已嵌入 system prompt，
         无法在消息层面进行截断。如需更严格的 token 控制，请调整 short_term_rounds 配置。
-        
         Args:
             messages: 原始消息列表
-            
         Returns:
             截断后的消息列表（在简化结构下返回原始消息）
         """

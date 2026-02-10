@@ -101,12 +101,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # 获取 bot_config 中的 values 配置（如果存在）
                         bot_values = get_bot_values(context)
                         if selected_bot.system_prompt:
-                            # Channel messages have no conversation history, so pass empty list
                             enhanced_prompt = enhance_prompt_with_strategy(
                                 original_prompt=selected_bot.system_prompt,
                                 conversation_history=[],
                                 current_message=message_text,
-                                bot_values=bot_values
+                                bot_values=bot_values,
+                                user_memories=None,
+                                enable_proactive=False
                             )
                             history.insert(0, {"role": "system", "content": enhanced_prompt})
                         logger.info(f"🧠 [STEP 6/9] AI_REQUEST: Sending to AI service, history_length={len(history)}")
@@ -188,9 +189,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             history = []
             for conv in reversed(list(recent_conversations)):
                 if conv.is_user_message:
-                    history.append({"role": "user", "content": conv.message})
+                    history.append({
+                        "role": "user",
+                        "content": conv.message,
+                        "timestamp": conv.timestamp.strftime("%Y-%m-%d %H:%M:%S") if conv.timestamp else ""
+                    })
                 else:
-                    history.append({"role": "assistant", "content": conv.response})
+                    history.append({
+                        "role": "assistant",
+                        "content": conv.response,
+                        "timestamp": conv.timestamp.strftime("%Y-%m-%d %H:%M:%S") if conv.timestamp else ""
+                    })
 
             try:
                 # 获取 bot_config 中的 values 配置（如果存在）

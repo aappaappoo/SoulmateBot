@@ -11,13 +11,13 @@ import yaml
 class ProactiveMode(str, Enum):
     """主动对话模式"""
     EXPLORE_INTEREST = "explore_interest"  # 探索兴趣：主动询问用户的兴趣爱好、星座、心情等个人信息
-    DEEPEN_TOPIC = "deepen_topic"          # 深入话题：对用户当前聊到的话题追问细节，深入探索
-    SHARE_AND_ASK = "share_and_ask"        # 分享并提问：先分享自己的看法或经历，再引导用户互动
-    FIND_COMMON = "find_common"            # 寻找共同点：发现与用户的共同兴趣，积极表达共鸣
-    SHOW_CURIOSITY = "show_curiosity"      # 表达好奇：对用户分享的内容表达好奇心，鼓励继续说
-    RECALL_MEMORY = "recall_memory"        # 回忆追问：回忆用户之前提到过的内容，主动追问后续
-    SUPPORTIVE = "supportive"              # 倾听支持：用户情绪低落时，以倾听和陪伴为主，少主动多回应
-    GENTLE_GUIDE = "gentle_guide"          # 温和引导：用户参与度低时，简短回应，不施压，给予空间
+    DEEPEN_TOPIC = "deepen_topic"  # 深入话题：对用户当前聊到的话题追问细节，深入探索
+    SHARE_AND_ASK = "share_and_ask"  # 分享并提问：先分享自己的看法或经历，再引导用户互动
+    FIND_COMMON = "find_common"  # 寻找共同点：发现与用户的共同兴趣，积极表达共鸣
+    SHOW_CURIOSITY = "show_curiosity"  # 表达好奇：对用户分享的内容表达好奇心，鼓励继续说
+    RECALL_MEMORY = "recall_memory"  # 回忆追问：回忆用户之前提到过的内容，主动追问后续
+    SUPPORTIVE = "supportive"  # 倾听支持：用户情绪低落时，以倾听和陪伴为主，少主动多回应
+    GENTLE_GUIDE = "gentle_guide"  # 温和引导：用户参与度低时，简短回应，不施压，给予空间
 
 
 class ConversationStage(str, Enum):
@@ -103,8 +103,6 @@ PROACTIVE_QUESTIONS: Dict[ProactiveMode, List[str]] = {
 
 # 主动分析关键词
 _analysis_keywords = _config.get("proactive_analysis_keywords", {})
-
-# ★ 新增：主动行动配置（从 YAML 加载，key 保持 str）
 _action_config_raw: Dict[str, Dict[str, Any]] = _config.get("proactive_action_config", {})
 
 
@@ -124,15 +122,13 @@ class ProactiveDialogueStrategyAnalyzer:
         self._topic_keywords = _analysis_keywords.get("topic_extraction", {})
         self._basic_topics = _analysis_keywords.get("basic_topics", [])
         self._default_explore = _analysis_keywords.get("default_explore_topics", [])
-        # ★ 新增：加载 action 配置，转换为 ProactiveMode key
+        #加载 action 配置，转换为 ProactiveMode key
         self._action_config: Dict[ProactiveMode, Dict[str, Any]] = {}
         for k, v in _action_config_raw.items():
             try:
                 self._action_config[ProactiveMode(k)] = v
             except ValueError:
                 logger.warning(f"⚠️ 未知的 ProactiveMode: {k}，已跳过")
-
-    # ======================== 公共方法（保持不变） ========================
 
     def analyze_user_profile(
             self,
@@ -141,11 +137,9 @@ class ProactiveDialogueStrategyAnalyzer:
     ) -> UserProfile:
         """
         构建用户画像
-
         Args:
             conversation_history: 对话历史
             user_memories: 用户长期记忆（可选）
-
         Returns:
             UserProfile: 用户画像
         """
@@ -232,7 +226,7 @@ class ProactiveDialogueStrategyAnalyzer:
             ProactiveAction: 主动行动建议
         """
         # 确定对话阶段
-        stage = self._determine_stage(user_profile.relationship_depth)
+        stage = self._determine_stage(user_profile)
         # 根据情绪和阶段选择模式
         mode = self._select_proactive_mode(stage, user_profile, topic_analysis, user_memories)
         # 生成具体建议
@@ -241,7 +235,6 @@ class ProactiveDialogueStrategyAnalyzer:
         return action
 
     # ======================== 私有分析方法（保持不变） ========================
-
     def _extract_interests(self, conversation_history: List[Dict[str, str]]) -> List[str]:
         """从对话中提取用户兴趣"""
         interest_counts = {}
@@ -302,13 +295,13 @@ class ProactiveDialogueStrategyAnalyzer:
         has_positive = any(kw in recent_text for kw in positive_keywords)
         has_negative = any(kw in recent_text for kw in negative_keywords)
         if has_negative and not has_positive:
-            return "积极情绪"
+            return "positive"
         elif has_positive and not has_negative:
-            return "消极情绪"
+            return "negative"
         elif has_positive and has_negative:
-            return "情绪转变中"
+            return "During the emotional transition"
         else:
-            return "无情绪波动"
+            return "neutral"
 
     def _extract_recent_topics(self, conversation_history: List[Dict[str, str]]) -> List[str]:
         """提取近期讨论话题"""
@@ -386,7 +379,8 @@ class ProactiveDialogueStrategyAnalyzer:
             topics_to_explore = list(self._default_explore)
         return topics_to_explore[:3]  # 最多3个
 
-    def _determine_stage(self, relationship_depth: int) -> ConversationStage:
+    def _determine_stage(self, user_profile: UserProfile) -> ConversationStage:
+        relationship_depth = user_profile.relationship_depth
         """确定对话阶段"""
         if relationship_depth <= 1:
             return ConversationStage.OPENING
@@ -409,7 +403,7 @@ class ProactiveDialogueStrategyAnalyzer:
         if user_profile.emotional_state == "negative":
             return ProactiveMode.SUPPORTIVE
 
-        # 参与度低时温和引导
+        # 参与度低时
         if user_profile.engagement_level == UserEngagement.LOW:
             return ProactiveMode.GENTLE_GUIDE
 
@@ -433,8 +427,8 @@ class ProactiveDialogueStrategyAnalyzer:
                 return ProactiveMode.SHOW_CURIOSITY
             # 深入当前话题
             return ProactiveMode.DEEPEN_TOPIC
-
-        else:  # ESTABLISHED
+        # 深度建立关系
+        else:
             # 有记忆可以追问
             if user_memories and len(user_memories) > 0:
                 return ProactiveMode.RECALL_MEMORY
@@ -443,8 +437,6 @@ class ProactiveDialogueStrategyAnalyzer:
                 return ProactiveMode.SHARE_AND_ASK
             # 寻找共同点
             return ProactiveMode.FIND_COMMON
-
-    # ======================== ★ 重构核心 ★ ========================
 
     def _build_runtime_context(
             self,
@@ -488,8 +480,7 @@ class ProactiveDialogueStrategyAnalyzer:
             user_memories: Optional[List[Dict[str, Any]]]
     ) -> ProactiveAction:
         """
-        构建主动行动（数据驱动版本）
-
+        构建主动行动
         所有静态文案（suggestion / tone_guidance / fallback）均来自 YAML
         proactive_action_config 节，Python 仅负责：
           1. 组装运行时模板变量（topic / interest / memory 等）
@@ -503,17 +494,14 @@ class ProactiveDialogueStrategyAnalyzer:
             return ProactiveAction(mode=mode, suggestion="")
 
         action = ProactiveAction(mode=mode, suggestion="")
-
         # --- 1. 构建运行时上下文 ---
         context = self._build_runtime_context(mode, topic_analysis, user_memories, cfg)
-
         # --- 2. 决定是否走 fallback 路径 ---
         use_fallback = False
         if mode == ProactiveMode.FIND_COMMON and not topic_analysis.common_interests:
             use_fallback = True
         elif mode == ProactiveMode.RECALL_MEMORY and (not user_memories or len(user_memories) == 0):
             use_fallback = True
-
         # --- 3. 填充 suggestion ---
         if use_fallback:
             action.suggestion = cfg.get("fallback_suggestion", "")
@@ -537,7 +525,6 @@ class ProactiveDialogueStrategyAnalyzer:
             action.example_questions = list(self.question_templates.get(mode, []))
         else:
             action.example_questions = self._fill_question_templates(mode, context)
-
         return action
 
     def _fill_question_templates(
@@ -560,10 +547,8 @@ class ProactiveDialogueStrategyAnalyzer:
     def format_proactive_guidance(self, action: ProactiveAction) -> str:
         """
         格式化主动策略为提示词
-
         Args:
             action: 主动行动
-
         Returns:
             格式化的策略文本
         """
@@ -571,7 +556,6 @@ class ProactiveDialogueStrategyAnalyzer:
 - 模式：{action.mode.value}
 - 策略：{action.suggestion}
 - 语气：{action.tone_guidance}
-
 【可以这样回复】
 """
         for i, question in enumerate(action.example_questions, 1):

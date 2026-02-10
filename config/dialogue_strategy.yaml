@@ -4,7 +4,7 @@
 # ============================================================
 
 # ============================================================
-# 一、情绪关键词库 (dialogue_strategy_config.py: EMOTION_KEYWORDS)
+# 一、情绪关键词库 (dialogue_strategy.analyze_emotion)
 # ============================================================
 emotion_keywords:
   negative:
@@ -17,16 +17,16 @@ emotion_keywords:
     low: ["还可以", "稍微好点", "一般", "凑合", "比之前好"]
 
 # ============================================================
-# 二、对话类型信号词 (dialogue_strategy_config.py: CONVERSATION_TYPE_SIGNALS)
+# 二、对话类型信号词 (dialogue_strategy.analyze_phase)
 # ============================================================
 conversation_type_signals:
-  emotional_vent: ["难过", "烦", "累", "不知道怎么办", "受不了", "压力大", "焦虑", "抑郁", "崩溃", "撑不下去", "心烦", "郁闷", "很难受", "好烦", "太累了", "快被压垮了", "情绪很差", "心里堵", "失落", "孤独", "空虚", "提不起劲", "没动力", "熬不下去了"]
+  emotional_vent: ["难过", "不开心", "烦", "累", "不知道怎么办", "受不了", "压力大", "焦虑", "抑郁", "崩溃", "撑不下去", "心烦", "郁闷", "很难受", "好烦", "太累了", "快被压垮了", "情绪很差", "心里堵", "失落", "孤独", "空虚", "提不起劲", "没动力", "熬不下去了"]
   opinion_discussion: ["我觉得", "你怎么看", "是不是应该", "你认为", "怎么想", "对不对", "有道理吗", "你的观点", "在我看来", "个人感觉", "我的看法", "怎么看这事", "你同不同意", "合理吗", "值不值得", "怎么看待"]
   info_request: ["最近", "有什么", "推荐", "是不是真的", "听说", "了解", "知道吗", "能不能", "怎么样", "哪里", "什么时候", "为什么", "怎么回事", "靠谱不", "是真的吗", "有没有", "具体是啥", "能查到吗"]
   decision_consulting: ["该不该", "怎么选", "帮我分析", "怎么办", "选择", "决定", "建议", "意见", "要不要", "值不值", "适不适合", "哪种好", "怎么决定", "取舍", "帮我想想", "给点建议"]
 
 # ============================================================
-# 三、策略指导模板 (dialogue_strategy_config.py: STRATEGY_TEMPLATES)
+# 三、策略指导模板 (dialogue_strategy_config.STRATEGY_TEMPLATES[response_type])
 # ============================================================
 strategy_templates:
   active_listening: |
@@ -78,7 +78,7 @@ strategy_templates:
     【当前对话策略：主动追问】
     本轮重点：
     - 主动询问用户的兴趣爱好、星座属性、心情状态等个人信息
-    - 通过自然的方式表达对用户的好奇和���心
+    - 通过自然的方式表达对用户的好奇和同理心
     - 问题要轻松、不带压力，可以分享自己的喜好来引导话题
     - 根据对话情境选择合适的追问话题
 
@@ -97,8 +97,9 @@ strategy_templates:
     - 如果用户不想回答，要尊重用户的选择
     - 你的人设和性格保持不变，以上是建议的沟通方式。
 
+
 # ============================================================
-# 四、立场策略模板 (dialogue_strategy_config.py: STANCE_STRATEGY_TEMPLATES)
+# 四、立场策略模板 (dialogue_strategy.analyze_stance)
 # ============================================================
 stance_strategy_templates:
   agree: |
@@ -115,7 +116,7 @@ stance_strategy_templates:
     - 用"不过"、"另外"等词语自然过渡
     - 温和地补充你的不同视角或额外信息
     - 避免让用户感觉被反驳
-    ��意：你的人设和性格保持不变。
+    注意：你的人设和性格保持不变。
 
   partial_agree: |
     【立场策略：部分同意】
@@ -137,14 +138,16 @@ stance_strategy_templates:
   challenge: |
     【立场策略：温和质疑】
     - 通过提问引导用户重新思考
-    - 指出用户观点中可能存在的���盾或盲点
+    - 指出用户观点中可能存在的矛盾或盲点
     - 用假设性问题启发思考："如果...会怎样？"
     - 保持好奇和探讨的态度，不是批判
     - 给用户空间自己得出结论
     注意：你的人设和性格保持不变。
 
+
+
 # ============================================================
-# 五、兴趣关键词库 (proactive_strategy.py: INTEREST_CATEGORIES)
+# 五、兴趣关键词库 _extract_interests(proactive_strategy._extract_interests)
 # ============================================================
 interest_categories:
   游戏: ["游戏", "打游戏", "玩游戏", "王者", "吃鸡", "LOL", "原神", "switch"]
@@ -159,7 +162,7 @@ interest_categories:
   摄影: ["拍照", "摄影", "相机", "照片"]
 
 # ============================================================
-# 六、主动提问模板 (proactive_strategy.py: PROACTIVE_QUESTIONS)
+# 六、主动提问模板 (proactive_strategy: PROACTIVE_QUESTIONS)
 # ============================================================
 proactive_questions:
   explore_interest:
@@ -189,20 +192,28 @@ proactive_questions:
     - "对了，你之前提到过{memory_topic}，后来怎么样了？"
     - "记得你说过{memory_content}，最近还有在{activity}吗？"
     - "你上次说的{memory_topic}，我一直记得呢，现在情况怎么样？"
-  # >>> 新增：原先硬编码在 Python 中的 supportive / gentle_guide 模板 <<<
   supportive:
     - "我在这里陪着你"
     - "你的感受是可以理解的"
     - "有什么想说的都可以告诉我"
+    - "你不用急着好起来，慢慢来也没关系"
+    - "这段时间对你来说确实不容易"
+    - "你已经很努力了，只是现在有点累"
+    - "我愿意听你把事情说清楚"
+    - "你现在的感受是重要的"
+    - "先不用想着解决问题，我们可以先缓一缓"
+    - "你不是一个人在面对这些"
+    - "就算现在很乱，也没关系"
+    - "你能把这些说出来，本身就不容易"
+    - "如果你愿意，我们可以一起理一理"
+    - "你不需要独自扛着"
   gentle_guide:
     - "嗯嗯~"
     - "我懂的"
     - "有需要随时跟我说~"
 
 # ============================================================
-# 七、主动行动配置（★ 新增节 ★）
-# 将 _build_proactive_action 中的 suggestion / tone_guidance /
-# default_context / fallback_questions 全部外置
+# 七、主动行动配置(_build_proactive_action._build_proactive_action)
 # ============================================================
 proactive_action_config:
   explore_interest:
@@ -210,7 +221,6 @@ proactive_action_config:
     tone_guidance: "轻松、好奇、不带压力"
     default_context:
       category: "游戏、电影、音乐"
-    # suggestion_template 为 null 表示 suggestion 是固定文案，不含变量
     suggestion_template: null
     fallback_questions: null
 
@@ -238,7 +248,6 @@ proactive_action_config:
       interest: ""
       activity: "一起玩"
       specific_activity: "玩"
-    # 当 common_interests 为空时使用的兜底文案
     fallback_suggestion: "寻找与用户的共同点"
     fallback_questions:
       - "我也喜欢！"
@@ -302,7 +311,7 @@ summary_keywords:
     鼓励: ["鼓励", "支持", "加油", "相信"]
 
 # ============================================================
-# 九、主动策略分析器内联关键词 (proactive_strategy.py 内联)
+# 九、主动策略分析器内联关键词 _analyze_emotional_state
 # ============================================================
 proactive_analysis_keywords:
   emotional_state:
