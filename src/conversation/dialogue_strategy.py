@@ -431,6 +431,7 @@ class DialogueStrategyInjector:
             str: 增强后的system prompt
         """
         # ========== 1. 回应策略  ==========
+        # 分析对话阶段
         phase = self.analyzer.analyze_phase(conversation_history)
         # 分析用户情绪
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
@@ -447,10 +448,6 @@ class DialogueStrategyInjector:
         enhanced_prompt = base_prompt
         # ========== 2. 立场策略  ==========
         if bot_values:
-            # 注入价值观维度
-            values_guidance = self._build_values_guidance(bot_values)
-            if values_guidance:
-                enhanced_prompt += f"\n\n{values_guidance}"
             # 如果是观点讨论类型，进行立场分析
             if conversation_type == ConversationType.OPINION_DISCUSSION:
                 stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
@@ -514,10 +511,6 @@ class DialogueStrategyInjector:
         except Exception as e:
             logger.warning(f"生成主动策略失败: {e}")
             return ""
-
-    def _build_values_guidance(self, bot_values: 'ValuesConfig') -> str:
-        guidance = ""
-        return guidance
 
     def _build_stance_guidance(self, stance_analysis: StanceAnalysis) -> str:
         """

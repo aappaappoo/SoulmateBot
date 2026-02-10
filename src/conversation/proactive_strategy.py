@@ -295,9 +295,9 @@ class ProactiveDialogueStrategyAnalyzer:
         has_positive = any(kw in recent_text for kw in positive_keywords)
         has_negative = any(kw in recent_text for kw in negative_keywords)
         if has_negative and not has_positive:
-            return "positive"
-        elif has_positive and not has_negative:
             return "negative"
+        elif has_positive and not has_negative:
+            return "positive"
         elif has_positive and has_negative:
             return "During the emotional transition"
         else:
