@@ -105,6 +105,42 @@ PROACTIVE_QUESTIONS: Dict[ProactiveMode, List[str]] = {
 _analysis_keywords = _config.get("proactive_analysis_keywords", {})
 _action_config_raw: Dict[str, Dict[str, Any]] = _config.get("proactive_action_config", {})
 
+# 基础话题关键词（公开，供统一分析层使用）
+BASIC_TOPICS: List[str] = _analysis_keywords.get("basic_topics", [])
+
+
+def identify_topic_from_messages(
+        recent_messages: List[Dict[str, str]],
+        interest_categories: Dict[str, List[str]] = None,
+        basic_topics: List[str] = None
+) -> Optional[str]:
+    """
+    从最近消息中识别当前话题（共享实现）
+    Args:
+        recent_messages: 最近的消息列表
+        interest_categories: 兴趣关键词库（默认使用全局 INTEREST_CATEGORIES）
+        basic_topics: 基础话题列表（默认使用全局 BASIC_TOPICS）
+    Returns:
+        当前话题或None
+    """
+    if not recent_messages:
+        return None
+    if interest_categories is None:
+        interest_categories = INTEREST_CATEGORIES
+    if basic_topics is None:
+        basic_topics = BASIC_TOPICS
+    for msg in reversed(recent_messages):
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        for interest, keywords in interest_categories.items():
+            if any(kw in content for kw in keywords):
+                return interest
+        for topic in basic_topics:
+            if topic in content:
+                return topic
+    return None
+
 
 class ProactiveDialogueStrategyAnalyzer:
     """
@@ -324,23 +360,8 @@ class ProactiveDialogueStrategyAnalyzer:
         return list(topics)
 
     def _identify_topic_from_messages(self, recent_messages: List[Dict[str, str]]) -> Optional[str]:
-        """识别当前话题（当统一分析层结果不可用时的后备方法）"""
-        if not recent_messages:
-            return None
-        # 简化：使用最后一条用户消息的主要话题
-        for msg in reversed(recent_messages):
-            if msg.get("role") != "user":
-                continue
-            content = msg.get("content", "")
-            # 检查兴趣类别
-            for interest, keywords in self.interest_categories.items():
-                if any(kw in content for kw in keywords):
-                    return interest
-            # 检查基础话题
-            for topic in self._basic_topics:
-                if topic in content:
-                    return topic
-        return None
+        """识别当前话题（委托给共享实现）"""
+        return identify_topic_from_messages(recent_messages, self.interest_categories, self._basic_topics)
 
     def _calculate_topic_depth(self, conversation_history: List[Dict[str, str]]) -> int:
         """计算话题深度"""

@@ -33,7 +33,7 @@ from .dialogue_strategy_config import (
 )
 from .proactive_strategy import (
     ProactiveDialogueStrategyAnalyzer, ProactiveMode,
-    INTEREST_CATEGORIES, _analysis_keywords,
+    INTEREST_CATEGORIES, identify_topic_from_messages,
 )
 
 # Type checking imports to avoid circular dependencies
@@ -93,20 +93,7 @@ class ConversationTypeAnalyzer:
         Returns:
             当前话题或None
         """
-        if not recent_messages:
-            return None
-        basic_topics = _analysis_keywords.get("basic_topics", [])
-        for msg in reversed(recent_messages):
-            if msg.get("role") != "user":
-                continue
-            content = msg.get("content", "")
-            for interest, keywords in INTEREST_CATEGORIES.items():
-                if any(kw in content for kw in keywords):
-                    return interest
-            for topic in basic_topics:
-                if topic in content:
-                    return topic
-        return None
+        return identify_topic_from_messages(recent_messages)
 
     def analyze_interests(
             self,
