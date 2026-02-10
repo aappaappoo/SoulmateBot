@@ -31,7 +31,10 @@ from .dialogue_strategy_config import (
     STANCE_STRATEGY_TEMPLATES,
     CONVERSATION_TYPE_SIGNALS,
 )
-from .proactive_strategy import ProactiveDialogueStrategyAnalyzer, ProactiveMode, INTEREST_CATEGORIES
+from .proactive_strategy import (
+    ProactiveDialogueStrategyAnalyzer, ProactiveMode,
+    INTEREST_CATEGORIES, _analysis_keywords,
+)
 
 # Type checking imports to avoid circular dependencies
 if TYPE_CHECKING:
@@ -81,6 +84,29 @@ class ConversationTypeAnalyzer:
         # 默认为日常闲聊
         logger.debug("🫙 [Dialogue-Strategy] 检测到无特殊情况，默认使用闲聊模式")
         return ConversationType.CASUAL_CHAT
+
+    def identify_current_topic(self, recent_messages: List[Dict[str, str]]) -> Optional[str]:
+        """
+        识别当前话题
+        Args:
+            recent_messages: 最近的消息列表
+        Returns:
+            当前话题或None
+        """
+        if not recent_messages:
+            return None
+        basic_topics = _analysis_keywords.get("basic_topics", [])
+        for msg in reversed(recent_messages):
+            if msg.get("role") != "user":
+                continue
+            content = msg.get("content", "")
+            for interest, keywords in INTEREST_CATEGORIES.items():
+                if any(kw in content for kw in keywords):
+                    return interest
+            for topic in basic_topics:
+                if topic in content:
+                    return topic
+        return None
 
     def analyze_interests(
             self,
@@ -630,16 +656,21 @@ class DialogueStrategyInjector:
             主动策略文本
         """
         try:
-            # 构建用户画像
+            # 从统一分析层获取兴趣结果，直接传入用户画像构建
+            interests = interest_analysis.get("interests", []) if interest_analysis else []
+            # 构建用户画像（复用统一分析层的兴趣结果）
             user_profile = self.proactive_analyzer.analyze_user_profile(
-                conversation_history, user_memories
+                conversation_history, user_memories, interests=interests
             )
-            # 如果有统一分析层的兴趣结果，更新用户画像
-            if interest_analysis and interest_analysis.get("interests"):
-                user_profile.interests = interest_analysis["interests"]
 
-            # 分析话题
-            topic_analysis = self.proactive_analyzer.analyze_topic(conversation_history, user_profile)
+            # 从统一分析层获取当前话题
+            recent_messages = conversation_history[-3:] if conversation_history else []
+            current_topic = self.conversation_type_analyzer.identify_current_topic(recent_messages)
+
+            # 分析话题（复用统一分析层的当前话题结果）
+            topic_analysis = self.proactive_analyzer.analyze_topic(
+                conversation_history, user_profile, current_topic=current_topic
+            )
             # 生成主动策略
             proactive_action = self.proactive_analyzer.generate_proactive_strategy(
                 user_profile, topic_analysis, conversation_history, user_memories

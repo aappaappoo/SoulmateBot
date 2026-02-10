@@ -644,6 +644,44 @@ class TestConversationTypeAnalyzerInterests:
             assert interest != "游戏"
 
 
+class TestConversationTypeAnalyzerIdentifyTopic:
+    """测试ConversationTypeAnalyzer.identify_current_topic"""
+
+    def setup_method(self):
+        """初始化测试"""
+        self.analyzer = ConversationTypeAnalyzer()
+
+    def test_identify_game_topic(self):
+        """测试识别游戏话题"""
+        messages = [
+            {"role": "user", "content": "我今天玩了很久游戏"},
+            {"role": "assistant", "content": "什么游戏？"}
+        ]
+        topic = self.analyzer.identify_current_topic(messages)
+        assert topic == "游戏"
+
+    def test_identify_basic_topic(self):
+        """测试识别基础话题（如工作）"""
+        messages = [
+            {"role": "user", "content": "今天工作好累"},
+        ]
+        topic = self.analyzer.identify_current_topic(messages)
+        assert topic == "工作"
+
+    def test_identify_no_topic(self):
+        """测试无法识别话题时返回None"""
+        messages = [
+            {"role": "user", "content": "你好"},
+        ]
+        topic = self.analyzer.identify_current_topic(messages)
+        assert topic is None
+
+    def test_identify_empty_messages(self):
+        """测试空消息列表"""
+        topic = self.analyzer.identify_current_topic([])
+        assert topic is None
+
+
 class TestPhaseDetails:
     """测试对话阶段分析的详情返回"""
 

@@ -133,20 +133,25 @@ class ProactiveDialogueStrategyAnalyzer:
     def analyze_user_profile(
             self,
             conversation_history: List[Dict[str, str]],
-            user_memories: Optional[List[Dict[str, Any]]] = None
+            user_memories: Optional[List[Dict[str, Any]]] = None,
+            interests: Optional[List[str]] = None
     ) -> UserProfile:
         """
         构建用户画像
         Args:
             conversation_history: 对话历史
             user_memories: 用户长期记忆（可选）
+            interests: 统一分析层已提取的用户兴趣（可选，避免重复提取）
         Returns:
             UserProfile: 用户画像
         """
         profile = UserProfile()
 
-        # 提取用户兴趣
-        profile.interests = self._extract_interests(conversation_history)
+        # 使用统一分析层的兴趣结果（如有），否则用本地方法提取
+        if interests is not None:
+            profile.interests = interests
+        else:
+            profile.interests = self._extract_interests_from_history(conversation_history)
         # 分析参与度
         profile.engagement_level = self._analyze_engagement(conversation_history)
         # 分析情绪状态
@@ -172,7 +177,8 @@ class ProactiveDialogueStrategyAnalyzer:
     def analyze_topic(
             self,
             conversation_history: List[Dict[str, str]],
-            user_profile: UserProfile
+            user_profile: UserProfile,
+            current_topic: Optional[str] = None
     ) -> TopicAnalysis:
         """
         分析话题
@@ -180,18 +186,20 @@ class ProactiveDialogueStrategyAnalyzer:
         Args:
             conversation_history: 对话历史
             user_profile: 用户画像
+            current_topic: 统一分析层已识别的当前话题（可选，避免重复识别）
 
         Returns:
             TopicAnalysis: 话题分析
         """
-        history_limit = 3  # 最近3条
         topic_limit = 3  # 最近3条
         analysis = TopicAnalysis()
 
-        # 识别当前话题
-        if conversation_history:
-            recent_messages = conversation_history[-history_limit:]
-            analysis.current_topic = self._identify_current_topic(recent_messages)
+        # 使用统一分析层的当前话题结果（如有），否则用本地方法识别
+        if current_topic is not None:
+            analysis.current_topic = current_topic
+        elif conversation_history:
+            recent_messages = conversation_history[-3:]
+            analysis.current_topic = self._identify_topic_from_messages(recent_messages)
 
         # 计算话题深度（计算最长连续相同话题的次数）
         analysis.topic_depth = self._calculate_topic_depth(conversation_history)
@@ -235,8 +243,8 @@ class ProactiveDialogueStrategyAnalyzer:
         return action
 
     # ======================== 私有分析方法（保持不变） ========================
-    def _extract_interests(self, conversation_history: List[Dict[str, str]]) -> List[str]:
-        """从对话中提取用户兴趣"""
+    def _extract_interests_from_history(self, conversation_history: List[Dict[str, str]]) -> List[str]:
+        """从对话中提取用户兴趣（当统一分析层结果不可用时的后备方法）"""
         interest_counts = {}
         for msg in conversation_history:
             if msg.get("role") != "user":
@@ -315,8 +323,8 @@ class ProactiveDialogueStrategyAnalyzer:
                     topics.add(topic)
         return list(topics)
 
-    def _identify_current_topic(self, recent_messages: List[Dict[str, str]]) -> Optional[str]:
-        """识别当前话题"""
+    def _identify_topic_from_messages(self, recent_messages: List[Dict[str, str]]) -> Optional[str]:
+        """识别当前话题（当统一分析层结果不可用时的后备方法）"""
         if not recent_messages:
             return None
         # 简化：使用最后一条用户消息的主要话题
@@ -342,7 +350,7 @@ class ProactiveDialogueStrategyAnalyzer:
         # 简化实现：检查最近消息中话题的连续性
         recent_topics = []
         for msg in conversation_history[-6:]:
-            topic = self._identify_current_topic([msg])
+            topic = self._identify_topic_from_messages([msg])
             if topic:
                 recent_topics.append(topic)
 

@@ -176,7 +176,7 @@ class TestProactiveDialogueStrategyAnalyzer:
             {"role": "assistant", "content": "不错！"}
         ]
         
-        interests = analyzer._extract_interests(conversation_history)
+        interests = analyzer._extract_interests_from_history(conversation_history)
         
         assert len(interests) > 0
         assert any(interest in ["游戏", "影视", "音乐"] for interest in interests)
@@ -267,7 +267,7 @@ class TestProactiveDialogueStrategyAnalyzer:
             {"role": "assistant", "content": "什么游戏？"}
         ]
         
-        topic = analyzer._identify_current_topic(recent_messages)
+        topic = analyzer._identify_topic_from_messages(recent_messages)
         
         assert topic == "游戏"
     

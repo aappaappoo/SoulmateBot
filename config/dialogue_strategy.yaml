@@ -147,7 +147,7 @@ stance_strategy_templates:
 
 
 # ============================================================
-# 五、兴趣关键词库 _extract_interests(proactive_strategy._extract_interests)
+# 五、兴趣关键词库（统一分析层 ConversationTypeAnalyzer.analyze_interests / identify_current_topic）
 # ============================================================
 interest_categories:
   游戏: ["游戏", "打游戏", "玩游戏", "王者", "吃鸡", "LOL", "原神", "switch"]

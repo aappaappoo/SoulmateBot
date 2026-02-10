@@ -217,7 +217,7 @@ handle_message_with_agents()                          # 入口 → agent_integra
             │       ├── 复用统一分析层构建的 user_profile（不再重复构建）
             │       │
             │       ├── ProactiveDialogueStrategyAnalyzer.analyze_topic()
-            │       │       ├── _identify_current_topic()    # 最后一条 user 消息的话题
+            │       │       ├── _identify_topic_from_messages() # 最后一条 user 消息的话题（后备方法，优先使用统一分析层）
             │       │       ├── _calculate_topic_depth()     # 连续同话题轮数
             │       │       ├── _identify_topics_to_explore()# 未深入的兴趣
             │       │       └── → TopicAnalysis
