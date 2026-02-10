@@ -546,6 +546,7 @@ class DialogueStrategyInjector:
             stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
         # 1.6 用户画像分析（参与度/情绪/关系深度/兴趣）
         interests = interest_analysis.get("interests", [])
+        potential_interests = interest_analysis.get("potential_interests", [])
         user_profile = self.proactive_analyzer.analyze_user_profile(
             conversation_history, user_memories, interests=interests
         ) if enable_proactive and conversation_history else None
@@ -577,7 +578,6 @@ class DialogueStrategyInjector:
         #     当情绪为负面时 response_type 会自动选择 COMFORT/VALIDATION）
 
         # 2.3 根据用户兴趣点给出应对策略
-        potential_interests = interest_analysis.get("potential_interests", [])
         if interests or potential_interests:
             interest_guidance = self._build_interest_guidance(interests, potential_interests)
             if interest_guidance:
