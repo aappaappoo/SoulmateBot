@@ -310,10 +310,10 @@ class TestProactiveDialogueStrategyAnalyzer:
         """Test conversation stage determination"""
         analyzer = ProactiveDialogueStrategyAnalyzer()
         
-        assert analyzer._determine_stage(1) == ConversationStage.OPENING
-        assert analyzer._determine_stage(2) == ConversationStage.EXPLORING
-        assert analyzer._determine_stage(3) == ConversationStage.DEEPENING
-        assert analyzer._determine_stage(5) == ConversationStage.ESTABLISHED
+        assert analyzer._determine_stage(UserProfile(relationship_depth=1)) == ConversationStage.OPENING
+        assert analyzer._determine_stage(UserProfile(relationship_depth=2)) == ConversationStage.EXPLORING
+        assert analyzer._determine_stage(UserProfile(relationship_depth=3)) == ConversationStage.DEEPENING
+        assert analyzer._determine_stage(UserProfile(relationship_depth=5)) == ConversationStage.ESTABLISHED
     
     def test_format_proactive_guidance(self):
         """Test proactive guidance formatting"""

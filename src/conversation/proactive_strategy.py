@@ -45,7 +45,7 @@ class UserProfile:
     interests: List[str] = field(default_factory=list)  # 用户兴趣
     personality_traits: List[str] = field(default_factory=list)  # 性格特征
     recent_topics: List[str] = field(default_factory=list)  # 近期讨论话题
-    emotional_state: str = "无情绪波动"  # 当前情绪状态
+    emotional_state: str = "neutral"  # 当前情绪状态
     engagement_level: UserEngagement = UserEngagement.MEDIUM  # 参与度
     relationship_depth: int = 1  # 关系深度（1-5）
 
@@ -280,7 +280,7 @@ class ProactiveDialogueStrategyAnalyzer:
     def _analyze_emotional_state(self, conversation_history: List[Dict[str, str]]) -> str:
         """分析用户情绪状态"""
         if not conversation_history:
-            return "无情绪波动"
+            return "neutral"
         positive_keywords = self._emotional_positive
         negative_keywords = self._emotional_negative
         # 检查最近消息
@@ -299,7 +299,7 @@ class ProactiveDialogueStrategyAnalyzer:
         elif has_positive and not has_negative:
             return "positive"
         elif has_positive and has_negative:
-            return "During the emotional transition"
+            return "transitioning"
         else:
             return "neutral"
 
@@ -380,8 +380,8 @@ class ProactiveDialogueStrategyAnalyzer:
         return topics_to_explore[:3]  # 最多3个
 
     def _determine_stage(self, user_profile: UserProfile) -> ConversationStage:
-        relationship_depth = user_profile.relationship_depth
         """确定对话阶段"""
+        relationship_depth = user_profile.relationship_depth
         if relationship_depth <= 1:
             return ConversationStage.OPENING
         elif relationship_depth <= 2:

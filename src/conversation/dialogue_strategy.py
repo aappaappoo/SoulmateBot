@@ -22,7 +22,7 @@ from .dialogue_strategy_config import (
     STANCE_STRATEGY_TEMPLATES,
     CONVERSATION_TYPE_SIGNALS,
 )
-from .proactive_strategy import ProactiveDialogueStrategyAnalyzer
+from .proactive_strategy import ProactiveDialogueStrategyAnalyzer, ProactiveMode
 
 # Type checking imports to avoid circular dependencies
 if TYPE_CHECKING:
@@ -421,22 +421,39 @@ class DialogueStrategyInjector:
         """
         将策略指令追加到原有 system_prompt 后面
         关键原则：添加，而非替换。保持原有个性不变。
+
+        统一流程：
+        1. 统一分析层 — 只做一次，产出共享上下文
+        2. 回应策略层 — 消费统一上下文，生成 strategy_guidance
+        3. 主动策略层 — 消费统一上下文，复用 phase，生成 proactive_guidance
+        4. 合并输出   — 去重 + 优先级排序
+
         Args:
             original_prompt: 原始system prompt（包含完整人设）
             conversation_history: 对话历史（不包含system prompt）
             current_message: 当前用户消息
             bot_values: Bot价值观配置（可选）
-            
+            user_memories: 用户记忆（可选）
+            enable_proactive: 是否启用主动策略
+
         Returns:
             str: 增强后的system prompt
         """
-        # ========== 1. 回应策略  ==========
+        # ========== 1. 统一分析层（只做一次，产出共享上下文） ==========
         # 分析对话阶段
         phase = self.analyzer.analyze_phase(conversation_history)
         # 分析用户情绪
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
         # 分析对话类型
         conversation_type = self.conversation_type_analyzer.analyze_type(current_message, conversation_history)
+        # 构建用户画像（统一构建，供回应策略和主动策略共享）
+        user_profile = None
+        if enable_proactive and conversation_history:
+            user_profile = self.proactive_analyzer.analyze_user_profile(
+                conversation_history, user_memories
+            )
+
+        # ========== 2. 回应策略层（消费统一上下文） ==========
         # 建议回应类型（传入对话历史以判断是否应该主动追问）
         response_type = self.analyzer.suggest_response_type(phase, emotion_type, emotion_intensity,
                                                             conversation_history)
@@ -446,9 +463,9 @@ class DialogueStrategyInjector:
         base_prompt = original_prompt if original_prompt else ""
         # 构建增强prompt
         enhanced_prompt = base_prompt
-        # ========== 2. 立场策略  ==========
+
+        # 立场策略（如果是观点讨论类型）
         if bot_values:
-            # 如果是观点讨论类型，进行立场分析
             if conversation_type == ConversationType.OPINION_DISCUSSION:
                 stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
                 stance_guidance = self._build_stance_guidance(stance_analysis)
@@ -456,10 +473,13 @@ class DialogueStrategyInjector:
                     enhanced_prompt += f"\n\n{stance_guidance}"
         # 添加对话策略指导
         enhanced_prompt += f"\n\n{strategy_guidance}"
-        # ========== 3. 主动策略 ==========
-        if enable_proactive and conversation_history:
+
+        # ========== 3. 主动策略层（消费统一上下文，复用 phase） ==========
+        if enable_proactive and conversation_history and user_profile:
             proactive_guidance = self._generate_proactive_guidance(
-                conversation_history, user_memories
+                conversation_history, user_memories,
+                user_profile=user_profile,
+                response_type=response_type
             )
             if proactive_guidance:
                 enhanced_prompt += f"\n\n{proactive_guidance}"
@@ -475,19 +495,26 @@ class DialogueStrategyInjector:
     def _generate_proactive_guidance(
             self,
             conversation_history: List[Dict[str, str]],
-            user_memories: Optional[List[Dict[str, Any]]]
+            user_memories: Optional[List[Dict[str, Any]]],
+            user_profile=None,
+            response_type: Optional[ResponseType] = None
     ) -> str:
         """
-        生成主动对话策略指导
+        生成主动对话策略指导（消费统一分析上下文）
         Args:
             conversation_history: 对话历史
             user_memories: 用户记忆
+            user_profile: 预构建的用户画像（来自统一分析层），避免重复分析
+            response_type: 回应策略层已选择的回应类型，用于去重
         Returns:
             主动策略文本
         """
         try:
-            # 构建用户画像
-            user_profile = self.proactive_analyzer.analyze_user_profile(conversation_history, user_memories)
+            # 复用统一分析层构建的用户画像，如未提供则回退到自行构建
+            if user_profile is None:
+                user_profile = self.proactive_analyzer.analyze_user_profile(
+                    conversation_history, user_memories
+                )
             # 分析话题
             topic_analysis = self.proactive_analyzer.analyze_topic(conversation_history, user_profile)
             # 生成主动策略
@@ -495,6 +522,18 @@ class DialogueStrategyInjector:
                                                                                    topic_analysis,
                                                                                    conversation_history,
                                                                                    user_memories)
+            # 去重：如果回应策略已选 PROACTIVE_INQUIRY，主动策略不再重复输出通用追问模板
+            if (response_type == ResponseType.PROACTIVE_INQUIRY
+                    and proactive_action.mode == ProactiveMode.EXPLORE_INTEREST):
+                logger.debug(
+                    "🫙 [Dialogue-Strategy] 回应策略已选 PROACTIVE_INQUIRY，"
+                    "跳过主动策略中的 EXPLORE_INTEREST 模板以避免重复"
+                )
+                proactive_action = None
+
+            if proactive_action is None:
+                return ""
+
             # 格式化为文本
             guidance = self.proactive_analyzer.format_proactive_guidance(proactive_action)
             # 添加用户画像信息
