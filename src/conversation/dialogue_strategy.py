@@ -1,10 +1,19 @@
 """
 动态对话策略模块 - 统一的对话策略生成入口
 
-包含：
-- 回应策略（阶段分析 + 情绪分析 + 对话类型 → 回应模板）
-- 主动策略（用户画像 + 话题分析 → 主动互动建议）
-- 立场策略（价值观匹配 → 立场表达方式）
+两层架构：
+第 1 层：统一分析层 — 构建用户画像与对话状态
+  - 对话阶段分析 (DialoguePhaseAnalyzer.analyze_phase) — 回复长度 + 对话轮数
+  - 情绪分析 (DialoguePhaseAnalyzer.analyze_emotion) — 情绪类型 + 情绪强度
+  - 对话类型分析 (ConversationTypeAnalyzer.analyze_type) — 倾诉/表达立场/探索技能/要求建议/轻松互动
+  - 用户兴趣分析 (ConversationTypeAnalyzer.analyze_interests) — 兴趣偏好 + 可能感兴趣的点
+  - 讨论立场分析 (StanceAnalyzer) — 当用户表达立场时匹配机器人预设立场
+
+第 2 层：生成策略层 — 基于分析结果生成应对策略
+  - 根据对话阶段给出回应策略
+  - 根据用户情绪给出应对策略
+  - 根据用户兴趣点给出应对策略
+  - 根据冲突程度给出机器人应对策略
 """
 
 from typing import List, Dict, Tuple, Optional, Any, TYPE_CHECKING
@@ -22,7 +31,7 @@ from .dialogue_strategy_config import (
     STANCE_STRATEGY_TEMPLATES,
     CONVERSATION_TYPE_SIGNALS,
 )
-from .proactive_strategy import ProactiveDialogueStrategyAnalyzer, ProactiveMode
+from .proactive_strategy import ProactiveDialogueStrategyAnalyzer, ProactiveMode, INTEREST_CATEGORIES
 
 # Type checking imports to avoid circular dependencies
 if TYPE_CHECKING:
@@ -32,6 +41,7 @@ if TYPE_CHECKING:
 class ConversationTypeAnalyzer:
     """
     对话类型分析器
+    分析对话类型和用户兴趣
     """
 
     def analyze_type(self, message: str, history: List[Dict[str, str]] = None) -> ConversationType:
@@ -71,6 +81,47 @@ class ConversationTypeAnalyzer:
         # 默认为日常闲聊
         logger.debug("🫙 [Dialogue-Strategy] 检测到无特殊情况，默认使用闲聊模式")
         return ConversationType.CASUAL_CHAT
+
+    def analyze_interests(
+            self,
+            conversation_history: List[Dict[str, str]],
+            current_message: str = ""
+    ) -> Dict[str, List[str]]:
+        """
+        分析用户兴趣偏好和可能感兴趣的点
+        Args:
+            conversation_history: 对话历史
+            current_message: 当前用户消息
+        Returns:
+            Dict 包含:
+              - interests: 已识别的用户兴趣列表
+              - potential_interests: 可能感兴趣的探索方向
+        """
+        interest_counts: Dict[str, int] = {}
+        # 分析对话历史中的兴趣
+        messages_to_scan = list(conversation_history)
+        if current_message:
+            messages_to_scan.append({"role": "user", "content": current_message})
+        for msg in messages_to_scan:
+            if msg.get("role") != "user":
+                continue
+            content = msg.get("content", "").lower()
+            for interest, keywords in INTEREST_CATEGORIES.items():
+                for keyword in keywords:
+                    if keyword in content:
+                        interest_counts[interest] = interest_counts.get(interest, 0) + 1
+                        break
+        # 按频次排序
+        sorted_interests = sorted(interest_counts.items(), key=lambda x: x[1], reverse=True)
+        interests = [interest for interest, _ in sorted_interests[:5]]
+        # 找出用户可能感兴趣但未深入的点
+        all_categories = list(INTEREST_CATEGORIES.keys())
+        potential_interests = [cat for cat in all_categories if cat not in interests][:3]
+        logger.debug(f"🫙 [Dialogue-Strategy] 兴趣分析: interests={interests}, potential={potential_interests}")
+        return {
+            "interests": interests,
+            "potential_interests": potential_interests
+        }
 
 
 @dataclass
@@ -219,27 +270,40 @@ class StanceAnalyzer:
 class DialoguePhaseAnalyzer:
     """
     对话阶段分析器
+    分析对话阶段（基于对话轮数和回复长度）和用户情绪
     """
 
-    def analyze_phase(self, conversation_history: List[Dict[str, str]]) -> DialoguePhase:
+    def analyze_phase(self, conversation_history: List[Dict[str, str]]) -> Tuple[DialoguePhase, Dict[str, Any]]:
         """
-        根据对话轮次判断当前阶段
+        根据对话轮次和回复长度判断当前阶段
         Args:
             conversation_history: 对话历史记录 (不包含system prompt)
         Returns:
-            DialoguePhase: 当前对话阶段
+            Tuple[DialoguePhase, Dict]: (当前对话阶段, 阶段分析详情)
+                详情包含: user_turn_count, avg_reply_length
         """
         # 计算用户消息轮数（只计算user角色的消息）
-        user_turn_count = sum(1 for msg in conversation_history if msg.get("role") == "user")
+        user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
+        user_turn_count = len(user_messages)
+        # 分析回复长度
+        avg_reply_length = 0
+        if user_messages:
+            avg_reply_length = sum(len(msg.get("content", "")) for msg in user_messages) / len(user_messages)
 
         if user_turn_count <= 2:
-            return DialoguePhase.OPENING
+            phase = DialoguePhase.OPENING
         elif user_turn_count <= 5:
-            return DialoguePhase.LISTENING
+            phase = DialoguePhase.LISTENING
         elif user_turn_count <= 8:
-            return DialoguePhase.DEEPENING
+            phase = DialoguePhase.DEEPENING
         else:
-            return DialoguePhase.SUPPORTING
+            phase = DialoguePhase.SUPPORTING
+
+        phase_details = {
+            "user_turn_count": user_turn_count,
+            "avg_reply_length": round(avg_reply_length, 1)
+        }
+        return phase, phase_details
 
     def analyze_emotion(self, message: str) -> Tuple[str, str]:
         """
@@ -422,11 +486,18 @@ class DialogueStrategyInjector:
         将策略指令追加到原有 system_prompt 后面
         关键原则：添加，而非替换。保持原有个性不变。
 
-        统一流程：
-        1. 统一分析层 — 只做一次，产出共享上下文
-        2. 回应策略层 — 消费统一上下文，生成 strategy_guidance
-        3. 主动策略层 — 消费统一上下文，复用 phase，生成 proactive_guidance
-        4. 合并输出   — 去重 + 优先级排序
+        第 1 层：统一分析层 — 只做一次，产出共享上下文
+          - 对话阶段分析（回复长度 + 对话轮数）
+          - 情绪分析（情绪类型 + 强度）
+          - 对话类型分析（倾诉/表达立场/探索技能/要求建议/轻松互动）
+          - 用户兴趣分析（兴趣偏好 + 可能感兴趣的点）
+          - 讨论立场分析（用户立场与机器人立场的交集）
+
+        第 2 层：生成策略层 — 基于分析结果生成应对策略
+          - 根据对话阶段给出回应策略
+          - 根据用户情绪给出应对策略
+          - 根据用户兴趣点给出应对策略
+          - 根据冲突程度给出机器人应对策略
 
         Args:
             original_prompt: 原始system prompt（包含完整人设）
@@ -439,90 +510,140 @@ class DialogueStrategyInjector:
         Returns:
             str: 增强后的system prompt
         """
-        # ========== 1. 统一分析层（只做一次，产出共享上下文） ==========
-        # 分析对话阶段（统计 user 消息轮数）
-        phase = self.analyzer.analyze_phase(conversation_history)
-        # 分析用户情绪(emotion_type, emotion_intensity)
+        # ================================================================
+        # 第 1 层：统一分析层（只做一次，产出共享上下文）
+        # ================================================================
+        # 1.1 对话阶段分析（回复长度 + 对话轮数）
+        phase, phase_details = self.analyzer.analyze_phase(conversation_history)
+        # 1.2 情绪分析（情绪类型 + 强度）
         emotion_type, emotion_intensity = self.analyzer.analyze_emotion(current_message)
-        # 分析对话类型
+        # 1.3 对话类型分析（倾诉/表达立场/探索技能/要求建议/轻松互动）
         conversation_type = self.conversation_type_analyzer.analyze_type(current_message, conversation_history)
-        # 构建用户画像（统一构建，供回应策略和主动策略共享）
-        user_profile = None
-        if enable_proactive and conversation_history:
-            user_profile = self.proactive_analyzer.analyze_user_profile(
-                conversation_history, user_memories
-            )
+        # 1.4 用户兴趣分析（兴趣偏好 + 可能感兴趣的点）
+        interest_analysis = self.conversation_type_analyzer.analyze_interests(
+            conversation_history, current_message
+        )
+        # 1.5 讨论立场分析（用户表达立场时匹配机器人预设立场）
+        stance_analysis = None
+        if bot_values and conversation_type == ConversationType.OPINION_DISCUSSION:
+            stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
 
-        # ========== 2. 回应策略层（消费统一上下文） ==========
-        # 建议回应类型（传入对话历史以判断是否应该主动追问）
-        response_type = self.analyzer.suggest_response_type(phase, emotion_type, emotion_intensity,
-                                                            conversation_history)
-        # 获取策略模板
-        strategy_guidance = STRATEGY_TEMPLATES[response_type]
-        # 追加策略到原prompt后面（保持原有人设不变）
+        # ================================================================
+        # 第 2 层：生成策略层（基于分析结果生成应对策略）
+        # ================================================================
         base_prompt = original_prompt if original_prompt else ""
-        # 构建增强prompt
         enhanced_prompt = base_prompt
+        strategy_parts = []
 
-        # 立场策略（如果是观点讨论类型）
-        if bot_values:
-            if conversation_type == ConversationType.OPINION_DISCUSSION:
-                stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
-                stance_guidance = self._build_stance_guidance(stance_analysis)
-                if stance_guidance:
-                    enhanced_prompt += f"\n\n{stance_guidance}"
-        # 添加对话策略指导
-        enhanced_prompt += f"\n\n{strategy_guidance}"
+        # 2.1 根据对话阶段给出回应策略
+        response_type = self.analyzer.suggest_response_type(
+            phase, emotion_type, emotion_intensity, conversation_history
+        )
+        phase_strategy = STRATEGY_TEMPLATES[response_type]
+        strategy_parts.append(phase_strategy)
 
-        # ========== 3. 主动策略层（消费统一上下文，复用 phase） ==========
-        if enable_proactive and conversation_history and user_profile:
+        # 2.2 根据用户情绪给出应对策略（已融合在 response_type 中，
+        #     当情绪为负面时 response_type 会自动选择 COMFORT/VALIDATION）
+
+        # 2.3 根据用户兴趣点给出应对策略
+        interests = interest_analysis.get("interests", [])
+        potential_interests = interest_analysis.get("potential_interests", [])
+        if interests or potential_interests:
+            interest_guidance = self._build_interest_guidance(interests, potential_interests)
+            if interest_guidance:
+                strategy_parts.append(interest_guidance)
+
+        # 2.4 根据冲突程度给出机器人应对策略
+        if stance_analysis and stance_analysis.bot_stance:
+            stance_guidance = self._build_stance_guidance(stance_analysis)
+            if stance_guidance:
+                strategy_parts.append(stance_guidance)
+
+        # 合并所有策略到增强 prompt
+        if strategy_parts:
+            enhanced_prompt += "\n\n" + "\n\n".join(strategy_parts)
+
+        # 主动策略层（基于统一分析结果生成主动互动建议）
+        if enable_proactive and conversation_history:
             proactive_guidance = self._generate_proactive_guidance(
                 conversation_history,
                 user_memories,
-                user_profile=user_profile,
+                interest_analysis=interest_analysis,
                 response_type=response_type
             )
             if proactive_guidance:
                 enhanced_prompt += f"\n\n{proactive_guidance}"
+
         logger.info(
             f"🫙 [Dialogue-Strategy] applied: phase={phase.value}, "
+            f"turns={phase_details['user_turn_count']}, avg_len={phase_details['avg_reply_length']}, "
             f"emotion={emotion_type}/{emotion_intensity}, "
             f"conversation_type={conversation_type.value}, "
             f"response_type={response_type.value}, "
+            f"interests={interests[:3]}, "
+            f"stance={'yes' if stance_analysis and stance_analysis.bot_stance else 'no'}, "
             f"proactive={'enabled' if enable_proactive else 'disabled'}"
         )
         return enhanced_prompt
+
+    def _build_interest_guidance(
+            self,
+            interests: List[str],
+            potential_interests: List[str]
+    ) -> str:
+        """
+        构建用户兴趣策略指导
+        Args:
+            interests: 已识别的用户兴趣
+            potential_interests: 可能感兴趣的方向
+        Returns:
+            兴趣策略指导文本
+        """
+        if not interests and not potential_interests:
+            return ""
+
+        lines = ["【用户兴趣策略】"]
+        if interests:
+            lines.append(f"- 用户已知兴趣：{', '.join(interests[:3])}")
+            lines.append("- 可以围绕这些兴趣展开话题，表达共鸣和好奇")
+        if potential_interests:
+            lines.append(f"- 可探索方向：{', '.join(potential_interests[:3])}")
+            lines.append("- 可以自然地引出新话题，了解用户更多喜好")
+        lines.append("注意：你的人设和性格保持不变，以上是建议的沟通方式。")
+        return "\n".join(lines)
 
     def _generate_proactive_guidance(
             self,
             conversation_history: List[Dict[str, str]],
             user_memories: Optional[List[Dict[str, Any]]],
-            user_profile=None,
+            interest_analysis: Optional[Dict[str, List[str]]] = None,
             response_type: Optional[ResponseType] = None
     ) -> str:
         """
-        生成主动对话策略指导（消费统一分析上下文）
+        生成主动对话策略指导（基于统一分析层结果）
         Args:
             conversation_history: 对话历史
             user_memories: 用户记忆
-            user_profile: 预构建的用户画像（来自统一分析层），避免重复分析
+            interest_analysis: 统一分析层的兴趣分析结果
             response_type: 回应策略层已选择的回应类型，用于去重
         Returns:
             主动策略文本
         """
         try:
-            # 复用统一分析层构建的用户画像，如未提供则回退到自行构建
-            if user_profile is None:
-                user_profile = self.proactive_analyzer.analyze_user_profile(
-                    conversation_history, user_memories
-                )
+            # 构建用户画像
+            user_profile = self.proactive_analyzer.analyze_user_profile(
+                conversation_history, user_memories
+            )
+            # 如果有统一分析层的兴趣结果，更新用户画像
+            if interest_analysis and interest_analysis.get("interests"):
+                user_profile.interests = interest_analysis["interests"]
+
             # 分析话题
             topic_analysis = self.proactive_analyzer.analyze_topic(conversation_history, user_profile)
             # 生成主动策略
-            proactive_action = self.proactive_analyzer.generate_proactive_strategy(user_profile,
-                                                                                   topic_analysis,
-                                                                                   conversation_history,
-                                                                                   user_memories)
+            proactive_action = self.proactive_analyzer.generate_proactive_strategy(
+                user_profile, topic_analysis, conversation_history, user_memories
+            )
             # 去重：如果回应策略已选 PROACTIVE_INQUIRY，主动策略不再重复输出通用追问模板
             if (response_type == ResponseType.PROACTIVE_INQUIRY
                     and proactive_action.mode == ProactiveMode.EXPLORE_INTEREST):
@@ -538,13 +659,15 @@ class DialogueStrategyInjector:
             # 格式化为文本
             guidance = self.proactive_analyzer.format_proactive_guidance(proactive_action)
             # 添加用户画像信息
+            interests_str = ', '.join(user_profile.interests[:3]) if user_profile.interests else '待探索'
+            explore_str = ', '.join(topic_analysis.topics_to_explore[:3]) if topic_analysis.topics_to_explore else '无'
             profile_info = f"""
 【当前对话情境】
 - 用户参与度：{user_profile.engagement_level.value}
 - 用户情绪：{user_profile.emotional_state}
 - 关系深度：{user_profile.relationship_depth}/5
-- 用户兴趣：{', '.join(user_profile.interests[:3]) if user_profile.interests else '待探索'}
-- 可探索话题：{', '.join(topic_analysis.topics_to_explore[:3]) if topic_analysis.topics_to_explore else '无'}
+- 用户兴趣：{interests_str}
+- 可探索话题：{explore_str}
 """
             return profile_info + "\n" + guidance
 

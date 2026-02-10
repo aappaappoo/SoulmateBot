@@ -12,6 +12,7 @@ from src.conversation.dialogue_strategy import (
     ResponseType,
     DialoguePhaseAnalyzer,
     DialogueStrategyInjector,
+    ConversationTypeAnalyzer,
     enhance_prompt_with_strategy,
     EMOTION_KEYWORDS,
     STRATEGY_TEMPLATES
@@ -89,16 +90,19 @@ class TestDialoguePhaseAnalyzer:
         history = [
             {"role": "user", "content": "你好"},
         ]
-        phase = self.analyzer.analyze_phase(history)
+        phase, details = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.OPENING
+        assert details["user_turn_count"] == 1
+        assert details["avg_reply_length"] > 0
         
         history = [
             {"role": "user", "content": "你好"},
             {"role": "assistant", "content": "你好啊"},
             {"role": "user", "content": "我今天心情不太好"},
         ]
-        phase = self.analyzer.analyze_phase(history)
+        phase, details = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.OPENING
+        assert details["user_turn_count"] == 2
     
     def test_analyze_phase_listening(self):
         """测试倾听阶段识别（3-5轮）"""
@@ -109,26 +113,31 @@ class TestDialoguePhaseAnalyzer:
             {"role": "assistant", "content": "回复2"},
             {"role": "user", "content": "消息3"},
         ]
-        phase = self.analyzer.analyze_phase(history)
+        phase, details = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.LISTENING
+        assert details["user_turn_count"] == 3
     
     def test_analyze_phase_deepening(self):
         """测试深入阶段识别（6-8轮）"""
         history = [{"role": "user", "content": f"消息{i}"} for i in range(6)]
-        phase = self.analyzer.analyze_phase(history)
+        phase, details = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.DEEPENING
+        assert details["user_turn_count"] == 6
     
     def test_analyze_phase_supporting(self):
         """测试支持阶段识别（9轮以上）"""
         history = [{"role": "user", "content": f"消息{i}"} for i in range(10)]
-        phase = self.analyzer.analyze_phase(history)
+        phase, details = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.SUPPORTING
+        assert details["user_turn_count"] == 10
     
     def test_analyze_phase_empty_history(self):
         """测试空对话历史"""
         history = []
-        phase = self.analyzer.analyze_phase(history)
+        phase, details = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.OPENING
+        assert details["user_turn_count"] == 0
+        assert details["avg_reply_length"] == 0
     
     def test_analyze_emotion_negative_high(self):
         """测试识别高强度负面情绪"""
@@ -467,9 +476,10 @@ class TestEdgeCases:
         analyzer = DialoguePhaseAnalyzer()
         history = [{"role": "user", "content": f"消息{i}"} for i in range(50)]
         
-        phase = analyzer.analyze_phase(history)
+        phase, details = analyzer.analyze_phase(history)
         # 应该识别为支持阶段
         assert phase == DialoguePhase.SUPPORTING
+        assert details["user_turn_count"] == 50
     
     def test_message_with_multiple_emotions(self):
         """测试包含多种情绪的消息"""
@@ -556,7 +566,7 @@ class TestProactiveInquiry:
             {"role": "assistant", "content": "回复2"},
             {"role": "user", "content": "消息3"},
         ]
-        phase = self.analyzer.analyze_phase(history)
+        phase, _ = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.LISTENING
         
         response_type = self.analyzer.suggest_response_type(
@@ -569,7 +579,7 @@ class TestProactiveInquiry:
         """测试支持阶段正面情绪时可能主动追问"""
         # 9轮用户消息（应该在支持阶段，且9能被3整除）
         history = [{"role": "user", "content": f"消息{i}"} for i in range(9)]
-        phase = self.analyzer.analyze_phase(history)
+        phase, _ = self.analyzer.analyze_phase(history)
         assert phase == DialoguePhase.SUPPORTING
         
         response_type = self.analyzer.suggest_response_type(
@@ -577,6 +587,79 @@ class TestProactiveInquiry:
         )
         # 9轮用户消息，正面情绪，应该触发主动追问
         assert response_type == ResponseType.PROACTIVE_INQUIRY
+
+
+class TestConversationTypeAnalyzerInterests:
+    """测试ConversationTypeAnalyzer.analyze_interests"""
+
+    def setup_method(self):
+        """初始化测试"""
+        self.analyzer = ConversationTypeAnalyzer()
+
+    def test_analyze_interests_with_game_topic(self):
+        """测试从对话中识别游戏兴趣"""
+        history = [
+            {"role": "user", "content": "我喜欢玩游戏"},
+            {"role": "assistant", "content": "什么游戏？"},
+            {"role": "user", "content": "原神和王者"},
+        ]
+        result = self.analyzer.analyze_interests(history)
+        assert "游戏" in result["interests"]
+
+    def test_analyze_interests_multiple_interests(self):
+        """测试识别多个兴趣"""
+        history = [
+            {"role": "user", "content": "我喜欢看电影和听音乐"},
+            {"role": "assistant", "content": "不错"},
+            {"role": "user", "content": "还喜欢运动"},
+        ]
+        result = self.analyzer.analyze_interests(history)
+        assert len(result["interests"]) >= 2
+
+    def test_analyze_interests_with_current_message(self):
+        """测试当前消息也被用于兴趣分析"""
+        history = [{"role": "user", "content": "你好"}]
+        result = self.analyzer.analyze_interests(history, current_message="我喜欢打游戏")
+        assert "游戏" in result["interests"]
+
+    def test_analyze_interests_no_interests(self):
+        """测试无兴趣时返回空列表和建议"""
+        history = [{"role": "user", "content": "你好"}]
+        result = self.analyzer.analyze_interests(history)
+        assert result["interests"] == []
+        assert len(result["potential_interests"]) > 0
+
+    def test_analyze_interests_returns_potential(self):
+        """测试返回潜在兴趣"""
+        history = [{"role": "user", "content": "我喜欢游戏"}]
+        result = self.analyzer.analyze_interests(history)
+        # 潜在兴趣应该不包含已识别的兴趣
+        assert "游戏" not in result["potential_interests"]
+
+
+class TestPhaseDetails:
+    """测试对话阶段分析的详情返回"""
+
+    def setup_method(self):
+        self.analyzer = DialoguePhaseAnalyzer()
+
+    def test_phase_details_reply_length(self):
+        """测试回复长度分析"""
+        history = [
+            {"role": "user", "content": "今天发生了很多有趣的事情，让我来详细说说"},
+            {"role": "assistant", "content": "好的"},
+        ]
+        phase, details = self.analyzer.analyze_phase(history)
+        assert details["avg_reply_length"] > 10
+
+    def test_phase_details_short_replies(self):
+        """测试短回复的长度分析"""
+        history = [
+            {"role": "user", "content": "嗯"},
+            {"role": "user", "content": "好"},
+        ]
+        phase, details = self.analyzer.analyze_phase(history)
+        assert details["avg_reply_length"] < 5
 
 
 class TestMultiMessageInstruction:
