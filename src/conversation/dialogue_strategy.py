@@ -8,12 +8,15 @@
   - 对话类型分析 (ConversationTypeAnalyzer.analyze_type) — 倾诉/表达立场/探索技能/要求建议/轻松互动
   - 用户兴趣分析 (ConversationTypeAnalyzer.analyze_interests) — 兴趣偏好 + 可能感兴趣的点
   - 讨论立场分析 (StanceAnalyzer) — 当用户表达立场时匹配机器人预设立场
+  - 用户画像分析 (ProactiveDialogueStrategyAnalyzer.analyze_user_profile) — 参与度/情绪/关系深度/兴趣
+  - 话题分析 (ProactiveDialogueStrategyAnalyzer.analyze_topic) — 当前话题/话题深度/待探索话题
 
 第 2 层：生成策略层 — 基于分析结果生成应对策略
   - 根据对话阶段给出回应策略
   - 根据用户情绪给出应对策略
   - 根据用户兴趣点给出应对策略
   - 根据冲突程度给出机器人应对策略
+  - 主动对话策略 — 基于用户画像和话题分析生成主动互动建议
 """
 
 from typing import List, Dict, Tuple, Optional, Any, TYPE_CHECKING
@@ -33,6 +36,7 @@ from .dialogue_strategy_config import (
 )
 from .proactive_strategy import (
     ProactiveDialogueStrategyAnalyzer, ProactiveMode,
+    UserProfile, TopicAnalysis,
     INTEREST_CATEGORIES, identify_topic_from_messages,
 )
 
@@ -540,6 +544,20 @@ class DialogueStrategyInjector:
         stance_analysis = None
         if bot_values and conversation_type == ConversationType.OPINION_DISCUSSION:
             stance_analysis = self.stance_analyzer.analyze_stance(current_message, bot_values)
+        # 1.6 用户画像分析（参与度/情绪/关系深度/兴趣）
+        interests = interest_analysis.get("interests", [])
+        user_profile = self.proactive_analyzer.analyze_user_profile(
+            conversation_history, user_memories, interests=interests
+        ) if enable_proactive and conversation_history else None
+        # 1.7 话题分析（当前话题/话题深度/待探索话题）
+        if enable_proactive and conversation_history and user_profile is not None:
+            recent_messages = conversation_history[-3:]
+            current_topic = self.conversation_type_analyzer.identify_current_topic(recent_messages)
+            topic_analysis = self.proactive_analyzer.analyze_topic(
+                conversation_history, user_profile, current_topic=current_topic
+            )
+        else:
+            topic_analysis = None
 
         # ================================================================
         # 第 2 层：生成策略层（基于分析结果生成应对策略）
@@ -559,7 +577,6 @@ class DialogueStrategyInjector:
         #     当情绪为负面时 response_type 会自动选择 COMFORT/VALIDATION）
 
         # 2.3 根据用户兴趣点给出应对策略
-        interests = interest_analysis.get("interests", [])
         potential_interests = interest_analysis.get("potential_interests", [])
         if interests or potential_interests:
             interest_guidance = self._build_interest_guidance(interests, potential_interests)
@@ -577,11 +594,12 @@ class DialogueStrategyInjector:
             enhanced_prompt += "\n\n" + "\n\n".join(strategy_parts)
 
         # 主动策略层（基于统一分析结果生成主动互动建议）
-        if enable_proactive and conversation_history:
+        if enable_proactive and conversation_history and user_profile is not None and topic_analysis is not None:
             proactive_guidance = self._generate_proactive_guidance(
+                user_profile,
+                topic_analysis,
                 conversation_history,
                 user_memories,
-                interest_analysis=interest_analysis,
                 response_type=response_type
             )
             if proactive_guidance:
@@ -627,37 +645,24 @@ class DialogueStrategyInjector:
 
     def _generate_proactive_guidance(
             self,
+            user_profile: UserProfile,
+            topic_analysis: TopicAnalysis,
             conversation_history: List[Dict[str, str]],
             user_memories: Optional[List[Dict[str, Any]]],
-            interest_analysis: Optional[Dict[str, List[str]]] = None,
             response_type: Optional[ResponseType] = None
     ) -> str:
         """
-        生成主动对话策略指导（基于统一分析层结果）
+        生成主动对话策略指导（仅负责策略生成，分析已在统一分析层完成）
         Args:
+            user_profile: 统一分析层已构建的用户画像
+            topic_analysis: 统一分析层已完成的话题分析
             conversation_history: 对话历史
             user_memories: 用户记忆
-            interest_analysis: 统一分析层的兴趣分析结果
             response_type: 回应策略层已选择的回应类型，用于去重
         Returns:
             主动策略文本
         """
         try:
-            # 从统一分析层获取兴趣结果，直接传入用户画像构建
-            interests = interest_analysis.get("interests", []) if interest_analysis else []
-            # 构建用户画像（复用统一分析层的兴趣结果）
-            user_profile = self.proactive_analyzer.analyze_user_profile(
-                conversation_history, user_memories, interests=interests
-            )
-
-            # 从统一分析层获取当前话题
-            recent_messages = conversation_history[-3:] if conversation_history else []
-            current_topic = self.conversation_type_analyzer.identify_current_topic(recent_messages)
-
-            # 分析话题（复用统一分析层的当前话题结果）
-            topic_analysis = self.proactive_analyzer.analyze_topic(
-                conversation_history, user_profile, current_topic=current_topic
-            )
             # 生成主动策略
             proactive_action = self.proactive_analyzer.generate_proactive_strategy(
                 user_profile, topic_analysis, conversation_history, user_memories

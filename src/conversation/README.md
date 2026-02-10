@@ -116,6 +116,14 @@ handle_message_with_agents()                          # 入口 → agent_integra
                 │       └── StanceAnalyzer.analyze_stance(message, bot_values)
                 │               └── → StanceAnalysis (立场分析结果)
                 │
+                ├── 1f. [如果启用主动策略 & 有对话历史]
+                │       └── ProactiveDialogueStrategyAnalyzer.analyze_user_profile(history, memories, interests)
+                │               └── → UserProfile (用户画像：参与度/情绪/关系深度/兴趣)
+                │
+                ├── 1g. [如果启用主动策略 & 有对话历史 & 用户画像已构建]
+                │       └── ProactiveDialogueStrategyAnalyzer.analyze_topic(history, user_profile, current_topic)
+                │               └── → TopicAnalysis (当前话题/话题深度/待探索话题)
+                │
                 ├── ══ 2. 生成策略层（基于分析结果生成应对策略） ══
                 │
                 ├── 2a. 根据对话阶段给出回应策略
@@ -135,9 +143,8 @@ handle_message_with_agents()                          # 入口 → agent_integra
                 │
                 ├── ══ 主动策略层（基于统一分析结果生成主动互动建议） ══
                 │
-                ├── _generate_proactive_guidance(history, memories, interest_analysis, response_type)
-                │       ├── 构建用户画像并复用兴趣分析结果
-                │       ├── analyze_topic() → topic_analysis
+                ├── _generate_proactive_guidance(user_profile, topic_analysis, history, memories, response_type)
+                │       ├── 直接使用统一分析层构建的 user_profile 和 topic_analysis
                 │       ├── generate_proactive_strategy() → proactive_action
                 │       └── format_proactive_guidance() → proactive_guidance 文本
                 │
@@ -212,15 +219,9 @@ handle_message_with_agents()                          # 入口 → agent_integra
             │           └── "- 用户在{date}时间表示{summary}" 或 "- {summary}"
             │
             │  ── Step 4：生成主动策略（ProactiveDialogueStrategy）──
-            ├── _generate_proactive_guidance(conversation_history, user_memories, user_profile, response_type)
+            ├── _generate_proactive_guidance(user_profile, topic_analysis, conversation_history, user_memories, response_type)
             │       │
-            │       ├── 复用统一分析层构建的 user_profile（不再重复构建）
-            │       │
-            │       ├── ProactiveDialogueStrategyAnalyzer.analyze_topic()
-            │       │       ├── _identify_topic_from_messages() # 最后一条 user 消息的话题（后备方法，优先使用统一分析层）
-            │       │       ├── _calculate_topic_depth()     # 连续同话题轮数
-            │       │       ├── _identify_topics_to_explore()# 未深入的兴趣
-            │       │       └── → TopicAnalysis
+            │       ├── 直接使用统一分析层构建的 user_profile 和 topic_analysis（不再重复构建）
             │       │
             │       ├── ProactiveDialogueStrategyAnalyzer.generate_proactive_strategy()
             │       │       ├── _determine_stage(user_profile)
