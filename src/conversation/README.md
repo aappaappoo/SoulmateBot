@@ -87,11 +87,12 @@ handle_message_with_agents()                          # 入口 → agent_integra
                 ├── ══ 1. 统一分析层（只做一次，产出共享上下文） ══
                 │
                 ├── 1a. DialoguePhaseAnalyzer.analyze_phase(conversation_history)
-                │       └── 统计 user 消息轮数 → 判断对话阶段
+                │       └── 统计 user 消息轮数 + 平均回复长度 → 判断对话阶段
                 │           ├── ≤2 轮  → OPENING    (开场)
                 │           ├── ≤5 轮  → LISTENING   (倾听)
                 │           ├── ≤8 轮  → DEEPENING   (深入)
                 │           └── >8 轮  → SUPPORTING   (支持引导)
+                │           └── → (phase, {user_turn_count, avg_reply_length})
                 │
                 ├── 1b. DialoguePhaseAnalyzer.analyze_emotion(current_message)
                 │       └── 关键词匹配 → (emotion_type, emotion_intensity)
@@ -106,41 +107,46 @@ handle_message_with_agents()                          # 入口 → agent_integra
                 │           ├── DECISION_CONSULTING   # 决策咨询 → 分析+建议
                 │           └── CASUAL_CHAT           # 日常闲聊 → 轻松互动
                 │
-                ├── 1d. ProactiveDialogueStrategyAnalyzer.analyze_user_profile()
-                │       └── 构建用户画像（统一构建，供回应策略和主动策略共享）
-                │           ├── _extract_interests()        # 兴趣关键词匹配
-                │           ├── _analyze_engagement()       # 用户消息平均长度 → HIGH/MEDIUM/LOW
-                │           ├── _analyze_emotional_state()  # positive/negative/transitioning/neutral
-                │           ├── relationship_depth           # 按 user_turns 分 1~5 级
-                │           └── _extract_recent_topics()
-                │           └── → UserProfile（共享上下文）
+                ├── 1d. ConversationTypeAnalyzer.analyze_interests(history, current_message)
+                │       └── 兴趣关键词匹配 → {interests, potential_interests}
+                │           ├── interests: 已识别的用户兴趣列表
+                │           └── potential_interests: 可探索的兴趣方向
                 │
-                ├── ══ 2. 回应策略层（消费统一上下文） ══
+                ├── 1e. [如果有 bot_values & conversation_type == OPINION_DISCUSSION]
+                │       └── StanceAnalyzer.analyze_stance(message, bot_values)
+                │               └── → StanceAnalysis (立场分析结果)
                 │
-                ├── 2a. DialoguePhaseAnalyzer.suggest_response_type(phase, emotion, intensity, history)
-                │       └── 综合阶段+情绪 → response_type
-                │           └── STRATEGY_TEMPLATES[response_type] → strategy_guidance 文本
+                ├── ══ 2. 生成策略层（基于分析结果生成应对策略） ══
                 │
-                ├── 2b. [如果有 bot_values & conversation_type == OPINION_DISCUSSION]
-                │       ├── StanceAnalyzer.analyze_stance(message, bot_values)
-                │       │       └── → StanceAnalysis (立场分析结果)
+                ├── 2a. 根据对话阶段给出回应策略
+                │       └── suggest_response_type(phase, emotion, intensity, history)
+                │           └── STRATEGY_TEMPLATES[response_type] → phase_strategy 文本
+                │
+                ├── 2b. 根据用户情绪给出应对策略
+                │       └── 已融合在 response_type 中（负面情绪自动选 COMFORT/VALIDATION）
+                │
+                ├── 2c. 根据用户兴趣点给出应对策略
+                │       └── _build_interest_guidance(interests, potential_interests)
+                │               └── → interest_guidance 文本
+                │
+                ├── 2d. 根据冲突程度给出机器人应对策略
                 │       └── _build_stance_guidance(stance_analysis)
                 │               └── → stance_guidance 文本
                 │
-                ├── ══ 3. 主动策略层（消费统一上下文，复用 user_profile） ══
+                ├── ══ 主动策略层（基于统一分析结果生成主动互动建议） ══
                 │
-                ├── 3a. _generate_proactive_guidance(history, memories, user_profile, response_type)
-                │       ├── 复用统一分析层的 user_profile（不再重复构建）
+                ├── _generate_proactive_guidance(history, memories, interest_analysis, response_type)
+                │       ├── 构建用户画像并复用兴趣分析结果
                 │       ├── analyze_topic() → topic_analysis
                 │       ├── generate_proactive_strategy() → proactive_action
                 │       └── format_proactive_guidance() → proactive_guidance 文本
                 │
-                ├── 3b. 去重逻辑
+                ├── 去重逻辑
                 │       └── 如果回应策略已选 PROACTIVE_INQUIRY 且主动策略为 EXPLORE_INTEREST
                 │           → 跳过主动策略中的通用追问模板，避免重复输出
                 │
-                └── ══ 4. 合并输出（去重 + 优先级排序） ══
-                        original_prompt + stance_guidance + strategy_guidance + proactive_guidance
+                └── ══ 合并输出 ══
+                        original_prompt + phase_strategy + interest_guidance + stance_guidance + proactive_guidance
                         │
                         └── → enhanced_with_strategy (完整增强 prompt)
 
