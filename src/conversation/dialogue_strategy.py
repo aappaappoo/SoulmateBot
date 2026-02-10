@@ -257,7 +257,6 @@ class DialoguePhaseAnalyzer:
         message_lower = message.lower()
 
         # 检查负面情绪（优先级更高，因为需要更多关注）
-        # Check negative emotions first (higher priority for mental health support)
         for intensity in ["high", "medium", "low"]:
             for keyword in EMOTION_KEYWORDS["negative"][intensity]:
                 if keyword in message_lower:

@@ -264,7 +264,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         history_messages.append(AgentMessage(
                             content=conv.message,
                             user_id="user",  # 标识为用户消息
-                            chat_id=str(chat_id)
+                            chat_id=str(chat_id),
                         ))
                     else:
                         history_messages.append(AgentMessage(
@@ -307,11 +307,11 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 构建对话历史格式（用于 UnifiedContextBuilder）
             conversation_history_for_builder = []
             for conv in reversed(recent_conversations):
+                time = conv.timestamp.strftime("%Y-%m-%d %H:%M:%S") if conv.timestamp else ""
                 if conv.is_user_message:
-                    conversation_history_for_builder.append({"role": "user", "content": conv.message})
+                    conversation_history_for_builder.append({"role": "user", "content": conv.message, "timestamp": time})
                 else:
                     conversation_history_for_builder.append({"role": "assistant", "content": conv.response})
-
             # 应用动态对话策略（生成策略文本）ot_config 中的 values 配置（如果存在）
             dialogue_strategy_text = None
             bot_values = get_bot_values(context)
@@ -373,10 +373,6 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                 logger.error(f"Error building context with UnifiedContextBuilder: {e}", exc_info=True)
                 # 回退到简单的 system prompt
                 enhanced_system_prompt = system_prompt or ""
-                enhanced_messages = [
-                    {"role": "system", "content": enhanced_system_prompt},
-                    {"role": "user", "content": message_text}
-                ]
             # 创建Agent消息和上下文
             agent_message = AgentMessage(
                 content=message_text,

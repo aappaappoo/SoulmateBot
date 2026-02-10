@@ -162,7 +162,6 @@ class UnifiedContextBuilder:
 
         # 3. 格式化长期记忆
         memory_context = self._format_memories(user_memories)
-
         # 5. 构建增强的 System Prompt（包含对话历史）
         enhanced_system_prompt = self._build_enhanced_system_prompt(
             bot_system_prompt=bot_system_prompt,
@@ -338,11 +337,6 @@ class UnifiedContextBuilder:
         if short_term_history:
             history_text = self._format_history_for_system_prompt(short_term_history)
             if history_text:
-                # 替换原有标题为统一格式
-                history_text = history_text.replace(
-                    "【历史对话 - 仅参考，禁止模仿格式】",
-                    "【近期对话记录】"
-                )
                 memory_sections.append(history_text)
         # 整合所有记忆到一个块
         if memory_sections:
@@ -419,19 +413,20 @@ class UnifiedContextBuilder:
         for msg in short_term_history:
             role = msg.get("role", "").lower()
             content = msg.get("content", "")
+            timestamp = msg.get("timestamp", "")
+            time_prefix = f"[{timestamp}] " if timestamp else ""
             if role == "user":
-                history_lines.append(f"User: {content}")
+                history_lines.append(f"{time_prefix}| User: {content}")
             elif role == "assistant":
                 content = content.replace("[MSG_SPLIT]", "")
                 history_lines.append(f"Assistant: {content}")
         if not history_lines:
             return ""
         history_text = """
-【历史对话 - 仅参考，禁止模仿格式】
+【近期对话记录】
+** 注意对话记录的时间，回复是需要保持对话的一致性和时间的连贯性 **
 <history>
-""" + "\n".join(history_lines) + """
-</history>
-⚠️ 注意：上方历史仅用于理解上下文，你的输出必须是JSON"""
+""" + "\n".join(history_lines) + """</history>"""
         return history_text
 
     def _get_json_format_instruction(self) -> str:

@@ -104,10 +104,11 @@ class HistoryFilter:
         for msg in conversation_history:
             content = msg.get("content", "")
             role = msg.get("role", "user")
-            
+            # 提取除 role/content 之外的额外字段（如 timestamp）
+            extra_fields = {k: v for k, v in msg.items() if k not in ("role", "content")}
             # 检查是否需要过滤
             should_filter, filter_reason, extracted_data = self._should_filter(content, role)
-            
+
             if should_filter:
                 # 创建过滤记录
                 filtered_content = FilteredContent(
@@ -122,7 +123,8 @@ class HistoryFilter:
                 if filtered_content.placeholder:
                     filtered_history.append({
                         "role": role,
-                        "content": filtered_content.placeholder
+                        "content": filtered_content.placeholder,
+                        **extra_fields
                     })
                 # 否则完全过滤（不添加到历史）
             else:
@@ -133,7 +135,8 @@ class HistoryFilter:
                 
                 filtered_history.append({
                     "role": role,
-                    "content": cleaned_content if cleaned_content.strip() else content
+                    "content": cleaned_content if cleaned_content.strip() else content,
+                    **extra_fields
                 })
         
         # 存储过滤的内容到磁盘
