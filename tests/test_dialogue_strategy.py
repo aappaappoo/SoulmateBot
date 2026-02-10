@@ -615,6 +615,9 @@ class TestConversationTypeAnalyzerInterests:
         ]
         result = self.analyzer.analyze_interests(history)
         assert len(result["interests"]) >= 2
+        # 验证具体识别到的兴趣
+        assert "影视" in result["interests"] or "音乐" in result["interests"]
+        assert "运动" in result["interests"]
 
     def test_analyze_interests_with_current_message(self):
         """测试当前消息也被用于兴趣分析"""
@@ -635,6 +638,10 @@ class TestConversationTypeAnalyzerInterests:
         result = self.analyzer.analyze_interests(history)
         # 潜在兴趣应该不包含已识别的兴趣
         assert "游戏" not in result["potential_interests"]
+        # 潜在兴趣应该包含其他合理类别
+        assert len(result["potential_interests"]) > 0
+        for interest in result["potential_interests"]:
+            assert interest != "游戏"
 
 
 class TestPhaseDetails:
