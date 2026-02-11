@@ -3,12 +3,67 @@ Voice helper utilities for sending voice or text replies
 语音回复辅助工具
 """
 import asyncio
-from typing import Tuple
+from typing import Tuple, Optional
 from loguru import logger
 
 from src.services.tts_service import tts_service
 from src.services.voice_preference_service import voice_preference_service
 from src.utils.emotion_parser import extract_emotion_and_text, parse_multi_message_response
+
+
+# 语音情绪到中文描述的映射
+VOICE_EMOTION_DESCRIPTIONS = {
+    "happy": "开心的",
+    "excited": "激动的",
+    "sad": "难过的",
+    "angry": "生气的",
+    "gentle": "温柔的",
+    "crying": "委屈的",
+}
+
+
+def build_voice_recognition_prompt(
+    recognized_text: str,
+    emotion: Optional[str] = None,
+) -> str:
+    """
+    将语音识别结果构建为 LLM 可理解的增强提示文本
+
+    将识别出的文本和情绪信息组合成一段自然的提示，
+    让 LLM 能够理解用户是通过语音发送消息并感知其情绪。
+
+    Args:
+        recognized_text: 语音识别出的文本内容
+        emotion: 推断的情绪类型 (happy, sad, angry, excited, gentle, crying)
+
+    Returns:
+        增强后的提示文本
+    """
+    if not recognized_text:
+        return ""
+
+    # 如果有情绪标签，添加情绪上下文
+    if emotion and emotion in VOICE_EMOTION_DESCRIPTIONS:
+        emotion_desc = VOICE_EMOTION_DESCRIPTIONS[emotion]
+        prompt = (
+            f"[用户通过语音发送了这条消息，语气听起来是{emotion_desc}] "
+            f"{recognized_text}"
+        )
+        logger.debug(
+            f"🎙️ [VOICE HELPER] Built voice prompt with emotion={emotion}: "
+            f"'{prompt[:100]}'"
+        )
+    else:
+        prompt = (
+            f"[用户通过语音发送了这条消息] "
+            f"{recognized_text}"
+        )
+        logger.debug(
+            f"🎙️ [VOICE HELPER] Built voice prompt without emotion: "
+            f"'{prompt[:100]}'"
+        )
+
+    return prompt
 
 
 async def send_voice_or_text_reply(message,
