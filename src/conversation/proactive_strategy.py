@@ -76,7 +76,7 @@ class ProactiveAction:
 
 
 # ========== 从 YAML 加载配置数据 ==========
-_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "dialogue_strategy.yaml"
+_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "dialogue_strategy.yaml"
 
 
 def _load_proactive_config():
@@ -585,9 +585,9 @@ class ProactiveDialogueStrategyAnalyzer:
 - 模式：{action.mode.value}
 - 策略：{action.suggestion}
 - 语气：{action.tone_guidance}
-【可以这样回复】
+- 示例回复如下：
 """
         for i, question in enumerate(action.example_questions, 1):
-            guidance += f"{i}. {question}\n"
+            guidance += f"  {i}. {question}\n"
 
         return guidance.strip()

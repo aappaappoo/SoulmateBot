@@ -64,7 +64,7 @@ def init_test_data() -> bool:
 
     步骤：
     1. 创建用户（只需 Telegram ID 和 Username）
-    2. 从 bots/ 目录选择配置创建 Bot
+    2. 从 bot 目录选择配置创建 Bot
     3. 自动绑定
     """
     import yaml
@@ -112,16 +112,16 @@ def init_test_data() -> bool:
         print("🤖 步骤 2/3: 创建 Bot")
         print("-" * 60)
 
-        # 扫描 bots/ 目录
-        bots_dir = Path("bots")
+        # 扫描 bot 目录
+        bots_dir = Path("src/bot/configs/")
         if not bots_dir.exists():
-            print(f"❌ bots 目录不存在: {bots_dir}")
+            print(f"❌ bot 目录不存在: {bots_dir}")
             return False
 
         available_configs = []
         for bot_dir in sorted(bots_dir.iterdir()):
             if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                config_file = bot_dir / "configs.yaml"
+                config_file = bot_dir / "config.yaml"
                 if config_file.exists():
                     try:
                         with open(config_file, 'r', encoding='utf-8') as f:
@@ -137,7 +137,7 @@ def init_test_data() -> bool:
                         pass
 
         if not available_configs:
-            print("❌ bots 目录下没有找到配置文件")
+            print("❌ bot 目录下没有找到配置文件")
             return False
 
         print("\n📁 可用的 Bot 配置:")
@@ -264,7 +264,7 @@ def init_test_data() -> bool:
    👤 用户: @{username} (Telegram ID: {telegram_id})
    🤖 Bot: @{bot_username} ({bot_name})
    💬 Channel: 私聊 (自动回复模式)
-   📁 配置目录: bots/{config_dir_name}/
+   📁 配置目录:  src/bot/configs/{config_dir_name}/
 
 ⚠️  重要：请在 main.py 中添加配置映射:
 

@@ -503,7 +503,7 @@ class BotCRUD:
         from pathlib import Path
 
         # 查找模板
-        template_path = Path(f"bots/{template_name}/configs.yaml")
+        template_path = Path(f"src/bot/configs/{template_name}/config.yaml")
         if not template_path.exists():
             print(f"❌ 模板不存在: {template_path}")
             return None
@@ -564,7 +564,7 @@ class BotCRUD:
         从已有的 YAML 配置创建 Bot（简化版）
 
         只需要：
-        1. 选择 bots/ 目录下的配置
+        1. 选择 bot 目录下的配置
         2. 输入 Token
         """
         import yaml
@@ -605,8 +605,8 @@ class BotCRUD:
         finally:
             db.close()
 
-        # ========== 2. 扫描 bots/ 目录 ==========
-        bots_dir = Path("bots")
+        # ========== 2. 扫描 bot 目录 ==========
+        bots_dir = Path("src/bot/configs")
         if not bots_dir.exists():
             print(f"\n❌ bots 目录不存在")
             return None
@@ -614,7 +614,7 @@ class BotCRUD:
         available_configs = []
         for bot_dir in sorted(bots_dir.iterdir()):
             if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                config_file = bot_dir / "configs.yaml"
+                config_file = bot_dir / "config.yaml"
                 if config_file.exists():
                     try:
                         with open(config_file, 'r', encoding='utf-8') as f:
@@ -750,7 +750,7 @@ class BotCRUD:
    ID: {bot.id}
    用户名: @{bot.bot_username}
    名称: {bot.bot_name}
-   配置: bots/{config_dir_name}/
+   配置: src/bot/configs/{config_dir_name}/
 
 ⚠️  请在 main.py 中添加映射:
 
@@ -770,7 +770,7 @@ class BotCRUD:
         """
         从 YAML 配置同步更新已注册的 Bot
 
-        将 bots/ 目录下的配置同步到数据库中已存在的 Bot
+        将 bot 目录下的配置同步到数据库中已存在的 Bot
         """
         import yaml
         from pathlib import Path
@@ -805,7 +805,7 @@ class BotCRUD:
             print(f"\n已选择: @{bot.bot_username} ({bot.bot_name})")
 
             # ========== 2. 扫描可用的配置 ==========
-            bots_dir = Path("bots")
+            bots_dir = Path("src/bot/configs")
             if not bots_dir.exists():
                 print("\n❌ bots 目录不存在")
                 return None
@@ -813,7 +813,7 @@ class BotCRUD:
             available_configs = []
             for bot_dir in sorted(bots_dir.iterdir()):
                 if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                    config_file = bot_dir / "configs.yaml"
+                    config_file = bot_dir / "config.yaml"
                     if config_file.exists():
                         try:
                             with open(config_file, 'r', encoding='utf-8') as f:
@@ -929,7 +929,7 @@ class BotCRUD:
 📋 已更新:
    Bot: @{bot.bot_username}
    名称: {bot.bot_name}
-   配置来源: bots/{config_dir_name}/
+   配置来源: src/bot/configs/{config_dir_name}/
 
 ⚠️  确保 main.py 中有映射:
    "{bot.bot_username}": "{config_dir_name}",
@@ -974,7 +974,7 @@ class BotCRUD:
         print("=" * 60)
 
         db = get_db_session()
-        bots_dir = Path("bots")
+        bots_dir = Path("src/bot/configs")
         synced_count = 0
 
         try:
@@ -989,7 +989,7 @@ class BotCRUD:
                     print(f"\n⚠️  @{bot.bot_username}: 没有配置映射，跳过")
                     continue
 
-                config_path = bots_dir / config_dir / "configs.yaml"
+                config_path = bots_dir / config_dir / "config.yaml"
                 if not config_path.exists():
                     print(f"\n⚠️  @{bot.bot_username}: 配置文件不存在 ({config_path})，跳过")
                     continue
@@ -1022,7 +1022,7 @@ class BotCRUD:
                     bot.voice_enabled = voice_data.get("enabled", False)
                     bot.voice_id = voice_data.get("voice_id", None)
 
-                    print(f"\n✅ @{bot.bot_username}: 已从 bots/{config_dir}/ 同步")
+                    print(f"\n✅ @{bot.bot_username}: 已从 src/bot/configs/{config_dir}/ 同步")
                     print(f"   voice_enabled={bot.voice_enabled}, voice_id={bot.voice_id}")
                     synced_count += 1
 

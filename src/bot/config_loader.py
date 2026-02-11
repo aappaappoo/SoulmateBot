@@ -606,7 +606,7 @@ class BotConfigLoader:
         Returns:
             BotConfig对象或None
         """
-        config_path = self.bots_dir / bot_id / "configs.yaml"
+        config_path = self.bots_dir / bot_id / "config.yaml"
 
         if not config_path.exists():
             logger.warning(f"Config file not found: {config_path}")
@@ -687,7 +687,7 @@ class BotConfigLoader:
         bots = []
         for bot_dir in self.bots_dir.iterdir():
             if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                if (bot_dir / "configs.yaml").exists():
+                if (bot_dir / "config.yaml").exists():
                     bots.append(bot_dir.name)
 
         return bots

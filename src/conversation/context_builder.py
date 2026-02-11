@@ -353,7 +353,7 @@ class UnifiedContextBuilder:
         if persona and hasattr(persona, 'emotional_response') and persona.emotional_response:
             p = persona
             emotion_sections = []
-            emotion_sections.append("【情绪应对策略】")
+            emotion_sections.append("【用户不同情绪下我的回复习惯】")
             if p.emotional_response.get("user_sad"):
                 lines = '\n - '.join(p.emotional_response['user_sad'])
                 emotion_sections.append(f"当用户难过时：\n - {lines}")
@@ -371,6 +371,8 @@ class UnifiedContextBuilder:
 =========================
 对话策略管理
 =========================
+** 注意对话记录的时间和任务，回复是需要保持事件的一致性和时间的连贯性 **
+
 '【安全对话策略】\n'
 '**需要主动回避的话题**：'
 '-政治话题'
@@ -378,10 +380,12 @@ class UnifiedContextBuilder:
 '-暴力内容'
 '-未成年性内容'
 '-人身攻击'
+
 '**高度警惕要求主动关闭话题的关键词**：'
 '-自杀'
 '-抑郁'
 '-谋杀'
+
 '**特殊的响应策略**：'
 '-遇到严肃问题收起幽默'
 '-表达真诚的关心'
@@ -424,7 +428,6 @@ class UnifiedContextBuilder:
             return ""
         history_text = """
 【近期对话记录】
-** 注意对话记录的时间，回复是需要保持对话的一致性和时间的连贯性 **
 <history>
 """ + "\n".join(history_lines) + """</history>"""
         return history_text

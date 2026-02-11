@@ -16,7 +16,7 @@ from src.database import get_async_db_context, init_async_db
 from src.handlers.voice_handler import get_voice_handlers
 from src.models.database import Bot as BotModel
 from src.bot.config_loader import BotConfigLoader, BotConfig
-from src.llm_gateway import get_llm_gateway
+# from src.llm_gateway import get_llm_gateway
 from src.conversation import get_session_manager
 from src.services.reminder_scheduler import get_reminder_scheduler, start_reminder_scheduler, stop_reminder_scheduler
 from src.handlers import (
@@ -70,12 +70,12 @@ class MultiBotLauncher:
         # 添加更多映射...
     }
 
-    def __init__(self, bots_dir: str = "bots"):
+    def __init__(self, bots_dir: str = "src/bot/configs"):
         self.bots_dir = bots_dir
         self.config_loader = BotConfigLoader(bots_dir)
         self.running_bots: Dict[int, RunningBot] = {}
         self._shutdown_event = asyncio.Event()
-        self._llm_gateway = None
+        # self._llm_gateway = None
         self._session_manager = None
         self.bot_voice_configs: Dict[str, BotVoiceConfig] = {}
         logger.info("MultiBotLauncher initialized")
@@ -84,7 +84,7 @@ class MultiBotLauncher:
         """
         从 YAML 配置加载 Bot 的语音设置
         """
-        config_path = Path(self.bots_dir) / config_dir / "configs.yaml"
+        config_path = Path(self.bots_dir) / config_dir / "config.yaml"
 
         if not config_path.exists():
             logger.debug(f"No configs file for voice: {config_path}")
@@ -120,7 +120,7 @@ class MultiBotLauncher:
         if bot_username in self.BOT_CONFIG_MAPPING:
             config_dir = self.BOT_CONFIG_MAPPING[bot_username]
             # 直接检查文件是否存在，避免 config_loader 产生警告
-            config_path = Path(self.bots_dir) / config_dir / "configs.yaml"
+            config_path = Path(self.bots_dir) / config_dir / "config.yaml"
             if config_path.exists():
                 config = self.config_loader.load_config(config_dir)
                 if config:
@@ -140,7 +140,7 @@ class MultiBotLauncher:
         ]
 
         for name in possible_names:
-            config_path = Path(self.bots_dir) / name / "configs.yaml"
+            config_path = Path(self.bots_dir) / name / "config.yaml"
             if config_path.exists():
                 config = self.config_loader.load_config(name)
                 if config:
@@ -317,7 +317,7 @@ class MultiBotLauncher:
         await init_async_db()
 
         # 初始化共享服务
-        self._llm_gateway = get_llm_gateway()
+        # self._llm_gateway = get_llm_gateway()
         self._session_manager = get_session_manager()
 
         # 加载 YAML 配置

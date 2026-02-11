@@ -265,7 +265,7 @@ def create_bot_directory(
     """
     # 获取项目根目录
     project_root = Path(__file__).parent.parent
-    bots_dir = project_root / "bots"
+    bots_dir = project_root / "src/bot/configs"
     
     # 机器人目录名（使用下划线格式）
     bot_dir_name = bot_name.lower().replace("-", "_").replace(" ", "_")
@@ -318,7 +318,7 @@ def create_bot_directory(
         print("\n" + "=" * 60)
         print(f"📁 预览: {bot_dir}")
         print("=" * 60)
-        print("\n--- configs.yaml ---")
+        print("\n--- config.yaml ---")
         print(config_content[:1000] + "...\n")
         print("--- __init__.py ---")
         print(init_content)
@@ -329,7 +329,7 @@ def create_bot_directory(
         bot_dir.mkdir(parents=True, exist_ok=True)
         
         # 创建config.yaml
-        config_file = bot_dir / "configs.yaml"
+        config_file = bot_dir / "config.yaml"
         with open(config_file, "w", encoding="utf-8") as f:
             f.write(config_content)
         
@@ -344,7 +344,7 @@ def create_bot_directory(
         print(f"""
 📁 目录: {bot_dir}
 📄 文件:
-   - configs.yaml (配置文件)
+   - config.yaml (配置文件)
    - __init__.py
 
 💡 下一步:
@@ -380,7 +380,7 @@ def list_templates():
 def list_existing_bots():
     """列出已有的机器人"""
     project_root = Path(__file__).parent.parent
-    bots_dir = project_root / "bots"
+    bots_dir = project_root / "src/bot/configs"
     
     print("\n" + "=" * 60)
     print("🤖 已有的机器人")
@@ -392,7 +392,7 @@ def list_existing_bots():
     
     for bot_dir in sorted(bots_dir.iterdir()):
         if bot_dir.is_dir() and not bot_dir.name.startswith("_"):
-            config_file = bot_dir / "configs.yaml"
+            config_file = bot_dir / "config.yaml"
             if config_file.exists():
                 print(f"   • {bot_dir.name}")
 
