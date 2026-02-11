@@ -28,7 +28,6 @@ except ImportError:
     DASHSCOPE_ASR_AVAILABLE = False
     logger.warning("dashscope ASR package not available. Voice recognition will not work.")
 
-
 # 情绪关键词映射 - 从语音识别文本中推断情绪
 EMOTION_KEYWORDS = {
     "happy": ["哈哈", "嘻嘻", "开心", "高兴", "太好了", "棒", "好开心", "太棒了", "耶", "好的呀"],
@@ -68,7 +67,7 @@ class VoiceRecognitionService:
     """
 
     # 默认 ASR 模型
-    DEFAULT_MODEL = "qwen3-asr-flash"
+    DEFAULT_MODEL = "paraformer-realtime-8k-v2"
 
     def __init__(self):
         self.api_key = getattr(settings, 'dashscope_api_key', None)
@@ -79,8 +78,8 @@ class VoiceRecognitionService:
             self.api_key = os.environ['DASHSCOPE_API_KEY']
 
     async def recognize_voice(
-        self,
-        audio_file_path: str,
+            self,
+            audio_file_path: str,
     ) -> VoiceRecognitionResult:
         """
         识别语音文件中的内容
@@ -121,11 +120,11 @@ class VoiceRecognitionService:
             return VoiceRecognitionResult(text="", emotion=None)
 
     def _sync_recognize(
-        self,
-        audio_file_path: str,
+            self,
+            audio_file_path: str,
     ) -> VoiceRecognitionResult:
         """
-        同步方式执行语音识��（用于在线程池中执行）
+        同步方式执行语音识别（用于在线程池中执行）
 
         Args:
             audio_file_path: 音频文件路径
@@ -140,12 +139,34 @@ class VoiceRecognitionService:
 
             logger.info(f"🎙️ [ASR] Calling DashScope Recognition API: model={self.model}, file={audio_file_path}")
 
-            # 调用 DashScope Recognition API
-            # 根据阿里云百炼官方文档，使用 'file' 参数传递本地音频文件路径
-            response = Recognition.call(
+            # 根据文件扩展名确定格式
+            file_ext = audio_file_path.lower().split('.')[-1]
+            format_map = {
+                'wav': 'wav',
+                'mp3': 'mp3',
+                'ogg': 'ogg',
+                'pcm': 'pcm',
+                'm4a': 'm4a',
+                'flac': 'flac',
+            }
+            audio_format = format_map.get(file_ext, 'wav')
+
+            # 根据模型名称确定采样率
+            if '8k' in self.model:
+                sample_rate = 8000
+            elif '16k' in self.model:
+                sample_rate = 16000
+            else:
+                sample_rate = 16000  # 默认 16kHz
+
+            # 创建 Recognition 实例并调用
+            recognition = Recognition(
                 model=self.model,
-                file=audio_file_path,  # 修复：使用 'file' 而不是 'audio_file'
+                format=audio_format,
+                sample_rate=sample_rate,
+                callback=None
             )
+            response = recognition.call(audio_file_path)
 
             logger.debug(f"🎙️ [ASR] Raw response status: {response.status_code}")
 
@@ -153,32 +174,38 @@ class VoiceRecognitionService:
                 # 提取识别文本
                 output = response.output or {}
                 recognized_text = ""
-
+                recognized_emo_tag = ""
+                recognized_emo_conf = ""
                 # DashScope ASR 返回格式：output.sentence 或 output.text
                 if isinstance(output, dict):
-                    recognized_text = output.get("sentence", {}).get("text", "") if isinstance(
-                        output.get("sentence"), dict
-                    ) else output.get("sentence", "")
+                    if isinstance(output.get("sentence"), dict):
+                        recognized_text = output.get("sentence", {}).get("text", "")
+                        recognized_emo_tag = output.get("sentence", {}).get("emo_tag", "")
+                        recognized_emo_conf = output.get("sentence", {}).get("emo_confidence", "")
+                    elif isinstance(output.get("sentence"), list):
+                        recognized_text = output.get("sentence", [{}])[0].get("text", "")
+                        recognized_emo_tag = output.get("sentence", [{}])[0].get("emo_tag", "")
+                        recognized_emo_conf = output.get("sentence", [{}])[0].get("emo_confidence", "")
+                    else:
+                        recognized_text = output.get("sentence", "")
                     if not recognized_text:
                         recognized_text = output.get("text", "")
+                        recognized_emo_tag = output.get("emo_tag", "")
+                        recognized_emo_conf = output.get("emo_confidence", "")
+
                 elif isinstance(output, str):
                     recognized_text = output
 
                 recognized_text = recognized_text.strip()
+                log_recognized_text = recognized_text[:100] + "..." if len(recognized_text) > 100 else recognized_text
                 logger.info(
                     f"🎙️ [ASR] Recognition successful: text_length={len(recognized_text)}, "
-                    f"text='{recognized_text[:100]}...'" if len(recognized_text) > 100
-                    else f"🎙️ [ASR] Recognition successful: text='{recognized_text}'"
+                    f"text={log_recognized_text} | emotion={recognized_emo_tag} | confidence={recognized_emo_conf}"
                 )
-
-                # 从文本中推断情绪
-                emotion = self._infer_emotion_from_text(recognized_text)
-                if emotion:
-                    logger.info(f"🎙️ [ASR] Inferred emotion: {emotion}")
-
                 return VoiceRecognitionResult(
                     text=recognized_text,
-                    emotion=emotion,
+                    emotion=recognized_emo_tag,
+                    confidence=recognized_emo_conf,
                     raw_response=output,
                 )
             else:

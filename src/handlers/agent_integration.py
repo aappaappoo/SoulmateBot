@@ -118,22 +118,26 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
     logger.info("=" * 50)
     logger.info(f"[Agent Mode] Received update ID: {update.update_id}")
     message = update.message or update.channel_post
-    if not message:
-        logger.warning("❌ No message or channel_post in update")
-        return
-
-    if not message.text:
-        logger.warning("❌ Message has no text")
-        return
 
     chat_type = message.chat.type
     chat_id = message.chat.id
     user_id = str(update.effective_user.id) if update.effective_user else "anonymous"
-    message_text = message.text
-
+    if not message:
+        logger.warning("❌ No message or channel_post in update")
+        return
+    if context.user_data.get("voice_input"):
+        message_text = context.user_data.get("voice_enhanced_text", "")
+        logger.info(f"🎙️ [VOICE INPUT] Processing voice message: '{message_text[:50]}...'")
+        if not message_text:
+            logger.warning("❌ Voice message has no enhanced text")
+            return
+    else:
+        if not message.text:
+            logger.warning("❌ Message has no text")
+            return
+        message_text = message.text
     logger.info(f"📨 Message from chat type: {chat_type}")
     logger.info(f"📝 Message text: {message_text[:50]}...")
-
     async with get_async_db_context() as db:
         channel_service = AsyncChannelManagerService(db)
 

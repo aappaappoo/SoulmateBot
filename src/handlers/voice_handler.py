@@ -42,24 +42,24 @@ def generate_voice_filename() -> str:
     """
     生成语音文件名
 
-    文件名格式: {时-分-秒}.mp3
+    文件名格式: {时-分-秒}.wav
 
     Returns:
         生成的文件名
     """
     current_time = datetime.now().strftime("%H-%M-%S")
-    return f"{current_time}.mp3"
+    return f"{current_time}.wav"
 
 
-async def convert_ogg_to_mp3(ogg_path: str, mp3_path: str) -> bool:
+async def convert_ogg_to_wav(ogg_path: str, wav_path: str) -> bool:
     """
-    将 OGG 格式音频转换为 MP3 格式
+    将 OGG 格式音频转换为 WAV 格式
 
     使用 ffmpeg 进行转换
 
     Args:
         ogg_path: OGG 文件路径
-        mp3_path: 目标 MP3 文件路径
+        wav_path: 目标 WAV 文件路径
 
     Returns:
         转换是否成功
@@ -67,14 +67,14 @@ async def convert_ogg_to_mp3(ogg_path: str, mp3_path: str) -> bool:
     try:
         # 使用 ffmpeg 转换，-y 表示覆盖已存在的文件
         result = subprocess.run(
-            ["ffmpeg", "-y", "-i", ogg_path, "-acodec", "libmp3lame", "-q:a", "2", mp3_path],
+            ["ffmpeg", "-y", "-i", ogg_path, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", wav_path],
             capture_output=True,
             text=True,
             timeout=30
         )
 
         if result.returncode == 0:
-            logger.info(f"🎙️ [VOICE] Successfully converted {ogg_path} to {mp3_path}")
+            logger.info(f"🎙️ [VOICE] Successfully converted {ogg_path} to {wav_path}")
             return True
         else:
             logger.error(f"🎙️ [VOICE] ffmpeg conversion failed: {result.stderr}")
@@ -210,7 +210,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     流程：
     1. 下载用户发送的语音文件（OGG 格式）
-    2. 将语音文件保存到 data/voice/{user_id}/{日期}/{时间}.mp3
+    2. 将语音文件保存到 data/voice/{user_id}/{日期}/{时间}.wav
     3. 调用 DashScope ASR 服务进行语音识别
     4. 将识别出的文本和情绪构建为 LLM 提示
     5. 调用 agent_integration 的消息处理流程获取 AI 回复
@@ -233,7 +233,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
     await message.chat.send_action("typing")
 
     tmp_ogg_path = None
-    saved_mp3_path = None
+    saved_wav_path = None
 
     try:
         # 1. 下载语音文件
@@ -248,28 +248,28 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await voice_file.download_to_drive(tmp_ogg_path)
         logger.info(f"🎙️ [VOICE MSG] Voice file downloaded to temp: {tmp_ogg_path}")
 
-        # 2. 保存语音文件到用户目录 (转换为 MP3 格式)
+        # 2. 保存语音文件到用户目录 (转换为 WAV 格式)
         if user_id:
             user_voice_dir = get_user_voice_storage_path(user_id)
             voice_filename = generate_voice_filename()
-            saved_mp3_path = str(user_voice_dir / voice_filename)
+            saved_wav_path = str(user_voice_dir / voice_filename)
 
-            # 转换 OGG 到 MP3
-            conversion_success = await convert_ogg_to_mp3(tmp_ogg_path, saved_mp3_path)
+            # 转换 OGG 到 wav
+            conversion_success = await convert_ogg_to_wav(tmp_ogg_path, saved_wav_path)
 
             if conversion_success:
-                logger.info(f"🎙️ [VOICE MSG] Voice file saved to: {saved_mp3_path}")
+                logger.info(f"🎙️ [VOICE MSG] Voice file saved to: {saved_wav_path}")
             else:
-                # 如果转换失败，直接复制 OGG 文件（改名为 .mp3 后缀）
-                logger.warning("🎙️ [VOICE MSG] MP3 conversion failed, saving OGG file instead")
+                # 如果转换失败，直接复制 OGG 文件（改名为 .wav 后缀）
+                logger.warning("🎙️ [VOICE MSG] WAV conversion failed, saving OGG file instead")
                 import shutil
-                saved_mp3_path = str(user_voice_dir / voice_filename.replace('.mp3', '.ogg'))
-                shutil.copy(tmp_ogg_path, saved_mp3_path)
-                logger.info(f"🎙️ [VOICE MSG] Voice file saved as OGG: {saved_mp3_path}")
+                saved_wav_path = str(user_voice_dir / voice_filename.replace('.wav', '.ogg'))
+                shutil.copy(tmp_ogg_path, saved_wav_path)
+                logger.info(f"🎙️ [VOICE MSG] Voice file saved as OGG: {saved_wav_path}")
 
-        # 3. 调用语音识别服务（使用保存的 MP3 文件）
+        # 3. 调用语音识别服务（使用保存的 WAV 文件）
         # 注意：DashScope ASR 支持 mp3/ogg/wav 等格式
-        asr_file_path = saved_mp3_path if saved_mp3_path and os.path.exists(saved_mp3_path) else tmp_ogg_path
+        asr_file_path = saved_wav_path if saved_wav_path and os.path.exists(saved_wav_path) else tmp_ogg_path
         recognition_result = await voice_recognition_service.recognize_voice(asr_file_path)
 
         if not recognition_result.text:
@@ -286,23 +286,18 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         enhanced_text = build_voice_recognition_prompt(
             recognized_text=recognition_result.text,
             emotion=recognition_result.emotion,
+            emotion_confidence=recognition_result.confidence,
+
         )
 
         # 5. 将语音识别结果作为文本消息注入到 agent 处理流程
-        # 通过模拟文本消息，复用现有的 handle_message_with_agents 逻辑
-        from src.handlers.agent_integration import handle_message_with_agents
-
-        # 保存原始文本，替换为语音识别增强文本
-        original_text = message.text
-        message.text = enhanced_text
-
-        # 在 context 中标记这是一条语音消息，供后续处理使用
         context.user_data["voice_input"] = True
         context.user_data["voice_recognized_text"] = recognition_result.text
         context.user_data["voice_emotion"] = recognition_result.emotion
-        context.user_data["voice_file_path"] = saved_mp3_path  # 保存语音文件路径
-
+        context.user_data["voice_file_path"] = saved_wav_path
+        context.user_data["voice_enhanced_text"] = enhanced_text
         logger.info(f"🎙️ [VOICE MSG] Forwarding to agent handler: '{enhanced_text[:100]}'")
+        from src.handlers.agent_integration import handle_message_with_agents
 
         await handle_message_with_agents(update, context)
 
@@ -311,9 +306,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.pop("voice_recognized_text", None)
         context.user_data.pop("voice_emotion", None)
         context.user_data.pop("voice_file_path", None)
-
-        # 恢复原始文本
-        message.text = original_text
+        context.user_data.pop("voice_enhanced_text", None)
 
     except Exception as e:
         logger.error(f"❌ [VOICE MSG] Error processing voice message: {e}", exc_info=True)

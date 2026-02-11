@@ -11,20 +11,11 @@ from src.services.voice_preference_service import voice_preference_service
 from src.utils.emotion_parser import extract_emotion_and_text, parse_multi_message_response
 
 
-# 语音情绪到中文描述的映射
-VOICE_EMOTION_DESCRIPTIONS = {
-    "happy": "开心的",
-    "excited": "激动的",
-    "sad": "难过的",
-    "angry": "生气的",
-    "gentle": "温柔的",
-    "crying": "委屈的",
-}
-
 
 def build_voice_recognition_prompt(
     recognized_text: str,
     emotion: Optional[str] = None,
+    emotion_confidence: Optional[float] = None,
 ) -> str:
     """
     将语音识别结果构建为 LLM 可理解的增强提示文本
@@ -41,28 +32,11 @@ def build_voice_recognition_prompt(
     """
     if not recognized_text:
         return ""
-
-    # 如果有情绪标签，添加情绪上下文
-    if emotion and emotion in VOICE_EMOTION_DESCRIPTIONS:
-        emotion_desc = VOICE_EMOTION_DESCRIPTIONS[emotion]
-        prompt = (
-            f"[用户通过语音发送了这条消息，语气听起来是{emotion_desc}] "
-            f"{recognized_text}"
-        )
-        logger.debug(
-            f"🎙️ [VOICE HELPER] Built voice prompt with emotion={emotion}: "
-            f"'{prompt[:100]}'"
-        )
-    else:
-        prompt = (
-            f"[用户通过语音发送了这条消息] "
-            f"{recognized_text}"
-        )
-        logger.debug(
-            f"🎙️ [VOICE HELPER] Built voice prompt without emotion: "
-            f"'{prompt[:100]}'"
-        )
-
+    prompt = f"用户通过语音发送了这条消息，内容：{recognized_text}"
+    if emotion:
+        prompt += f"｜语气情感：{emotion}"
+        if emotion_confidence:
+            prompt += f"|情绪强度(0表示最低，1表示最高)：{emotion_confidence:.2f} "
     return prompt
 
 
