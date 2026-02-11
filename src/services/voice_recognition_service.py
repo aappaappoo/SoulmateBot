@@ -125,7 +125,7 @@ class VoiceRecognitionService:
         audio_file_path: str,
     ) -> VoiceRecognitionResult:
         """
-        同步方式执行语音识别（用于在线程池中执行）
+        同步方式执行语音识��（用于在线程池中执行）
 
         Args:
             audio_file_path: 音频文件路径
@@ -138,12 +138,13 @@ class VoiceRecognitionService:
             if self.api_key:
                 dashscope.api_key = self.api_key
 
-            logger.info(f"🎙️ [ASR] Calling DashScope Recognition API: model={self.model}")
+            logger.info(f"🎙️ [ASR] Calling DashScope Recognition API: model={self.model}, file={audio_file_path}")
 
             # 调用 DashScope Recognition API
+            # 根据阿里云百炼官方文档，使用 'file' 参数传递本地音频文件路径
             response = Recognition.call(
                 model=self.model,
-                audio_file=audio_file_path,
+                file=audio_file_path,  # 修复：使用 'file' 而不是 'audio_file'
             )
 
             logger.debug(f"🎙️ [ASR] Raw response status: {response.status_code}")
