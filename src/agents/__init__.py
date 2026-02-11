@@ -21,8 +21,8 @@ Example usage:
     agents = loader.load_agents()
     
     # Create router with configuration
-    config = RouterConfig(min_confidence=0.5, max_agents=2)
-    router = Router(agents, config)
+    configs = RouterConfig(min_confidence=0.5, max_agents=2)
+    router = Router(agents, configs)
     
     # Route a message
     message = Message(content="I'm feeling sad today", user_id="123", chat_id="456")

@@ -143,7 +143,7 @@ class LLMGateway:
     
     Usage:
         gateway = LLMGateway()
-        gateway.register_provider("openai", OpenAIProvider(config))
+        gateway.register_provider("openai", OpenAIProvider(configs))
         
         request = LLMRequest(
             messages=[{"role": "user", "content": "你好"}],
@@ -450,7 +450,7 @@ def get_llm_gateway() -> LLMGateway:
                     logger.warning(f"Failed to register Anthropic provider: {e}")
         
         except ImportError as e:
-            logger.warning(f"Could not import config settings: {e}")
+            logger.warning(f"Could not import configs settings: {e}")
         except Exception as e:
             logger.warning(f"Error auto-registering providers: {e}")
     

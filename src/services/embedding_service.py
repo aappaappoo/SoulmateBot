@@ -558,7 +558,7 @@ def get_embedding_service() -> EmbeddingService:
                     "Please set DASHSCOPE_API_KEY or OPENAI_API_KEY in your .env file."
                 )
         except ImportError:
-            logger.warning("Could not import config settings for embedding service")
+            logger.warning("Could not import configs settings for embedding service")
         except Exception as e:
             logger.error(f"Error auto-configuring embedding provider: {e}")
 

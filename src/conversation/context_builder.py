@@ -210,8 +210,8 @@ class UnifiedContextBuilder:
         """
         分割对话历史为短期和中期
         
-        短期：最近 N 轮（config.short_term_rounds）
-        中期：第 M 到 N 轮（config.mid_term_start 到 config.mid_term_end）
+        短期：最近 N 轮（configs.short_term_rounds）
+        中期：第 M 到 N 轮（configs.mid_term_start 到 configs.mid_term_end）
         
         Returns:
             (short_term, mid_term): 短期历史和中期历史

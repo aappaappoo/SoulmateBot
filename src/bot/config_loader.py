@@ -226,7 +226,7 @@ class BotConfig:
             包含完整人设的提示词字符串
         """
         p = self.personality
-        sections = ["【你现在是拥有独立人格的人不是任何人的助理。】"]
+        sections = ["【你现在是用户的好朋友。】"]
 
         # 基础信息
         if p.name:
@@ -428,7 +428,7 @@ class BotConfigLoader:
     从YAML文件加载Bot配置
     """
 
-    def __init__(self, bots_dir: str = "bots"):
+    def __init__(self, bots_dir: str = "src/bot/configs"):
         """
         初始化加载器
         
@@ -476,7 +476,7 @@ class BotConfigLoader:
             enabled.append(AgentConfig(
                 name=agent_data.get("name", ""),
                 priority=agent_data.get("priority", 50),
-                config=agent_data.get("config", {})
+                config=agent_data.get("configs", {})
             ))
 
         return AgentsConfig(
@@ -606,7 +606,7 @@ class BotConfigLoader:
         Returns:
             BotConfig对象或None
         """
-        config_path = self.bots_dir / bot_id / "config.yaml"
+        config_path = self.bots_dir / bot_id / "configs.yaml"
 
         if not config_path.exists():
             logger.warning(f"Config file not found: {config_path}")
@@ -637,12 +637,12 @@ class BotConfigLoader:
                 agents=self._parse_agents_config(data.get("agents", {}))
             )
             self._configs[bot_id] = config
-            logger.info(f"Loaded config for bot: {bot_id}")
+            logger.info(f"Loaded configs for bot: {bot_id}")
 
             return config
 
         except Exception as e:
-            logger.error(f"Error loading config for bot {bot_id}: {e}")
+            logger.error(f"Error loading configs for bot {bot_id}: {e}")
             return None
 
     def load_all_configs(self) -> Dict[str, BotConfig]:
@@ -687,7 +687,7 @@ class BotConfigLoader:
         bots = []
         for bot_dir in self.bots_dir.iterdir():
             if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                if (bot_dir / "config.yaml").exists():
+                if (bot_dir / "configs.yaml").exists():
                     bots.append(bot_dir.name)
 
         return bots

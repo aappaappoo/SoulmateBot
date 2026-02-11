@@ -503,7 +503,7 @@ class BotCRUD:
         from pathlib import Path
 
         # 查找模板
-        template_path = Path(f"bots/{template_name}/config.yaml")
+        template_path = Path(f"bots/{template_name}/configs.yaml")
         if not template_path.exists():
             print(f"❌ 模板不存在: {template_path}")
             return None
@@ -614,7 +614,7 @@ class BotCRUD:
         available_configs = []
         for bot_dir in sorted(bots_dir.iterdir()):
             if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                config_file = bot_dir / "config.yaml"
+                config_file = bot_dir / "configs.yaml"
                 if config_file.exists():
                     try:
                         with open(config_file, 'r', encoding='utf-8') as f:
@@ -813,7 +813,7 @@ class BotCRUD:
             available_configs = []
             for bot_dir in sorted(bots_dir.iterdir()):
                 if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                    config_file = bot_dir / "config.yaml"
+                    config_file = bot_dir / "configs.yaml"
                     if config_file.exists():
                         try:
                             with open(config_file, 'r', encoding='utf-8') as f:
@@ -989,7 +989,7 @@ class BotCRUD:
                     print(f"\n⚠️  @{bot.bot_username}: 没有配置映射，跳过")
                     continue
 
-                config_path = bots_dir / config_dir / "config.yaml"
+                config_path = bots_dir / config_dir / "configs.yaml"
                 if not config_path.exists():
                     print(f"\n⚠️  @{bot.bot_username}: 配置文件不存在 ({config_path})，跳过")
                     continue

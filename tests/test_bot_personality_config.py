@@ -24,7 +24,7 @@ sys.path.insert(0, str(src_path))
 # Import yaml directly
 import yaml
 
-# Import config loader classes using importlib.util to avoid telegram dependency in __init__.py
+# Import configs loader classes using importlib.util to avoid telegram dependency in __init__.py
 _config_loader_path = src_path / "src" / "bot" / "config_loader.py"
 _spec = importlib.util.spec_from_file_location("config_loader", _config_loader_path)
 config_loader_module = importlib.util.module_from_spec(_spec)
@@ -43,7 +43,7 @@ class TestPersonalityConfig:
     """Tests for PersonalityConfig model."""
     
     def test_personality_config_creation(self):
-        """Test basic personality config creation."""
+        """Test basic personality configs creation."""
         personality = PersonalityConfig(
             character="一个温暖的陪伴者",
             traits=["温柔", "耐心", "共情"],
@@ -54,7 +54,7 @@ class TestPersonalityConfig:
         assert "温柔" in personality.traits
     
     def test_personality_with_appearance(self):
-        """Test personality config with appearance."""
+        """Test personality configs with appearance."""
         appearance = AppearanceConfig(
             avatar="温暖的笑容",
             physical_description="25岁的年轻人",
@@ -72,7 +72,7 @@ class TestPersonalityConfig:
         assert len(personality.appearance.distinctive_features) == 2
     
     def test_personality_with_catchphrases(self):
-        """Test personality config with catchphrases."""
+        """Test personality configs with catchphrases."""
         personality = PersonalityConfig(
             character="温暖的陪伴者",
             catchphrases=["我在这里", "慢慢说", "你很棒"]
@@ -82,7 +82,7 @@ class TestPersonalityConfig:
         assert "我在这里" in personality.catchphrases
     
     def test_personality_with_ideals_and_goals(self):
-        """Test personality config with ideals and life goals."""
+        """Test personality configs with ideals and life goals."""
         personality = PersonalityConfig(
             character="温暖的陪伴者",
             ideals="成为心灵的避风港",
@@ -94,7 +94,7 @@ class TestPersonalityConfig:
         assert "传递温暖" in personality.life_goals
     
     def test_personality_with_likes_dislikes(self):
-        """Test personality config with likes and dislikes."""
+        """Test personality configs with likes and dislikes."""
         personality = PersonalityConfig(
             character="温暖的陪伴者",
             likes=["安静的交流", "真诚的表达"],
@@ -107,7 +107,7 @@ class TestPersonalityConfig:
         assert "情感操控" in personality.dislikes
     
     def test_personality_with_living_environment(self):
-        """Test personality config with living environment."""
+        """Test personality configs with living environment."""
         personality = PersonalityConfig(
             character="温暖的陪伴者",
             living_environment="一个温馨的小房间"
@@ -120,7 +120,7 @@ class TestSkillsConfig:
     """Tests for SkillsConfig model."""
     
     def test_skills_config_creation(self):
-        """Test basic skills config creation."""
+        """Test basic skills configs creation."""
         skills = SkillsConfig(
             enabled=[
                 SkillConfig(
@@ -137,7 +137,7 @@ class TestSkillsConfig:
         assert skills.default_skill == "emotional_support"
     
     def test_skill_config_defaults(self):
-        """Test skill config default values."""
+        """Test skill configs default values."""
         skill = SkillConfig(
             id="test_skill",
             name="测试技能"
@@ -149,7 +149,7 @@ class TestSkillsConfig:
         assert skill.description == ""
     
     def test_multiple_skills(self):
-        """Test config with multiple skills."""
+        """Test configs with multiple skills."""
         skills = SkillsConfig(
             enabled=[
                 SkillConfig(id="skill1", name="技能1", priority=10),
@@ -179,16 +179,16 @@ class TestBotConfigLoader:
         shutil.rmtree(self.temp_dir)
     
     def _create_bot_config(self, bot_id: str, config_data: dict):
-        """Helper to create a bot config file."""
+        """Helper to create a bot configs file."""
         bot_dir = self.bots_dir / bot_id
         bot_dir.mkdir()
         
-        config_path = bot_dir / "config.yaml"
+        config_path = bot_dir / "configs.yaml"
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config_data, f, allow_unicode=True)
     
     def test_load_bot_with_full_personality(self):
-        """Test loading bot config with full personality configuration."""
+        """Test loading bot configs with full personality configuration."""
         config_data = {
             "bot": {
                 "name": "test_bot",
@@ -232,7 +232,7 @@ class TestBotConfigLoader:
         assert config.personality.living_environment == "温馨小房间"
     
     def test_load_bot_with_skills(self):
-        """Test loading bot config with skills configuration."""
+        """Test loading bot configs with skills configuration."""
         config_data = {
             "bot": {
                 "name": "skill_bot",
@@ -273,7 +273,7 @@ class TestBotConfigLoader:
         assert first_skill.priority == 10
     
     def test_load_bot_with_empty_personality(self):
-        """Test loading bot config with no personality (uses defaults)."""
+        """Test loading bot configs with no personality (uses defaults)."""
         config_data = {
             "bot": {
                 "name": "minimal_bot",

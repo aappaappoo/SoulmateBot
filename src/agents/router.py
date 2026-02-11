@@ -32,7 +32,7 @@ class RouterConfig:
         fallback_agent_name: 当没有Agent满足阈值时的备用Agent名称
         
     使用示例:
-        config = RouterConfig(
+        configs = RouterConfig(
             min_confidence=0.6,     # 只选择置信度>=0.6的Agent
             max_agents=2,           # 最多2个Agent响应
             exclusive_mention=True, # @提及时独占
@@ -68,8 +68,8 @@ class Router:
     
     使用示例:
         agents = [EmotionalAgent(), TechAgent(), ToolAgent()]
-        config = RouterConfig(min_confidence=0.5, max_agents=1)
-        router = Router(agents, config)
+        configs = RouterConfig(min_confidence=0.5, max_agents=1)
+        router = Router(agents, configs)
         
         message = Message(content="我今天很难过", user_id="123", chat_id="456")
         context = ChatContext(chat_id="456")
@@ -86,7 +86,7 @@ class Router:
         
         参数:
             agents: 可用的Agent列表
-            config: 路由配置（如果为None则使用默认配置）
+            configs: 路由配置（如果为None则使用默认配置）
         """
         # 使用Agent名称作为key构建字典，便于快速查找
         self.agents = {agent.name: agent for agent in agents}

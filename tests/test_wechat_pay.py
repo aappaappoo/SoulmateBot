@@ -20,12 +20,12 @@ def wechat_service():
     os.environ["WECHAT_PAY_CERT_SERIAL_NO"] = "test_serial"
     os.environ["WECHAT_PAY_PRIVATE_KEY_PATH"] = "/path/to/key.pem"
     
-    # Reload the entire config module
+    # Reload the entire configs module
     import sys
-    if 'config.settings' in sys.modules:
-        del sys.modules['config.settings']
-    if 'config' in sys.modules:
-        del sys.modules['config']
+    if 'configs.settings' in sys.modules:
+        del sys.modules['configs.settings']
+    if 'configs' in sys.modules:
+        del sys.modules['configs']
     
     from src.payment.wechat_pay import WeChatPayService
     service = WeChatPayService()

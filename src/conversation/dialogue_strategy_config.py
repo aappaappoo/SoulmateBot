@@ -14,7 +14,7 @@ from loguru import logger
 
 
 # ========== 加载 YAML 配置 ==========
-_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "dialogue_strategy.yaml"
+_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "dialogue_strategy.yaml"
 
 
 def _load_yaml_config() -> Dict[str, Any]:

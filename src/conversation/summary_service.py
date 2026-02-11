@@ -95,7 +95,7 @@ class ConversationSummaryService:
         from pathlib import Path
         import yaml
 
-        config_path = Path(__file__).parent.parent.parent / "config" / "dialogue_strategy.yaml"
+        config_path = Path(__file__).parent.parent.parent / "configs" / "dialogue_strategy.yaml"
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)

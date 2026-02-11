@@ -46,7 +46,7 @@ class MultiBotPlatform:
     
     def __init__(
         self,
-        bots_dir: str = "bots",
+        bots_dir: str = "src/bot/configs",
         enable_database: bool = True
     ):
         """

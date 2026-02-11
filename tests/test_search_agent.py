@@ -12,7 +12,6 @@ import pytest
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from datetime import datetime
 
 # Add src to path for imports
 src_path = Path(__file__).parent.parent
@@ -31,7 +30,7 @@ class TestSearchAgent:
     @pytest.fixture
     def search_agent(self):
         """Create a SearchAgent instance for testing."""
-        from agents.search_agent import SearchAgent
+        from src.agents.plugins.search_agent import SearchAgent
         return SearchAgent()
     
     @pytest.fixture

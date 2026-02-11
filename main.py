@@ -84,10 +84,10 @@ class MultiBotLauncher:
         """
         从 YAML 配置加载 Bot 的语音设置
         """
-        config_path = Path(self.bots_dir) / config_dir / "config.yaml"
+        config_path = Path(self.bots_dir) / config_dir / "configs.yaml"
 
         if not config_path.exists():
-            logger.debug(f"No config file for voice: {config_path}")
+            logger.debug(f"No configs file for voice: {config_path}")
             return BotVoiceConfig()
 
         try:
@@ -103,11 +103,11 @@ class MultiBotLauncher:
             )
 
             logger.info(
-                f"Loaded voice config for @{bot_username}: enabled={config.enabled}, voice_id={config.voice_id}")
+                f"Loaded voice configs for @{bot_username}: enabled={config.enabled}, voice_id={config.voice_id}")
             return config
 
         except Exception as e:
-            logger.error(f"Failed to load voice config: {e}")
+            logger.error(f"Failed to load voice configs: {e}")
             return BotVoiceConfig()
 
     def find_bot_config(self, bot_username: str) -> Optional[BotConfig]:
@@ -120,16 +120,16 @@ class MultiBotLauncher:
         if bot_username in self.BOT_CONFIG_MAPPING:
             config_dir = self.BOT_CONFIG_MAPPING[bot_username]
             # 直接检查文件是否存在，避免 config_loader 产生警告
-            config_path = Path(self.bots_dir) / config_dir / "config.yaml"
+            config_path = Path(self.bots_dir) / config_dir / "configs.yaml"
             if config_path.exists():
                 config = self.config_loader.load_config(config_dir)
                 if config:
-                    logger.info(f"Loaded config: bots/{config_dir}/ -> @{bot_username}")
+                    logger.info(f"Loaded configs: bots/{config_dir}/ -> @{bot_username}")
                     voice_config = self.load_voice_config(bot_username, config_dir)
                     self.bot_voice_configs[bot_username] = voice_config
                     return config
             else:
-                logger.warning(f"Mapped config not found: {config_path}")
+                logger.warning(f"Mapped configs not found: {config_path}")
                 return None
 
         # 2. 如果没有映射，尝试直接匹配（静默检查，不产生警告）
@@ -140,17 +140,17 @@ class MultiBotLauncher:
         ]
 
         for name in possible_names:
-            config_path = Path(self.bots_dir) / name / "config.yaml"
+            config_path = Path(self.bots_dir) / name / "configs.yaml"
             if config_path.exists():
                 config = self.config_loader.load_config(name)
                 if config:
-                    logger.info(f"Loaded config: bots/{name}/ -> @{bot_username}")
+                    logger.info(f"Loaded configs: bots/{name}/ -> @{bot_username}")
                     voice_config = self.load_voice_config(bot_username, name)
                     self.bot_voice_configs[bot_username] = voice_config
                     return config
 
         # 3. 没有找到任何配置
-        logger.info(f"No YAML config for @{bot_username}, using database config")
+        logger.info(f"No YAML configs for @{bot_username}, using database configs")
         return None
 
     async def run_single_bot(self, bot_db: BotModel) -> None:

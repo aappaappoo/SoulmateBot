@@ -179,10 +179,10 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             selected_bot = selected_mapping.bot
         logger.info(f"✅ Selected bot: @{selected_bot.bot_username}")
         # Store the system prompt for later use
-        # Priority: YAML config > database
+        # Priority: YAML configs > database
         bot_config = context.bot_data.get("bot_config")
         if bot_config:
-            # Use system prompt from YAML config file
+            # Use system prompt from YAML configs file
             system_prompt = bot_config.get_system_prompt()
             logger.info(f"📄 Using system prompt from YAML config for @{selected_bot.bot_username}")
         else:

@@ -15,7 +15,7 @@ class TestBotConfigLoader:
     
     @pytest.fixture
     def temp_bots_dir(self):
-        """Create a temporary bots directory with sample config"""
+        """Create a temporary bots directory with sample configs"""
         with tempfile.TemporaryDirectory() as tmpdir:
             bot_dir = Path(tmpdir) / "test_bot"
             bot_dir.mkdir()
@@ -59,11 +59,11 @@ messages:
 metadata:
   version: "1.0.0"
 """
-            (bot_dir / "config.yaml").write_text(config_content)
+            (bot_dir / "configs.yaml").write_text(config_content)
             yield tmpdir
     
     def test_load_config(self, temp_bots_dir):
-        """Test loading a single bot config"""
+        """Test loading a single bot configs"""
         loader = BotConfigLoader(temp_bots_dir)
         
         config = loader.load_config("test_bot")
@@ -97,7 +97,7 @@ metadata:
         # Create another bot
         bot_dir = Path(temp_bots_dir) / "another_bot"
         bot_dir.mkdir()
-        (bot_dir / "config.yaml").write_text("""
+        (bot_dir / "configs.yaml").write_text("""
 bot:
   name: "AnotherBot"
 """)

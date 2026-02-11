@@ -76,7 +76,7 @@ class ProactiveAction:
 
 
 # ========== 从 YAML 加载配置数据 ==========
-_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "dialogue_strategy.yaml"
+_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "dialogue_strategy.yaml"
 
 
 def _load_proactive_config():

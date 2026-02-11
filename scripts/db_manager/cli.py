@@ -121,7 +121,7 @@ def init_test_data() -> bool:
         available_configs = []
         for bot_dir in sorted(bots_dir.iterdir()):
             if bot_dir.is_dir() and not bot_dir.name.startswith('_'):
-                config_file = bot_dir / "config.yaml"
+                config_file = bot_dir / "configs.yaml"
                 if config_file.exists():
                     try:
                         with open(config_file, 'r', encoding='utf-8') as f:

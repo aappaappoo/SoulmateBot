@@ -20,7 +20,7 @@ class AgentLoader:
     Each agent should be in its own module/package under the agents directory.
     """
     
-    def __init__(self, agents_dir: str = "agents"):
+    def __init__(self, agents_dir: str = "src/agents/plugins"):
         """
         Initialize the agent loader.
         
@@ -86,7 +86,7 @@ class AgentLoader:
         """
         try:
             # Import the module
-            module_path = f"agents.{module_name}"
+            module_path = f"src.agents.plugins.{module_name}"
             module = importlib.import_module(module_path)
             
             # Look for BaseAgent subclasses
