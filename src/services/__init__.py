@@ -13,6 +13,9 @@ from .async_channel_manager import AsyncChannelManagerService
 from .tts_service import TTSService, tts_service
 from .qwen_tts_service import QwenTTSService, qwen_tts_service
 
+# ASR 语音识别服务
+from .voice_recognition_service import VoiceRecognitionService, voice_recognition_service
+
 __all__ = [
     "ChannelManagerService",
     "AsyncChannelManagerService",
@@ -22,4 +25,6 @@ __all__ = [
     "tts_service",
     "QwenTTSService",
     "qwen_tts_service",
+    "VoiceRecognitionService",
+    "voice_recognition_service",
 ]
