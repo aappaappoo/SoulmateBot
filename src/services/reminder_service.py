@@ -276,10 +276,12 @@ def format_reminder_confirmation(minutes: int, reminder_text: str) -> str:
             time_str = f"{hours}小时{remaining_mins}分钟"
         else:
             time_str = f"{hours}小时"
+    elif minutes == 0:
+        time_str = f"1分钟"
     else:
         time_str = f"{minutes}分钟"
-    
-    return f"⏰ 好的！我会在 {time_str} 后提醒你：\n\n📝 {reminder_text}\n\n放心吧，到时间我会准时提醒你的！"
+
+    return f"⏰ 好的！我会在{time_str}后提醒你：\n📝 {reminder_text}\n放心吧，到时间我会准时提醒你的！"
 
 
 def format_reminder_message(reminder_text: str) -> str:

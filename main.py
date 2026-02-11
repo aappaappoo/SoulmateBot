@@ -75,7 +75,6 @@ class MultiBotLauncher:
         self.config_loader = BotConfigLoader(bots_dir)
         self.running_bots: Dict[int, RunningBot] = {}
         self._shutdown_event = asyncio.Event()
-        # self._llm_gateway = None
         self._session_manager = None
         self.bot_voice_configs: Dict[str, BotVoiceConfig] = {}
         logger.info("MultiBotLauncher initialized")
