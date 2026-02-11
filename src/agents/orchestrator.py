@@ -103,16 +103,16 @@ class AgentOrchestrator:
 判断用户消息应如何处理，intent 只能是以下三种之一：
 
 - "direct_response"：
-  日常闲聊、问候、简单问答，你可以直接回复用户
+  日常闲聊、情感陪伴、情绪沟通，你可以直接回复用户
 
 - "single_agent"：
-  需要某一个专业 Agent 处理的问题
-
+  需要使用到下面某一个专业 Agent 处理能力来解决的时候
+  ** 可用 Agent 能力如下 **：
+    {agent_capabilities}
+    
 - "multi_agent"：
-  需要多个 Agent 协作的问题
+  需要完成一个复杂任务而非单一智能体即可完成的使用
 
-可用 Agent 能力如下：
-{agent_capabilities}
 
 当 intent 为：
 - direct_response → agents 设为空数组 []

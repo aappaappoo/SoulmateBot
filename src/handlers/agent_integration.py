@@ -52,7 +52,7 @@ def get_orchestrator() -> AgentOrchestrator:
 
     if _orchestrator is None:
         # 加载所有Agent
-        loader = AgentLoader(agents_dir="agents")
+        loader = AgentLoader(agents_dir="src/agents/plugins")
         agents = loader.load_agents()
 
         # 创建编排器
