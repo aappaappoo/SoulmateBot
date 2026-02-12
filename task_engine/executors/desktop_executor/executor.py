@@ -135,11 +135,14 @@ class DesktopExecutor(BaseExecutor):
                 # 4. 等待播放启动
                 await page.wait_for_timeout(3000)
 
-                # 5. 获取歌曲信息
-                song_info = await page.locator(
-                    ".songlist__item a, .song-list__item a"
-                ).first.text_content()
-                song_name = (song_info or query).strip()
+                # 5. 尝试获取歌曲信息
+                try:
+                    song_info = await page.locator(
+                        ".songlist__item a, .song-list__item a"
+                    ).first.text_content(timeout=5000)
+                    song_name = (song_info or query).strip()
+                except Exception:
+                    song_name = query
 
                 await browser.close()
                 browser = None
