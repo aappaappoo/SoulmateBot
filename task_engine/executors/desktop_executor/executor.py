@@ -17,20 +17,22 @@ tool_call 通过 aiohttp 调 vLLM /v1/chat/completions
 （VLLMProvider 本身不支持 tools）
 """
 import json
-import os
 from typing import Any, Dict, List, Optional
 
 from task_engine.models import Step, StepResult
 from task_engine.executors.base import BaseExecutor
 from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
 from task_engine.executors.desktop_executor.tools import TOOL_DEFINITIONS, TOOL_REGISTRY
+from config import settings
 
-# 最大循环次数
-_MAX_ITERATIONS: int = 15
 
-# vLLM 服务地址（从环境变量读取，无需新配置文件）
-_VLLM_BASE_URL: str = os.environ.get("VLLM_BASE_URL", "http://localhost:8000")
-_VLLM_MODEL: str = os.environ.get("VLLM_MODEL", "default")
+# 执行的LLM配置（从环境变量读取）
+EXECUTOR_LLM_URL = getattr(settings, 'executor_llm_url', "http://localhost:8000")
+EXECUTOR_LLM_MODEL = getattr(settings, 'executor_llm_model', "default")
+EXECUTOR_LLM_TOKEN = getattr(settings, 'executor_llm_token', "")
+_MAX_ITERATIONS = getattr(settings, 'max_iterations', "")
+
+
 
 # 桌面操控 system prompt
 _SYSTEM_PROMPT: str = """你是一个桌面操控助手。你的任务是通过调用工具来完成用户的桌面操作请求。
@@ -188,26 +190,31 @@ class DesktopExecutor(BaseExecutor):
             # aiohttp 已在 requirements.txt 中，不应发生
             return None
 
-        url = f"{_VLLM_BASE_URL}/v1/chat/completions"
+        url = f"{EXECUTOR_LLM_URL}/v1/chat/completions"
         payload = {
-            "model": _VLLM_MODEL,
+            "model": EXECUTOR_LLM_MODEL,
             "messages": messages,
             "tools": TOOL_DEFINITIONS,
             "tool_choice": "auto",
         }
-
         try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {EXECUTOR_LLM_TOKEN}"
+            }
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60),
+                        url,
+                        json=payload,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=60),
                 ) as resp:
                     if resp.status != 200:
                         return None
                     data = await resp.json()
                     choice = data.get("choices", [{}])[0]
                     msg = choice.get("message", {})
+                    print("=====>", choice, msg)
                     return {
                         "content": msg.get("content", ""),
                         "tool_calls": msg.get("tool_calls"),
