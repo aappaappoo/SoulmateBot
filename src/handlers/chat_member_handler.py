@@ -5,7 +5,6 @@ Chat Member Handler - 处理用户聊天状态变更事件
 1. 删除与Bot的聊天记录（Clear chat history）
 2. 删除并屏蔽Bot（Delete and block）
 3. 屏蔽Bot（Block）
-
 这些事件会触发 my_chat_member 更新，我们监听这个事件来清理数据库中的聊天记录。
 """
 from telegram import Update, ChatMemberUpdated
@@ -19,9 +18,7 @@ from src.models.database import Conversation, User, Bot
 async def handle_my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     处理Bot的成员状态变更
-
     当用户屏蔽Bot或删除与Bot的对话时触发
-
     Args:
         update: Telegram更新对象
         context: 上下文对象

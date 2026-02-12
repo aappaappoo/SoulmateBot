@@ -11,12 +11,11 @@ from telegram.ext import ChatMemberHandler
 from loguru import logger
 from sqlalchemy import select
 
-from src.handlers.chat_member_handler import handle_my_chat_member, get_chat_member_handler
+from src.handlers.chat_member_handler import get_chat_member_handler
 from src.database import get_async_db_context, init_async_db
 from src.handlers.voice_handler import get_voice_handlers
 from src.models.database import Bot as BotModel
 from src.bot.config_loader import BotConfigLoader, BotConfig
-# from src.llm_gateway import get_llm_gateway
 from src.conversation import get_session_manager
 from src.services.reminder_scheduler import get_reminder_scheduler, start_reminder_scheduler, stop_reminder_scheduler
 from src.handlers import (
@@ -67,7 +66,6 @@ class MultiBotLauncher:
         "pp_2025_bot": "pangpang_bot",
         "qq_2025_bot": "qiqi_bot",
         "tuantuan_2025_bot": "tuantuan_bot",
-        # 添加更多映射...
     }
 
     def __init__(self, bots_dir: str = "src/bot/configs"):
