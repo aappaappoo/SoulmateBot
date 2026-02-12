@@ -5,7 +5,7 @@
 """
 from abc import ABC, abstractmethod
 
-from ..models import Step, StepResult
+from task_engine.models import Step, StepResult
 
 
 class BaseExecutor(ABC):

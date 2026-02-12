@@ -3,8 +3,8 @@ LLM 执行器 - 纯文本回答
 
 当任务不需要桌面操控时，使用 LLM 直接生成文本回答。
 """
-from ..models import Step, StepResult
-from .base import BaseExecutor
+from task_engine.models import Step, StepResult
+from task_engine.executors.base import BaseExecutor
 
 
 class LLMExecutor(BaseExecutor):

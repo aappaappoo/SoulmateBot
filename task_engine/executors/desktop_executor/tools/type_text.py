@@ -7,7 +7,7 @@ Linux: 使用 xdotool
 """
 import asyncio
 
-from ..platform import detect_platform, PlatformType
+from task_engine.executors.desktop_executor.platform import detect_platform, PlatformType
 
 
 async def type_text(text: str) -> str:

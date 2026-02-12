@@ -1,11 +1,11 @@
 """桌面工具包"""
-from .shell_run import shell_run
-from .app_open import app_open
-from .screenshot import screenshot
-from .vision_analyze import vision_analyze
-from .click import click
-from .type_text import type_text
-from .key_press import key_press
+from task_engine.executors.desktop_executor.tools.shell_run import shell_run
+from task_engine.executors.desktop_executor.tools.app_open import app_open
+from task_engine.executors.desktop_executor.tools.screenshot import screenshot
+from task_engine.executors.desktop_executor.tools.vision_analyze import vision_analyze
+from task_engine.executors.desktop_executor.tools.click import click
+from task_engine.executors.desktop_executor.tools.type_text import type_text
+from task_engine.executors.desktop_executor.tools.key_press import key_press
 
 # 工具注册表：名称 → 函数
 TOOL_REGISTRY = {

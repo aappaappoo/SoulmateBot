@@ -20,10 +20,10 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from ...models import Step, StepResult
-from ..base import BaseExecutor
-from .guard import GuardAction, TaskGuard
-from .tools import TOOL_DEFINITIONS, TOOL_REGISTRY
+from task_engine.models import Step, StepResult
+from task_engine.executors.base import BaseExecutor
+from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+from task_engine.executors.desktop_executor.tools import TOOL_DEFINITIONS, TOOL_REGISTRY
 
 # 最大循环次数
 _MAX_ITERATIONS: int = 15

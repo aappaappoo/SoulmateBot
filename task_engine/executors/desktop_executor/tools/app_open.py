@@ -3,7 +3,7 @@
 """
 import asyncio
 
-from ..platform import get_open_command
+from task_engine.executors.desktop_executor.platform import get_open_command
 
 
 async def app_open(url: str) -> str:

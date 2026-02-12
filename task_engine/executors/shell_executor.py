@@ -7,8 +7,8 @@ import asyncio
 import re
 from typing import List
 
-from ..models import Step, StepResult
-from .base import BaseExecutor
+from task_engine.models import Step, StepResult
+from task_engine.executors.base import BaseExecutor
 
 # 危险命令黑名单正则
 _DENY_PATTERNS: List[re.Pattern] = [

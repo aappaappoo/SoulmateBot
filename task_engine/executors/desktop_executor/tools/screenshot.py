@@ -6,7 +6,7 @@ import os
 import tempfile
 import time
 
-from ..platform import get_screenshot_command
+from task_engine.executors.desktop_executor.platform import get_screenshot_command
 
 
 async def screenshot() -> str:

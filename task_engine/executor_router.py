@@ -3,10 +3,10 @@
 
 根据 Step.executor_type 将步骤路由到对应的执行器。
 """
-from ..models import ExecutorType, Step, StepResult
-from .shell_executor import ShellExecutor
-from .llm_executor import LLMExecutor
-from .desktop_executor import DesktopExecutor
+from task_engine.models import ExecutorType, Step, StepResult
+from task_engine.executors.shell_executor import ShellExecutor
+from task_engine.executors.llm_executor import LLMExecutor
+from task_engine.executors.desktop_executor import DesktopExecutor
 
 
 # 延迟实例化的执行器缓存
