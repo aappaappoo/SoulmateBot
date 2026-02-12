@@ -1,24 +1,18 @@
-"""桌面工具包"""
+"""桌面工具包（Playwright 方案 - 视觉工具已移除）"""
 from task_engine.executors.desktop_executor.tools.shell_run import shell_run
 from task_engine.executors.desktop_executor.tools.app_open import app_open
-from task_engine.executors.desktop_executor.tools.screenshot import screenshot
-from task_engine.executors.desktop_executor.tools.vision_analyze import vision_analyze
-from task_engine.executors.desktop_executor.tools.click import click
 from task_engine.executors.desktop_executor.tools.type_text import type_text
 from task_engine.executors.desktop_executor.tools.key_press import key_press
 
-# 工具注册表：名称 → 函数
+# 工具注册表：名称 → 函数（视觉工具已移除）
 TOOL_REGISTRY = {
     "shell_run": shell_run,
     "app_open": app_open,
-    "screenshot": screenshot,
-    "vision_analyze": vision_analyze,
-    "click": click,
     "type_text": type_text,
     "key_press": key_press,
 }
 
-# 工具描述，供 LLM tool-call 使用
+# 工具描述，供 LLM tool-call 使用（视觉工具已移除）
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -31,47 +25,6 @@ TOOL_DEFINITIONS = [
                     "url": {"type": "string", "description": "要打开的 URL 或应用名称"},
                 },
                 "required": ["url"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "screenshot",
-            "description": "屏幕截图，返回截图文件路径",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "vision_analyze",
-            "description": "使用视觉模型分析截图，识别 UI 元素坐标。返回元素描述和坐标。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "image_path": {"type": "string", "description": "截图文件路径"},
-                    "query": {"type": "string", "description": "要查找的 UI 元素描述，如：搜索框、播放按钮"},
-                },
-                "required": ["image_path", "query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "click",
-            "description": "鼠标点击屏幕指定坐标",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer", "description": "点击的 X 坐标"},
-                    "y": {"type": "integer", "description": "点击的 Y 坐标"},
-                },
-                "required": ["x", "y"],
             },
         },
     },
@@ -124,9 +77,6 @@ __all__ = [
     "TOOL_DEFINITIONS",
     "shell_run",
     "app_open",
-    "screenshot",
-    "vision_analyze",
-    "click",
     "type_text",
     "key_press",
 ]

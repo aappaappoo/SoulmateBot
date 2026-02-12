@@ -1,72 +1,35 @@
 """
-桌面操控执行器 - 核心 LLM tool-call 循环
+桌面操控执行器 - Playwright 浏览器自动化方案
 
 ⭐ 这是整个 task_engine 中最关键的模块。
 
-执行流程：
-1. 构建 system prompt（桌面操控策略）
-2. 注册 DesktopToolRegistry
-3. while 循环（max 15 次）：
-   - LLM 返回 tool_call
-   - 执行 tool
-   - TaskGuard 校验
-   - 将 tool result 回填 messages
-4. LLM 不再调用工具 → 任务完成
+使用 Playwright 替代原先的视觉点击方案：
+- 原方案：截图 → 视觉模型分析 → 坐标点击（已删除）
+- 新方案：Playwright 直接操控浏览器 DOM
 
-tool_call 通过 aiohttp 调 vLLM /v1/chat/completions
-（VLLMProvider 本身不支持 tools）
+执行流程：
+1. 解析用户意图，提取搜索关键词
+2. 使用 Playwright 打开音乐网站
+3. 在搜索框输入关键词并搜索
+4. 点击第一首歌曲的播放按钮
 """
-import json
-from typing import Any, Dict, List, Optional
+import re
+from typing import Optional
 
 from task_engine.models import Step, StepResult
 from task_engine.executors.base import BaseExecutor
 from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
-from task_engine.executors.desktop_executor.tools import TOOL_DEFINITIONS, TOOL_REGISTRY
-from config import settings
 
 
-# 执行的LLM配置（从环境变量读取）
-EXECUTOR_LLM_URL = getattr(settings, 'executor_llm_url', "http://localhost:8000")
-EXECUTOR_LLM_MODEL = getattr(settings, 'executor_llm_model', "default")
-EXECUTOR_LLM_TOKEN = getattr(settings, 'executor_llm_token', "")
-_MAX_ITERATIONS = getattr(settings, 'max_iterations', "")
-
-
-
-# 桌面操控 system prompt
-_SYSTEM_PROMPT: str = """你是一个桌面操控助手。你的任务是通过调用工具来完成用户的桌面操作请求。
-
-可用工具：
-- app_open: 打开浏览器/URL
-- screenshot: 屏幕截图
-- vision_analyze: 视觉分析截图，识别 UI 元素坐标
-- click: 鼠标点击指定坐标
-- type_text: 在当前焦点位置输入文本
-- key_press: 按下键盘按键
-- shell_run: 执行 shell 命令
-
-操作策略：
-1. 先打开目标应用/网页
-2. 截图查看当前屏幕状态
-3. 用视觉分析找到目标 UI 元素
-4. 点击/输入/按键完成操作
-5. 再次截图验证结果
-6. 重复直到任务完成
-
-注意事项：
-- 不要尝试登录、支付、输入密码等敏感操作
-- 如果某个网站需要登录才能使用，尝试其他网站
-- 每次操作后都应截图确认状态
-- 任务完成后，用自然语言描述操作结果
-"""
+# 音乐搜索 URL 模板
+_MUSIC_SEARCH_URL = "https://y.qq.com/n/ryqq/search?w={query}&t=song"
 
 
 class DesktopExecutor(BaseExecutor):
     """
     桌面操控执行器
 
-    通过 LLM tool-call 循环实现自主桌面操控。
+    通过 Playwright 浏览器自动化实现桌面操控。
     """
 
     def __init__(self) -> None:
@@ -88,138 +51,110 @@ class DesktopExecutor(BaseExecutor):
 
         self._guard.reset()
 
-        # 构建初始消息
-        messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": f"请完成以下桌面操作任务：{task_text}"},
-        ]
+        # 守卫检查任务文本
+        action = self._guard.check("task", {"task": task_text}, task_text)
+        if action == GuardAction.ABORT:
+            return StepResult(
+                success=False,
+                message="安全守卫终止：检测到危险操作",
+            )
 
-        for iteration in range(1, _MAX_ITERATIONS + 1):
-            # 调用 LLM 获取下一步操作
-            llm_response = await self._call_llm(messages)
+        # 解析音乐搜索关键词
+        query = self._extract_music_query(task_text)
+        if not query:
+            return StepResult(success=False, message="无法识别搜索关键词")
 
-            if llm_response is None:
-                return StepResult(
-                    success=False,
-                    message=f"LLM 调用失败（第 {iteration} 轮）",
-                )
+        # 使用 Playwright 播放音乐
+        return await self._play_music(query)
 
-            # 检查是否有 tool_call
-            tool_calls = llm_response.get("tool_calls")
-            assistant_content = llm_response.get("content", "")
-
-            if not tool_calls:
-                # LLM 不再调用工具，任务完成
-                return StepResult(
-                    success=True,
-                    message=assistant_content or "桌面操控任务已完成",
-                    data={"iterations": iteration},
-                )
-
-            # 将 assistant 消息加入历史
-            messages.append({
-                "role": "assistant",
-                "content": assistant_content,
-                "tool_calls": tool_calls,
-            })
-
-            # 依次执行每个 tool_call
-            for tc in tool_calls:
-                func_name: str = tc.get("function", {}).get("name", "")
-                func_args_raw: str = tc.get("function", {}).get("arguments", "{}")
-                tc_id: str = tc.get("id", "")
-
-                try:
-                    func_args: Dict[str, Any] = json.loads(func_args_raw)
-                except (json.JSONDecodeError, TypeError):
-                    func_args = {}
-
-                # 执行工具
-                tool_fn = TOOL_REGISTRY.get(func_name)
-                if tool_fn is None:
-                    tool_result = f"未知工具: {func_name}"
-                else:
-                    try:
-                        tool_result = await tool_fn(**func_args)
-                    except Exception as e:
-                        tool_result = f"工具执行异常: {e}"
-
-                # 守卫检查
-                action = self._guard.check(func_name, func_args, str(tool_result))
-                if action == GuardAction.ABORT:
-                    return StepResult(
-                        success=False,
-                        message=f"安全守卫终止：检测到危险操作或过多偏离",
-                        data={"iterations": iteration, "last_tool": func_name},
-                    )
-                elif action == GuardAction.SWITCH:
-                    # 提示 LLM 切换目标
-                    tool_result = (
-                        f"{tool_result}\n"
-                        f"[守卫提示] 当前应用/网站多次失败，请切换到其他替代方案。"
-                    )
-
-                # 将 tool 结果回填消息
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": str(tool_result),
-                })
-
-        return StepResult(
-            success=False,
-            message=f"达到最大迭代次数 ({_MAX_ITERATIONS})，任务未完成",
-            data={"iterations": _MAX_ITERATIONS},
-        )
-
-    async def _call_llm(self, messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    @staticmethod
+    def _extract_music_query(task_text: str) -> Optional[str]:
         """
-        调用 vLLM /v1/chat/completions 获取 LLM 响应
+        从任务文本中提取音乐搜索关键词
 
-        通过 aiohttp 直接调用，支持 tool_call。
+        支持模式：
+        - "输入XXX播放" → XXX
+        - "搜索XXX播放" → XXX
 
         Args:
-            messages: 对话消息列表
+            task_text: 用户任务文本
 
         Returns:
-            Dict 包含 content 和 tool_calls，或 None 表示失败
+            提取的关键词，或 None
+        """
+        match = re.search(r"输入(.+?)(?:播放|搜索|$)", task_text)
+        if match:
+            return match.group(1).strip()
+        match = re.search(r"搜索(.+?)(?:播放|$)", task_text)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    async def _play_music(self, query: str) -> StepResult:
+        """
+        使用 Playwright 在音乐网站搜索并播放
+
+        Args:
+            query: 搜索关键词（如 "周杰伦"）
+
+        Returns:
+            StepResult: 执行结果
         """
         try:
-            import aiohttp
+            from playwright.async_api import async_playwright
         except ImportError:
-            # aiohttp 已在 requirements.txt 中，不应发生
-            return None
+            return StepResult(
+                success=False,
+                message="Playwright 未安装，请运行: pip install playwright && playwright install chromium",
+            )
 
-        url = f"{EXECUTOR_LLM_URL}/v1/chat/completions"
-        payload = {
-            "model": EXECUTOR_LLM_MODEL,
-            "messages": messages,
-            "tools": TOOL_DEFINITIONS,
-            "tool_choice": "auto",
-        }
+        browser = None
         try:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {EXECUTOR_LLM_TOKEN}"
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                        url,
-                        json=payload,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=60),
-                ) as resp:
-                    if resp.status != 200:
-                        return None
-                    data = await resp.json()
-                    choice = data.get("choices", [{}])[0]
-                    msg = choice.get("message", {})
-                    print("=====>", choice, msg)
-                    return {
-                        "content": msg.get("content", ""),
-                        "tool_calls": msg.get("tool_calls"),
-                    }
-        except Exception as exc:
-            # 连接失败、超时等，返回 None 由调用方处理
-            _ = exc  # 实际部署时可接入日志系统
-            return None
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
+
+                # 1. 访问音乐搜索页
+                search_url = _MUSIC_SEARCH_URL.format(query=query)
+                await page.goto(search_url, timeout=30000)
+
+                # 2. 等待歌曲列表加载
+                await page.wait_for_selector(
+                    ".songlist__list, .song-list, [class*='songlist']",
+                    timeout=15000,
+                )
+
+                # 3. 点击第一首歌播放
+                play_btn = page.locator(
+                    ".songlist__item [class*='play'], "
+                    ".song-list__item [class*='play'], "
+                    "[class*='songlist'] [class*='play']"
+                ).first
+                await play_btn.click(timeout=10000)
+
+                # 4. 等待播放启动
+                await page.wait_for_timeout(3000)
+
+                # 5. 获取歌曲信息
+                song_info = await page.locator(
+                    ".songlist__item a, .song-list__item a"
+                ).first.text_content()
+                song_name = (song_info or query).strip()
+
+                await browser.close()
+                browser = None
+
+            return StepResult(
+                success=True,
+                message=f"已播放 {query} 的音乐: {song_name}",
+                data={"query": query, "song": song_name},
+            )
+        except Exception as e:
+            return StepResult(
+                success=False,
+                message=f"Playwright 播放失败: {e}",
+                data={"query": query},
+            )
+        finally:
+            if browser:
+                await browser.close()

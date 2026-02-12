@@ -468,19 +468,26 @@ class TestDesktopTools:
 
     def test_tool_registry_completeness(self):
         from task_engine.executors.desktop_executor.tools import TOOL_REGISTRY
+        # 视觉工具已移除（screenshot, vision_analyze, click），使用 Playwright 方案
         expected_tools = [
-            "shell_run", "app_open", "screenshot",
-            "vision_analyze", "click", "type_text", "key_press",
+            "shell_run", "app_open", "type_text", "key_press",
         ]
         for tool_name in expected_tools:
             assert tool_name in TOOL_REGISTRY, f"工具 {tool_name} 未注册"
+        # 确认视觉工具已移除
+        for removed in ["screenshot", "vision_analyze", "click"]:
+            assert removed not in TOOL_REGISTRY, f"视觉工具 {removed} 应已移除"
 
     def test_tool_definitions_completeness(self):
         from task_engine.executors.desktop_executor.tools import TOOL_DEFINITIONS
         names = [td["function"]["name"] for td in TOOL_DEFINITIONS]
-        expected = ["app_open", "screenshot", "vision_analyze", "click", "type_text", "key_press", "shell_run"]
+        # 视觉工具已移除，使用 Playwright 方案
+        expected = ["app_open", "type_text", "key_press", "shell_run"]
         for name in expected:
             assert name in names, f"工具定义 {name} 缺失"
+        # 确认视觉工具已移除
+        for removed in ["screenshot", "vision_analyze", "click"]:
+            assert removed not in names, f"视觉工具定义 {removed} 应已移除"
 
     def test_tool_definitions_format(self):
         from task_engine.executors.desktop_executor.tools import TOOL_DEFINITIONS
@@ -502,20 +509,13 @@ class TestDesktopTools:
         result = await shell_run("sudo rm -rf /")
         assert "安全拒绝" in result
 
-    @pytest.mark.asyncio
-    async def test_vision_analyze_missing_file(self):
-        from task_engine.executors.desktop_executor.tools.vision_analyze import vision_analyze
-        result = await vision_analyze("/nonexistent/file.png", "搜索框")
-        data = json.loads(result)
-        assert "error" in data
-
 
 # ============================================================
 # DesktopExecutor 测试
 # ============================================================
 
 class TestDesktopExecutor:
-    """测试桌面操控执行器"""
+    """测试桌面操控执行器（Playwright 方案）"""
 
     @pytest.mark.asyncio
     async def test_missing_task_param(self):
@@ -527,83 +527,91 @@ class TestDesktopExecutor:
         assert result.success is False
         assert "缺少" in result.message
 
+    def test_extract_music_query_input_pattern(self):
+        """测试从'输入XXX播放'模式提取关键词"""
+        from task_engine.executors.desktop_executor.executor import DesktopExecutor
+        assert DesktopExecutor._extract_music_query("打开网页里的音乐输入周杰伦播放音乐") == "周杰伦"
+
+    def test_extract_music_query_search_pattern(self):
+        """测试从'搜索XXX播放'模式提取关键词"""
+        from task_engine.executors.desktop_executor.executor import DesktopExecutor
+        assert DesktopExecutor._extract_music_query("搜索林俊杰播放") == "林俊杰"
+
+    def test_extract_music_query_no_match(self):
+        """测试无法匹配时返回 None"""
+        from task_engine.executors.desktop_executor.executor import DesktopExecutor
+        assert DesktopExecutor._extract_music_query("今天天气不错") is None
+
     @pytest.mark.asyncio
-    async def test_llm_call_failure_returns_error(self):
+    async def test_no_query_returns_error(self):
+        """测试无法识别关键词时返回错误"""
         from task_engine.executors.desktop_executor.executor import DesktopExecutor
         from task_engine.models import ExecutorType, Step
         executor = DesktopExecutor()
         step = Step(
             executor_type=ExecutorType.DESKTOP,
             description="test",
-            params={"task": "打开浏览器播放音乐"},
+            params={"task": "今天天气不错"},
         )
-        # vLLM 未运行，_call_llm 会返回 None
         result = await executor.execute(step)
         assert result.success is False
-        assert "LLM 调用失败" in result.message
+        assert "无法识别" in result.message
 
     @pytest.mark.asyncio
-    async def test_tool_call_loop_completion(self):
-        """测试 LLM 返回无 tool_calls 时正常完成"""
+    async def test_playwright_play_music_mock(self):
+        """测试 Playwright 播放音乐（mock Playwright）"""
         from task_engine.executors.desktop_executor.executor import DesktopExecutor
         from task_engine.models import ExecutorType, Step
 
         executor = DesktopExecutor()
 
-        # Mock _call_llm 返回无 tool_calls（任务完成）
-        async def mock_call_llm(messages):
-            return {"content": "已完成播放周杰伦的晴天", "tool_calls": None}
+        # Mock _play_music 返回成功
+        async def mock_play_music(query):
+            return StepResult(
+                success=True,
+                message=f"已播放 {query} 的音乐: 晴天",
+                data={"query": query, "song": "晴天"},
+            )
 
-        executor._call_llm = mock_call_llm
+        from task_engine.models import StepResult
+        executor._play_music = mock_play_music
+
         step = Step(
             executor_type=ExecutorType.DESKTOP,
             description="test",
-            params={"task": "播放音乐"},
+            params={"task": "打开网页里的音乐输入周杰伦播放音乐"},
         )
         result = await executor.execute(step)
         assert result.success is True
         assert "周杰伦" in result.message
+        assert "晴天" in result.message
 
     @pytest.mark.asyncio
-    async def test_guard_abort_during_loop(self):
-        """测试守卫在循环中检测到危险操作时终止"""
+    async def test_playwright_import_error(self):
+        """测试 Playwright 未安装时返回友好错误"""
         from task_engine.executors.desktop_executor.executor import DesktopExecutor
         from task_engine.models import ExecutorType, Step
 
         executor = DesktopExecutor()
-        call_count = 0
 
-        async def mock_call_llm(messages):
-            nonlocal call_count
-            call_count += 1
-            return {
-                "content": "",
-                "tool_calls": [{
-                    "id": f"call_{call_count}",
-                    "function": {
-                        "name": "click",
-                        "arguments": json.dumps({"x": 100, "y": 200}),
-                    },
-                }],
-            }
-
-        # Mock click 工具，通过 TOOL_REGISTRY 替换
-        async def mock_click(**kwargs):
-            return "点击了支付按钮"
-
-        with patch.dict(
-            "task_engine.executors.desktop_executor.tools.TOOL_REGISTRY",
-            {"click": mock_click},
-        ):
-            executor._call_llm = mock_call_llm
-            step = Step(
-                executor_type=ExecutorType.DESKTOP,
-                description="test",
-                params={"task": "测试"},
+        # Mock _play_music 模拟 Playwright 未安装
+        async def mock_play_music(query):
+            return StepResult(
+                success=False,
+                message="Playwright 未安装，请运行: pip install playwright && playwright install chromium",
             )
-            result = await executor.execute(step)
-            assert result.success is False
-            assert "安全守卫终止" in result.message
+
+        from task_engine.models import StepResult
+        executor._play_music = mock_play_music
+
+        step = Step(
+            executor_type=ExecutorType.DESKTOP,
+            description="test",
+            params={"task": "打开网页里的音乐输入周杰伦播放音乐"},
+        )
+        result = await executor.execute(step)
+        assert result.success is False
+        assert "Playwright" in result.message
 
 
 # ============================================================
@@ -623,12 +631,44 @@ class TestTaskEngine:
         assert "LLM" in result
 
     @pytest.mark.asyncio
-    async def test_desktop_flow_without_vllm(self):
-        """桌面任务在无 vLLM 时应返回失败"""
+    async def test_desktop_flow_without_playwright(self):
+        """桌面任务在无 Playwright 时应返回失败"""
         from task_engine.engine import TaskEngine
         engine = TaskEngine()
         result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
-        assert "❌" in result or "LLM 调用失败" in result
+        # Playwright 未安装或执行失败时返回错误
+        assert "❌" in result or "Playwright" in result or "播放失败" in result
+
+    @pytest.mark.asyncio
+    async def test_desktop_flow_with_mocked_playwright(self):
+        """桌面任务使用 mocked Playwright 完整流程"""
+        from task_engine.engine import TaskEngine
+        from task_engine.models import StepResult
+
+        # Mock DesktopExecutor._play_music 模拟成功播放
+        async def mock_play_music(self, query):
+            return StepResult(
+                success=True,
+                message=f"已播放 {query} 的音乐: 晴天",
+                data={"query": query, "song": "晴天"},
+            )
+
+        with patch(
+            "task_engine.executors.desktop_executor.executor.DesktopExecutor._play_music",
+            mock_play_music,
+        ):
+            engine = TaskEngine()
+            # 需要清除缓存的执行器实例
+            from task_engine import executor_router
+            executor_router._executors.clear()
+
+            result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
+            assert "✅" in result
+            assert "周杰伦" in result
+            assert "晴天" in result
+
+            # 清理
+            executor_router._executors.clear()
 
 
 # ============================================================
