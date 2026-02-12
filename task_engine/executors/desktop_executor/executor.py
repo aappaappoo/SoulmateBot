@@ -212,5 +212,7 @@ class DesktopExecutor(BaseExecutor):
                         "content": msg.get("content", ""),
                         "tool_calls": msg.get("tool_calls"),
                     }
-        except Exception:
+        except Exception as exc:
+            # 连接失败、超时等，返回 None 由调用方处理
+            _ = exc  # 实际部署时可接入日志系统
             return None

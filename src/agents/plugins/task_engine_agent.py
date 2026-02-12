@@ -107,12 +107,11 @@ class TaskEngineAgent(BaseAgent):
             loop = None
 
         if loop and loop.is_running():
-            # 已在异步上下文中（如 Telegram handler），创建新任务
+            # 已在异步上下文中，在独立线程运行新事件循环避免死锁
             import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result_text = pool.submit(
-                    asyncio.run, self._engine.run(user_input)
-                ).result(timeout=120)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self._engine.run(user_input))
+                result_text = future.result(timeout=120)
         else:
             result_text = asyncio.run(self._engine.run(user_input))
 

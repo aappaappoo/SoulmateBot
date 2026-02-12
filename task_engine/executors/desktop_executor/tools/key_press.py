@@ -100,14 +100,14 @@ def _build_macos_key_command(key: str) -> str:
         script = f'tell application "System Events" to keystroke "{main_key}"{using}'
     else:
         mapped = _MACOS_KEY_MAP.get(key_lower, key_lower)
-        script = f'tell application "System Events" to key code {_get_macos_keycode(mapped)}'
-        # 对于简单文本按键使用 keystroke
         if mapped in _MACOS_KEY_MAP.values():
+            # 特殊按键使用 key code
             script = (
                 f'tell application "System Events" to key code '
                 f'{_get_macos_keycode(mapped)}'
             )
         else:
+            # 普通文本按键使用 keystroke
             script = f'tell application "System Events" to keystroke "{mapped}"'
 
     return f"osascript -e '{script}'"
