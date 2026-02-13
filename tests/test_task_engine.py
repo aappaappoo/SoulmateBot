@@ -611,6 +611,13 @@ class TestDesktopTools:
         result = _parse_vlm_response(content, "测试")
         assert len(result["elements"]) == 1
 
+    def test_parse_vlm_response_unclosed_code_block(self):
+        """测试 VLM 响应解析 - 未闭合代码块不崩溃"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = '```json\n{"found": false, "elements": []}'
+        result = _parse_vlm_response(content, "测试")
+        assert result["found"] is False
+
     @pytest.mark.asyncio
     async def test_vision_analyze_vlm_api_success(self):
         """测试 VLM API 调用成功场景（mock）"""

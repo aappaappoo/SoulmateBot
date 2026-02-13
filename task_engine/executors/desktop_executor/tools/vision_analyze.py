@@ -90,14 +90,17 @@ def _parse_vlm_response(content: str, query: str) -> dict:
     content = content.strip()
 
     # 处理 JSON 被代码块包裹的情况
-    if "```json" in content:
-        start = content.index("```json") + 7
-        end = content.index("```", start)
-        content = content[start:end].strip()
-    elif "```" in content:
-        start = content.index("```") + 3
-        end = content.index("```", start)
-        content = content[start:end].strip()
+    try:
+        if "```json" in content:
+            start = content.index("```json") + 7
+            end = content.index("```", start)
+            content = content[start:end].strip()
+        elif "```" in content:
+            start = content.index("```") + 3
+            end = content.index("```", start)
+            content = content[start:end].strip()
+    except ValueError:
+        pass  # 代码块格式不完整，使用原始内容继续解析
 
     try:
         parsed = json.loads(content)
