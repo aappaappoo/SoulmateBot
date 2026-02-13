@@ -51,6 +51,6 @@ def get_screenshot_command() -> str:
     """
     p = detect_platform()
     if p == PlatformType.MACOS:
-        return "screencapture -x {path}"
+        return "screencapture -t jpg -x {path}"
     # Linux: 使用 scrot 或 gnome-screenshot
     return "scrot {path}"

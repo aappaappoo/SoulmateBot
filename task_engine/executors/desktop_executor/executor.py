@@ -18,6 +18,7 @@ tool_call 通过 aiohttp 调 vLLM /v1/chat/completions
 """
 import json
 from typing import Any, Dict, List, Optional
+from loguru import logger
 
 from task_engine.models import Step, StepResult
 from task_engine.executors.base import BaseExecutor
@@ -214,7 +215,8 @@ class DesktopExecutor(BaseExecutor):
                     data = await resp.json()
                     choice = data.get("choices", [{}])[0]
                     msg = choice.get("message", {})
-                    print("=====>", choice, msg)
+                    logger.info(f"🪛 DesktopExecutor summary: {msg}")
+
                     return {
                         "content": msg.get("content", ""),
                         "tool_calls": msg.get("tool_calls"),
