@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     executor_llm_token: Optional[str] = None
     max_iterations: Optional[int] = 5
 
+    vlm_api_url: Optional[str] = None
+    vlm_model: Optional[str] = None
+    vlm_api_token: Optional[str] = None
+
     # Database Configuration
     database_url: str = "sqlite:///./soulmatebot.db"
     redis_url: Optional[str] = None

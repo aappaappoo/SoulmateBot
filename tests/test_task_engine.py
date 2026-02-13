@@ -17,10 +17,12 @@ task_engine 单元测试
 """
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 # 确保项目根目录在 sys.path 中
@@ -508,6 +510,184 @@ class TestDesktopTools:
         result = await vision_analyze("/nonexistent/file.png", "搜索框")
         data = json.loads(result)
         assert "error" in data
+
+    @pytest.mark.asyncio
+    async def test_vision_analyze_encode_image(self):
+        """测试图片 base64 编码"""
+        import tempfile
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _encode_image
+        # 创建临时测试图片
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+            tmp_path = f.name
+        try:
+            encoded = _encode_image(tmp_path)
+            assert isinstance(encoded, str)
+            assert len(encoded) > 0
+            # 验证 base64 可解码
+            import base64
+            decoded = base64.b64decode(encoded)
+            assert decoded[:4] == b"\x89PNG"
+        finally:
+            os.remove(tmp_path)
+
+    def test_vision_analyze_get_mime_type(self):
+        """测试 MIME 类型识别"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _get_mime_type
+        assert _get_mime_type("test.png") == "image/png"
+        assert _get_mime_type("test.jpg") == "image/jpeg"
+        assert _get_mime_type("test.jpeg") == "image/jpeg"
+        assert _get_mime_type("test.gif") == "image/gif"
+        assert _get_mime_type("test.webp") == "image/webp"
+        assert _get_mime_type("test.bmp") == "image/bmp"
+        assert _get_mime_type("test.unknown") == "image/png"  # 默认值
+
+    def test_parse_vlm_response_valid_json(self):
+        """测试 VLM 响应解析 - 有效 JSON"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = json.dumps({
+            "found": True,
+            "elements": [
+                {"description": "搜索框", "x": 500, "y": 100, "width": 200, "height": 30, "confidence": 0.95}
+            ],
+        })
+        result = _parse_vlm_response(content, "搜索框")
+        assert result["found"] is True
+        assert result["query"] == "搜索框"
+        assert len(result["elements"]) == 1
+        assert result["elements"][0]["x"] == 500
+        assert result["elements"][0]["y"] == 100
+        assert result["elements"][0]["confidence"] == 0.95
+
+    def test_parse_vlm_response_json_in_code_block(self):
+        """测试 VLM 响应解析 - JSON 被代码块包裹"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = '```json\n{"found": true, "elements": [{"description": "按钮", "x": 200, "y": 300, "width": 80, "height": 40, "confidence": 0.9}]}\n```'
+        result = _parse_vlm_response(content, "按钮")
+        assert result["found"] is True
+        assert len(result["elements"]) == 1
+        assert result["elements"][0]["x"] == 200
+
+    def test_parse_vlm_response_not_found(self):
+        """测试 VLM 响应解析 - 未找到元素"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = json.dumps({"found": False, "elements": []})
+        result = _parse_vlm_response(content, "搜索框")
+        assert result["found"] is False
+        assert result["elements"] == []
+
+    def test_parse_vlm_response_invalid_json(self):
+        """测试 VLM 响应解析 - 无效 JSON 回退"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = "这不是 JSON 格式的回复"
+        result = _parse_vlm_response(content, "搜索框")
+        assert result["found"] is False
+        assert "message" in result
+
+    def test_parse_vlm_response_multiple_elements(self):
+        """测试 VLM 响应解析 - 多个元素"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = json.dumps({
+            "found": True,
+            "elements": [
+                {"description": "搜索框1", "x": 100, "y": 200, "width": 300, "height": 30, "confidence": 0.9},
+                {"description": "搜索框2", "x": 400, "y": 500, "width": 300, "height": 30, "confidence": 0.7},
+            ],
+        })
+        result = _parse_vlm_response(content, "搜索框")
+        assert result["found"] is True
+        assert len(result["elements"]) == 2
+
+    def test_parse_vlm_response_invalid_element(self):
+        """测试 VLM 响应解析 - 无效元素被过滤"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = json.dumps({
+            "found": True,
+            "elements": [
+                {"description": "有效", "x": 100, "y": 200},
+                {"description": "无效-缺少坐标"},
+            ],
+        })
+        result = _parse_vlm_response(content, "测试")
+        assert len(result["elements"]) == 1
+
+    def test_parse_vlm_response_unclosed_code_block(self):
+        """测试 VLM 响应解析 - 未闭合代码块不崩溃"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _parse_vlm_response
+        content = '```json\n{"found": false, "elements": []}'
+        result = _parse_vlm_response(content, "测试")
+        assert result["found"] is False
+
+    @pytest.mark.asyncio
+    async def test_vision_analyze_vlm_api_success(self):
+        """测试 VLM API 调用成功场景（mock）"""
+        import tempfile
+        from task_engine.executors.desktop_executor.tools.vision_analyze import vision_analyze
+
+        # 创建临时测试图片
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+            tmp_path = f.name
+
+        vlm_response = {
+            "choices": [{
+                "message": {
+                    "content": json.dumps({
+                        "found": True,
+                        "elements": [
+                            {"description": "搜索框", "x": 500, "y": 100, "width": 200, "height": 30, "confidence": 0.95}
+                        ],
+                    })
+                }
+            }]
+        }
+
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.json = AsyncMock(return_value=vlm_response)
+
+        mock_session = AsyncMock()
+        mock_session.post = MagicMock(return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_resp),
+            __aexit__=AsyncMock(return_value=False),
+        ))
+
+        with patch("aiohttp.ClientSession", return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_session),
+            __aexit__=AsyncMock(return_value=False),
+        )):
+            try:
+                result_str = await vision_analyze(tmp_path, "搜索框")
+                result = json.loads(result_str)
+                assert result["found"] is True
+                assert len(result["elements"]) == 1
+                assert result["elements"][0]["x"] == 500
+            finally:
+                os.remove(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_vision_analyze_vlm_api_connection_error(self):
+        """测试 VLM API 连接失败场景"""
+        import tempfile
+        from task_engine.executors.desktop_executor.tools.vision_analyze import vision_analyze
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+            tmp_path = f.name
+
+        with patch("aiohttp.ClientSession") as mock_cls:
+            mock_session = AsyncMock()
+            mock_session.post = MagicMock(side_effect=aiohttp.ClientError("连接失败"))
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            try:
+                result_str = await vision_analyze(tmp_path, "搜索框")
+                result = json.loads(result_str)
+                assert result["found"] is False
+                assert "error" in result
+            finally:
+                os.remove(tmp_path)
 
 
 # ============================================================
