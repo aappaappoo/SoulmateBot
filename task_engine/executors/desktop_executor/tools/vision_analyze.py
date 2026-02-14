@@ -239,6 +239,7 @@ async def vision_analyze(image_path: str, query: str) -> str:
     # 解析 VLM 返回内容
     try:
         content = data["choices"][0]["message"]["content"]
+        # print("====>vlm", query, content)
         logger.info(f"👁️ VLM 分析完成: query={query}")
         result = _parse_vlm_response(content, query)
         return json.dumps(result, ensure_ascii=False)

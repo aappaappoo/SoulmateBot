@@ -54,7 +54,7 @@ TOOL_DEFINITIONS = [
                 "type": "object",
                 "properties": {
                     "image_path": {"type": "string", "description": "截图文件路径"},
-                    "query": {"type": "string", "description": "要查找的 UI 元素描述，如：搜索框、播放按钮"},
+                    "query": {"type": "string", "description": "要查找的 UI 元素描述，如：搜索框、带放大镜搜索框、播放按钮"},
                 },
                 "required": ["image_path", "query"],
             },
