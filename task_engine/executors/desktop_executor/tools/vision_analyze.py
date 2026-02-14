@@ -3,11 +3,13 @@
 
 通过视觉语言模型分析截图，识别指定 UI 元素的位置。
 使用 vLLM 的 OpenAI 兼容 API，支持视觉模型（如 Qwen-VL, LLaVA 等）。
+
+当 VLM 识别到需要点击的具体元素时，会在截图上绘制红色边框标注。
 """
 import base64
 import json
 import os
-from typing import Optional
+from typing import List, Optional
 
 import aiohttp
 from loguru import logger
@@ -74,6 +76,79 @@ def _get_mime_type(image_path: str) -> str:
         ".bmp": "image/bmp",
     }
     return mime_map.get(ext, "image/png")
+
+
+def draw_bounding_boxes(image_path: str, elements: List[dict]) -> Optional[str]:
+    """
+    在截图上绘制红色边框标注 VLM 识别到的 UI 元素
+
+    Args:
+        image_path: 原始截图文件路径
+        elements: VLM 识别到的元素列表，每个元素包含 x, y, width, height, description
+
+    Returns:
+        str: 标注后的截图文件路径，失败返回 None
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        logger.warning("Pillow 未安装，无法绘制边框标注")
+        return None
+
+    if not elements or not os.path.exists(image_path):
+        return None
+
+    try:
+        img = Image.open(image_path)
+        draw = ImageDraw.Draw(img)
+
+        for elem in elements:
+            cx = elem.get("x", 0)
+            cy = elem.get("y", 0)
+            w = elem.get("width", 0)
+            h = elem.get("height", 0)
+            desc = elem.get("description", "")
+            confidence = elem.get("confidence", 0.0)
+
+            # 如果没有宽高信息，使用默认大小
+            if w <= 0:
+                w = 60
+            if h <= 0:
+                h = 30
+
+            # 计算矩形左上角和右下角坐标
+            x1 = cx - w // 2
+            y1 = cy - h // 2
+            x2 = cx + w // 2
+            y2 = cy + h // 2
+
+            # 绘制红色矩形边框（3像素宽）
+            draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
+
+            # 在矩形上方绘制标签文字
+            label = f"{desc} ({confidence:.0%})"
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+            except (IOError, OSError):
+                font = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), label, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            text_x = x1
+            text_y = max(0, y1 - text_h - 4)
+            draw.rectangle([text_x, text_y, text_x + text_w + 4, text_y + text_h + 4], fill="red")
+            draw.text((text_x + 2, text_y + 2), label, fill="white", font=font)
+
+        # 保存标注后的截图
+        base, ext = os.path.splitext(image_path)
+        annotated_path = f"{base}_annotated{ext}"
+        img.save(annotated_path)
+        logger.info(f"🖼️ 已在截图上标注 {len(elements)} 个元素: {annotated_path}")
+        return annotated_path
+
+    except Exception as e:
+        logger.warning(f"绘制边框标注失败: {e}")
+        return None
 
 
 def _parse_vlm_response(content: str, query: str) -> dict:
@@ -239,9 +314,16 @@ async def vision_analyze(image_path: str, query: str) -> str:
     # 解析 VLM 返回内容
     try:
         content = data["choices"][0]["message"]["content"]
-        # print("====>vlm", query, content)
         logger.info(f"👁️ VLM 分析完成: query={query}")
         result = _parse_vlm_response(content, query)
+
+        # 在截图上绘制识别到的元素边框
+        if result.get("found") and result.get("elements"):
+            annotated = draw_bounding_boxes(image_path, result["elements"])
+            if annotated:
+                result["annotated_image"] = annotated
+                logger.info(f"🖼️ 元素标注截图已保存: {annotated}")
+
         return json.dumps(result, ensure_ascii=False)
     except (KeyError, IndexError) as e:
         logger.warning(f"VLM 响应格式异常: {e}, data={data}")

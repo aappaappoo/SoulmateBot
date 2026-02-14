@@ -689,6 +689,163 @@ class TestDesktopTools:
             finally:
                 os.remove(tmp_path)
 
+    def test_draw_bounding_boxes_single_element(self):
+        """测试绘制单个元素边框标注"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import draw_bounding_boxes
+
+        # 创建临时测试图片 (200x200 白色图片)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_path = f.name
+        img = Image.new("RGB", (200, 200), "white")
+        img.save(tmp_path)
+
+        elements = [
+            {"description": "搜索框", "x": 100, "y": 50, "width": 120, "height": 30, "confidence": 0.95}
+        ]
+        try:
+            annotated_path = draw_bounding_boxes(tmp_path, elements)
+            assert annotated_path is not None
+            assert os.path.exists(annotated_path)
+            assert "_annotated" in annotated_path
+            # 验证标注图片可以正常打开
+            annotated_img = Image.open(annotated_path)
+            assert annotated_img.size == (200, 200)
+        finally:
+            os.remove(tmp_path)
+            if annotated_path and os.path.exists(annotated_path):
+                os.remove(annotated_path)
+
+    def test_draw_bounding_boxes_multiple_elements(self):
+        """测试绘制多个元素边框标注"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import draw_bounding_boxes
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_path = f.name
+        img = Image.new("RGB", (400, 300), "white")
+        img.save(tmp_path)
+
+        elements = [
+            {"description": "搜索框", "x": 200, "y": 50, "width": 200, "height": 30, "confidence": 0.95},
+            {"description": "播放按钮", "x": 100, "y": 200, "width": 60, "height": 40, "confidence": 0.8},
+        ]
+        try:
+            annotated_path = draw_bounding_boxes(tmp_path, elements)
+            assert annotated_path is not None
+            assert os.path.exists(annotated_path)
+        finally:
+            os.remove(tmp_path)
+            if annotated_path and os.path.exists(annotated_path):
+                os.remove(annotated_path)
+
+    def test_draw_bounding_boxes_no_width_height(self):
+        """测试元素无宽高时使用默认大小"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import draw_bounding_boxes
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_path = f.name
+        img = Image.new("RGB", (200, 200), "white")
+        img.save(tmp_path)
+
+        elements = [
+            {"description": "按钮", "x": 100, "y": 100, "width": 0, "height": 0, "confidence": 0.7}
+        ]
+        try:
+            annotated_path = draw_bounding_boxes(tmp_path, elements)
+            assert annotated_path is not None
+        finally:
+            os.remove(tmp_path)
+            if annotated_path and os.path.exists(annotated_path):
+                os.remove(annotated_path)
+
+    def test_draw_bounding_boxes_empty_elements(self):
+        """测试空元素列表返回 None"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import draw_bounding_boxes
+        result = draw_bounding_boxes("/some/path.png", [])
+        assert result is None
+
+    def test_draw_bounding_boxes_missing_file(self):
+        """测试不存在的文件返回 None"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import draw_bounding_boxes
+        result = draw_bounding_boxes("/nonexistent/file.png", [{"x": 100, "y": 100}])
+        assert result is None
+
+
+# ============================================================
+# 工具日志辅助函数测试
+# ============================================================
+
+class TestToolLogHelpers:
+    """测试工具日志辅助函数"""
+
+    def test_get_tool_icon(self):
+        from task_engine.executors.desktop_executor.executor import _get_tool_icon
+        assert _get_tool_icon("screenshot") == "📸"
+        assert _get_tool_icon("vision_analyze") == "👁️"
+        assert _get_tool_icon("click") == "🖱️"
+        assert _get_tool_icon("type_text") == "⌨️"
+        assert _get_tool_icon("key_press") == "⌨️"
+        assert _get_tool_icon("app_open") == "🌐"
+        assert _get_tool_icon("shell_run") == "💻"
+        assert _get_tool_icon("unknown_tool") == "🔧"
+
+    def test_summarize_args_screenshot(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        assert _summarize_args("screenshot", {}) == ""
+
+    def test_summarize_args_click(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        result = _summarize_args("click", {"x": 100, "y": 200})
+        assert "x=100" in result
+        assert "y=200" in result
+
+    def test_summarize_args_type_text(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        result = _summarize_args("type_text", {"text": "周杰伦"})
+        assert "周杰伦" in result
+
+    def test_summarize_args_key_press(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        result = _summarize_args("key_press", {"key": "Return"})
+        assert "Return" in result
+
+    def test_summarize_args_app_open(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        result = _summarize_args("app_open", {"url": "https://music.163.com"})
+        assert "music.163.com" in result
+
+    def test_summarize_args_vision_analyze(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        result = _summarize_args("vision_analyze", {"query": "搜索框", "image_path": "/tmp/test.png"})
+        assert "搜索框" in result
+
+    def test_summarize_result_vision_found(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        result_json = json.dumps({
+            "found": True,
+            "elements": [{"description": "搜索框", "x": 100, "y": 50}]
+        })
+        summary = _summarize_result("vision_analyze", result_json)
+        assert "找到" in summary
+        assert "搜索框" in summary
+
+    def test_summarize_result_vision_not_found(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        result_json = json.dumps({"found": False, "elements": []})
+        summary = _summarize_result("vision_analyze", result_json)
+        assert "未找到" in summary
+
+    def test_summarize_result_truncation(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        long_result = "a" * 300
+        summary = _summarize_result("click", long_result)
+        assert len(summary) <= 200
+
 
 # ============================================================
 # DesktopExecutor 测试
@@ -784,6 +941,152 @@ class TestDesktopExecutor:
             result = await executor.execute(step)
             assert result.success is False
             assert "安全守卫终止" in result.message
+
+    @pytest.mark.asyncio
+    async def test_multi_step_tool_call_flow(self):
+        """测试多步骤工具调用流程（截图→分析→点击→输入→回车）并验证日志输出"""
+        from task_engine.executors.desktop_executor.executor import DesktopExecutor
+        from task_engine.models import ExecutorType, Step
+
+        executor = DesktopExecutor()
+        call_count = 0
+
+        async def mock_call_llm(messages):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # 第一轮：打开网页
+                return {
+                    "content": "我来打开音乐网站",
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {
+                            "name": "app_open",
+                            "arguments": json.dumps({"url": "https://music.163.com"}),
+                        },
+                    }],
+                }
+            elif call_count == 2:
+                # 第二轮：截图
+                return {
+                    "content": "网页已打开，我来截图",
+                    "tool_calls": [{
+                        "id": "call_2",
+                        "function": {
+                            "name": "screenshot",
+                            "arguments": "{}",
+                        },
+                    }],
+                }
+            elif call_count == 3:
+                # 第三轮：视觉分析 + 点击 + 输入 + 回车
+                return {
+                    "content": "我来搜索周杰伦",
+                    "tool_calls": [
+                        {
+                            "id": "call_3a",
+                            "function": {
+                                "name": "click",
+                                "arguments": json.dumps({"x": 500, "y": 100}),
+                            },
+                        },
+                        {
+                            "id": "call_3b",
+                            "function": {
+                                "name": "type_text",
+                                "arguments": json.dumps({"text": "周杰伦"}),
+                            },
+                        },
+                        {
+                            "id": "call_3c",
+                            "function": {
+                                "name": "key_press",
+                                "arguments": json.dumps({"key": "Return"}),
+                            },
+                        },
+                    ],
+                }
+            else:
+                # 第四轮：完成
+                return {
+                    "content": "已成功搜索并播放周杰伦的音乐",
+                    "tool_calls": None,
+                }
+
+        # Mock 所有工具
+        async def mock_app_open(**kwargs):
+            return f"已打开: {kwargs.get('url', '')}"
+
+        async def mock_screenshot(**kwargs):
+            return "/tmp/test_screenshot.png"
+
+        async def mock_click(**kwargs):
+            return f"已点击坐标 ({kwargs.get('x')}, {kwargs.get('y')})"
+
+        async def mock_type_text(**kwargs):
+            return f"已输入文本: {kwargs.get('text', '')}"
+
+        async def mock_key_press(**kwargs):
+            return f"已按下: {kwargs.get('key', '')}"
+
+        with patch.dict(
+            "task_engine.executors.desktop_executor.tools.TOOL_REGISTRY",
+            {
+                "app_open": mock_app_open,
+                "screenshot": mock_screenshot,
+                "click": mock_click,
+                "type_text": mock_type_text,
+                "key_press": mock_key_press,
+            },
+        ):
+            executor._call_llm = mock_call_llm
+            step = Step(
+                executor_type=ExecutorType.DESKTOP,
+                description="test",
+                params={"task": "打开网页里的音乐输入周杰伦播放音乐"},
+            )
+            result = await executor.execute(step)
+            assert result.success is True
+            assert "周杰伦" in result.message
+            assert result.data["iterations"] == 4
+            assert call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_max_iterations_reached(self):
+        """测试达到最大迭代次数时返回失败"""
+        from task_engine.executors.desktop_executor.executor import DesktopExecutor
+        from task_engine.models import ExecutorType, Step
+
+        executor = DesktopExecutor()
+
+        async def mock_call_llm(messages):
+            return {
+                "content": "继续截图",
+                "tool_calls": [{
+                    "id": "call_loop",
+                    "function": {
+                        "name": "screenshot",
+                        "arguments": "{}",
+                    },
+                }],
+            }
+
+        async def mock_screenshot(**kwargs):
+            return "/tmp/loop_screenshot.png"
+
+        with patch.dict(
+            "task_engine.executors.desktop_executor.tools.TOOL_REGISTRY",
+            {"screenshot": mock_screenshot},
+        ):
+            executor._call_llm = mock_call_llm
+            step = Step(
+                executor_type=ExecutorType.DESKTOP,
+                description="test",
+                params={"task": "无限循环任务"},
+            )
+            result = await executor.execute(step)
+            assert result.success is False
+            assert "最大迭代次数" in result.message
 
 
 # ============================================================
