@@ -329,7 +329,15 @@ def _summarize_args(func_name: str, func_args: Dict[str, Any]) -> str:
 def _summarize_result(func_name: str, result: str) -> str:
     """简要描述工具执行结果，避免日志过长"""
     if func_name == "screenshot":
-        return result[:200]
+        try:
+            data = json.loads(result)
+            path = data.get("file_path", "")
+            scale = data.get("scale_factor")
+            if scale:
+                return f"{path} (scale={scale})"
+            return path
+        except (json.JSONDecodeError, TypeError):
+            return result[:200]
     if func_name == "vision_analyze":
         # 尝试解析 JSON 提取关键信息
         try:

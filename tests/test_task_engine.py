@@ -881,6 +881,155 @@ class TestDesktopTools:
         assert "导航栏" in _VISION_SYSTEM_PROMPT
         assert "music.163.com" in _VISION_SYSTEM_PROMPT
 
+    def test_scale_elements_retina_2x(self):
+        """测试 Retina 2x 缩放因子下的坐标转换"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _scale_elements
+        elements = [
+            {"description": "搜索框", "x": 810, "y": 334, "width": 400, "height": 60, "confidence": 0.95}
+        ]
+        scaled = _scale_elements(elements, 2.0)
+        assert len(scaled) == 1
+        assert scaled[0]["x"] == 405
+        assert scaled[0]["y"] == 167
+        assert scaled[0]["width"] == 200
+        assert scaled[0]["height"] == 30
+        assert scaled[0]["confidence"] == 0.95
+        assert scaled[0]["description"] == "搜索框"
+
+    def test_scale_elements_no_scaling(self):
+        """测试缩放因子为 1.0 时不修改坐标"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _scale_elements
+        elements = [
+            {"description": "按钮", "x": 400, "y": 200, "width": 100, "height": 40, "confidence": 0.9}
+        ]
+        scaled = _scale_elements(elements, 1.0)
+        assert scaled[0]["x"] == 400
+        assert scaled[0]["y"] == 200
+
+    def test_scale_elements_near_one(self):
+        """测试接近 1.0 的缩放因子（差异 < 0.01）不修改坐标"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _scale_elements
+        elements = [
+            {"description": "按钮", "x": 400, "y": 200, "width": 100, "height": 40, "confidence": 0.9}
+        ]
+        scaled = _scale_elements(elements, 1.005)
+        # Should return original list since diff < 0.01
+        assert scaled is elements
+
+    def test_scale_elements_multiple(self):
+        """测试多个元素的坐标缩放"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _scale_elements
+        elements = [
+            {"description": "搜索框", "x": 800, "y": 300, "width": 400, "height": 60, "confidence": 0.9},
+            {"description": "播放按钮", "x": 600, "y": 500, "width": 80, "height": 80, "confidence": 0.8},
+        ]
+        scaled = _scale_elements(elements, 2.0)
+        assert len(scaled) == 2
+        assert scaled[0]["x"] == 400
+        assert scaled[0]["y"] == 150
+        assert scaled[1]["x"] == 300
+        assert scaled[1]["y"] == 250
+
+    def test_scale_elements_preserves_original(self):
+        """测试坐标缩放不修改原始元素"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _scale_elements
+        elements = [
+            {"description": "搜索框", "x": 800, "y": 300, "width": 400, "height": 60, "confidence": 0.9},
+        ]
+        scaled = _scale_elements(elements, 2.0)
+        # 原始元素不应被修改
+        assert elements[0]["x"] == 800
+        assert elements[0]["y"] == 300
+        # 缩放后的元素应该是新列表
+        assert scaled[0]["x"] == 400
+        assert scaled[0]["y"] == 150
+
+    def test_get_image_size(self):
+        """测试获取图片尺寸"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _get_image_size
+        # 创建测试图片
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (2880, 1800), color="white")
+            img.save(f, format="PNG")
+            tmp_path = f.name
+        try:
+            w, h = _get_image_size(tmp_path)
+            assert w == 2880
+            assert h == 1800
+        finally:
+            os.remove(tmp_path)
+
+    def test_get_image_size_nonexistent(self):
+        """测试获取不存在文件的尺寸"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _get_image_size
+        w, h = _get_image_size("/nonexistent/file.png")
+        assert w is None
+        assert h is None
+
+    @pytest.mark.asyncio
+    async def test_get_scale_factor_retina(self):
+        """测试 Retina 屏幕下的缩放因子计算"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _get_scale_factor
+        # 创建 2880x1800 的测试图片（模拟 Retina 截图）
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (2880, 1800), color="white")
+            img.save(f, format="PNG")
+            tmp_path = f.name
+        try:
+            # Mock 屏幕分辨率为 1440x900
+            with patch(
+                "task_engine.executors.desktop_executor.tools.vision_analyze.get_screen_resolution",
+                return_value=(1440, 900),
+            ):
+                scale = await _get_scale_factor(tmp_path)
+                assert scale == 2.0
+        finally:
+            os.remove(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_get_scale_factor_no_scaling(self):
+        """测试非 HiDPI 屏幕下缩放因子为 1.0"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _get_scale_factor
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (1920, 1080), color="white")
+            img.save(f, format="PNG")
+            tmp_path = f.name
+        try:
+            with patch(
+                "task_engine.executors.desktop_executor.tools.vision_analyze.get_screen_resolution",
+                return_value=(1920, 1080),
+            ):
+                scale = await _get_scale_factor(tmp_path)
+                assert scale == 1.0
+        finally:
+            os.remove(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_get_scale_factor_no_screen_resolution(self):
+        """测试无法获取屏幕分辨率时返回 None"""
+        import tempfile
+        from PIL import Image
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _get_scale_factor
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (1920, 1080), color="white")
+            img.save(f, format="PNG")
+            tmp_path = f.name
+        try:
+            with patch(
+                "task_engine.executors.desktop_executor.tools.vision_analyze.get_screen_resolution",
+                return_value=None,
+            ):
+                scale = await _get_scale_factor(tmp_path)
+                assert scale is None
+        finally:
+            os.remove(tmp_path)
+
 
 # ============================================================
 # 工具日志辅助函数测试
@@ -972,6 +1121,39 @@ class TestToolLogHelpers:
         long_result = "a" * 300
         summary = _summarize_result("click", long_result)
         assert len(summary) <= 200
+
+    def test_summarize_result_screenshot_json(self):
+        """测试 screenshot JSON 结果的摘要"""
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        result_json = json.dumps({
+            "file_path": "/tmp/desktop_screenshot_123.png",
+            "image_width": 2880,
+            "image_height": 1800,
+            "screen_width": 1440,
+            "screen_height": 900,
+            "scale_factor": 2.0,
+        })
+        summary = _summarize_result("screenshot", result_json)
+        assert "/tmp/desktop_screenshot_123.png" in summary
+        assert "scale=2.0" in summary
+
+    def test_summarize_result_screenshot_json_no_scale(self):
+        """测试无缩放的 screenshot JSON 结果的摘要"""
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        result_json = json.dumps({
+            "file_path": "/tmp/desktop_screenshot_123.png",
+            "image_width": 1920,
+            "image_height": 1080,
+        })
+        summary = _summarize_result("screenshot", result_json)
+        assert "/tmp/desktop_screenshot_123.png" in summary
+        assert "scale" not in summary
+
+    def test_summarize_result_screenshot_plain_string(self):
+        """测试旧格式的 screenshot 结果兼容性"""
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        summary = _summarize_result("screenshot", "/tmp/screenshot.png")
+        assert "/tmp/screenshot.png" in summary
 
 
 # ============================================================
