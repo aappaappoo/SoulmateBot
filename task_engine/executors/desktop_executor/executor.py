@@ -67,7 +67,7 @@ _SYSTEM_PROMPT: str = """你是一个桌面操控助手。你的任务是通过�
 
 搜索框识别策略：
 - 使用 vision_analyze 时，对搜索框的查询描述要具体，例如："页面顶部导航栏中的搜索输入框"、"带有放大镜图标的搜索框"
-- 对于网易云音乐(music.163.com)等网站，搜索框通常在顶部深色导航栏的右侧区域
+- 对于酷狗音乐(kugou.com)等网站，搜索框通常在顶部深色导航栏的右侧区域
 - 如果 vision_analyze 返回 found=false，立即使用 page_analyze(element_type="search") 来通过 DOM 查找搜索框
 - page_analyze 返回的坐标可以直接用于 click
 
