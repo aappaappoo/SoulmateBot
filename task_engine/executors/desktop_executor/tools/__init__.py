@@ -6,6 +6,7 @@ from task_engine.executors.desktop_executor.tools.vision_analyze import vision_a
 from task_engine.executors.desktop_executor.tools.click import click
 from task_engine.executors.desktop_executor.tools.type_text import type_text
 from task_engine.executors.desktop_executor.tools.key_press import key_press
+from task_engine.executors.desktop_executor.tools.page_analyze import page_analyze
 
 # 工具注册表：名称 → 函数
 TOOL_REGISTRY = {
@@ -13,6 +14,7 @@ TOOL_REGISTRY = {
     "app_open": app_open,
     "screenshot": screenshot,
     "vision_analyze": vision_analyze,
+    "page_analyze": page_analyze,
     "click": click,
     "type_text": type_text,
     "key_press": key_press,
@@ -117,6 +119,28 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "page_analyze",
+            "description": (
+                "通过浏览器 DOM 分析页面可交互元素（搜索框、输入框、按钮）的坐标。"
+                "当 vision_analyze 无法识别搜索框等元素时，使用此工具作为备选方案。"
+                "通过 JavaScript 注入查找页面中的 input、button 等元素并返回坐标。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "element_type": {
+                        "type": "string",
+                        "description": "要查找的元素类型：search（搜索框）、input（输入框）、button（按钮）",
+                        "enum": ["search", "input", "button"],
+                    },
+                },
+                "required": ["element_type"],
+            },
+        },
+    },
 ]
 
 __all__ = [
@@ -126,6 +150,7 @@ __all__ = [
     "app_open",
     "screenshot",
     "vision_analyze",
+    "page_analyze",
     "click",
     "type_text",
     "key_press",

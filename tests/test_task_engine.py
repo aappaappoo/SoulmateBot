@@ -472,7 +472,7 @@ class TestDesktopTools:
         from task_engine.executors.desktop_executor.tools import TOOL_REGISTRY
         expected_tools = [
             "shell_run", "app_open", "screenshot",
-            "vision_analyze", "click", "type_text", "key_press",
+            "vision_analyze", "page_analyze", "click", "type_text", "key_press",
         ]
         for tool_name in expected_tools:
             assert tool_name in TOOL_REGISTRY, f"工具 {tool_name} 未注册"
@@ -480,7 +480,7 @@ class TestDesktopTools:
     def test_tool_definitions_completeness(self):
         from task_engine.executors.desktop_executor.tools import TOOL_DEFINITIONS
         names = [td["function"]["name"] for td in TOOL_DEFINITIONS]
-        expected = ["app_open", "screenshot", "vision_analyze", "click", "type_text", "key_press", "shell_run"]
+        expected = ["app_open", "screenshot", "vision_analyze", "click", "type_text", "key_press", "shell_run", "page_analyze"]
         for name in expected:
             assert name in names, f"工具定义 {name} 缺失"
 
@@ -775,6 +775,112 @@ class TestDesktopTools:
         result = draw_bounding_boxes("/nonexistent/file.png", [{"x": 100, "y": 100}])
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_page_analyze_no_cdp(self):
+        """测试 page_analyze 在无 CDP 连接时返回合理结果"""
+        from task_engine.executors.desktop_executor.tools.page_analyze import page_analyze
+        result_str = await page_analyze("search")
+        result = json.loads(result_str)
+        assert result["found"] is False
+        assert result["query"] == "search"
+
+    @pytest.mark.asyncio
+    async def test_page_analyze_invalid_type_defaults_to_search(self):
+        """测试 page_analyze 无效类型默认回退为 search"""
+        from task_engine.executors.desktop_executor.tools.page_analyze import page_analyze
+        result_str = await page_analyze("invalid_type")
+        result = json.loads(result_str)
+        assert result["query"] == "search"
+
+    @pytest.mark.asyncio
+    async def test_page_analyze_with_mock_cdp(self):
+        """测试 page_analyze 通过 mock CDP 返回元素"""
+        from task_engine.executors.desktop_executor.tools.page_analyze import page_analyze
+
+        mock_js_result = json.dumps([
+            {
+                "type": "search",
+                "tag": "input",
+                "id": "srch",
+                "name": "query",
+                "className": "search-input",
+                "placeholder": "搜索音乐",
+                "ariaLabel": "搜索",
+                "x": 600,
+                "y": 35,
+                "width": 200,
+                "height": 30,
+            }
+        ])
+
+        with patch(
+            "task_engine.executors.desktop_executor.tools.page_analyze._run_browser_js",
+            new_callable=AsyncMock,
+            return_value=mock_js_result,
+        ):
+            result_str = await page_analyze("search")
+            result = json.loads(result_str)
+            assert result["found"] is True
+            assert len(result["elements"]) == 1
+            assert result["elements"][0]["x"] == 600
+            assert result["elements"][0]["y"] == 35
+            assert "搜索音乐" in result["elements"][0]["description"]
+
+    @pytest.mark.asyncio
+    async def test_page_analyze_search_fallback_to_input(self):
+        """测试 page_analyze search 未找到时回退到 input 类型"""
+        from task_engine.executors.desktop_executor.tools.page_analyze import page_analyze
+
+        mock_js_result = json.dumps([
+            {
+                "type": "input",
+                "tag": "input",
+                "id": "text-field",
+                "name": "",
+                "className": "text-input",
+                "placeholder": "输入内容",
+                "ariaLabel": "",
+                "x": 400,
+                "y": 50,
+                "width": 150,
+                "height": 25,
+            }
+        ])
+
+        with patch(
+            "task_engine.executors.desktop_executor.tools.page_analyze._run_browser_js",
+            new_callable=AsyncMock,
+            return_value=mock_js_result,
+        ):
+            result_str = await page_analyze("search")
+            result = json.loads(result_str)
+            assert result["found"] is True
+            assert len(result["elements"]) == 1
+            assert result["elements"][0]["x"] == 400
+
+    @pytest.mark.asyncio
+    async def test_page_analyze_invalid_js_result(self):
+        """测试 page_analyze JS 返回无效结果"""
+        from task_engine.executors.desktop_executor.tools.page_analyze import page_analyze
+
+        with patch(
+            "task_engine.executors.desktop_executor.tools.page_analyze._run_browser_js",
+            new_callable=AsyncMock,
+            return_value="not-valid-json",
+        ):
+            result_str = await page_analyze("search")
+            result = json.loads(result_str)
+            assert result["found"] is False
+            assert "error" in result
+
+    def test_vision_analyze_system_prompt_has_search_hints(self):
+        """测试 VLM system prompt 包含搜索框视觉特征描述"""
+        from task_engine.executors.desktop_executor.tools.vision_analyze import _VISION_SYSTEM_PROMPT
+        assert "搜索框" in _VISION_SYSTEM_PROMPT
+        assert "放大镜" in _VISION_SYSTEM_PROMPT
+        assert "导航栏" in _VISION_SYSTEM_PROMPT
+        assert "music.163.com" in _VISION_SYSTEM_PROMPT
+
 
 # ============================================================
 # 工具日志辅助函数测试
@@ -787,6 +893,7 @@ class TestToolLogHelpers:
         from task_engine.executors.desktop_executor.executor import _get_tool_icon
         assert _get_tool_icon("screenshot") == "📸"
         assert _get_tool_icon("vision_analyze") == "👁️"
+        assert _get_tool_icon("page_analyze") == "🔍"
         assert _get_tool_icon("click") == "🖱️"
         assert _get_tool_icon("type_text") == "⌨️"
         assert _get_tool_icon("key_press") == "⌨️"
@@ -824,6 +931,11 @@ class TestToolLogHelpers:
         result = _summarize_args("vision_analyze", {"query": "搜索框", "image_path": "/tmp/test.png"})
         assert "搜索框" in result
 
+    def test_summarize_args_page_analyze(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_args
+        result = _summarize_args("page_analyze", {"element_type": "search"})
+        assert "search" in result
+
     def test_summarize_result_vision_found(self):
         from task_engine.executors.desktop_executor.executor import _summarize_result
         result_json = json.dumps({
@@ -839,6 +951,21 @@ class TestToolLogHelpers:
         result_json = json.dumps({"found": False, "elements": []})
         summary = _summarize_result("vision_analyze", result_json)
         assert "未找到" in summary
+
+    def test_summarize_result_page_analyze_found(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        result_json = json.dumps({
+            "found": True,
+            "elements": [{"description": "input(placeholder=\"搜索\")", "x": 500, "y": 35}]
+        })
+        summary = _summarize_result("page_analyze", result_json)
+        assert "DOM 找到" in summary
+
+    def test_summarize_result_page_analyze_not_found(self):
+        from task_engine.executors.desktop_executor.executor import _summarize_result
+        result_json = json.dumps({"found": False, "elements": []})
+        summary = _summarize_result("page_analyze", result_json)
+        assert "DOM 未找到" in summary
 
     def test_summarize_result_truncation(self):
         from task_engine.executors.desktop_executor.executor import _summarize_result
