@@ -46,6 +46,7 @@ _SYSTEM_PROMPT: str = """你是一个桌面操控助手。你的任务是通过�
 - app_open: 打开浏览器/URL
 - screenshot: 屏幕截图
 - vision_analyze: 视觉分析截图，识别 UI 元素坐标。返回元素描述和坐标。
+- page_analyze: 通过浏览器 DOM 分析页面可交互元素（搜索框、输入框、按钮）的坐标。当 vision_analyze 无法识别元素时使用。
 - click: 鼠标点击指定坐标
 - type_text: 在当前焦点位置输入文本
 - key_press: 按下键盘按键
@@ -55,13 +56,20 @@ _SYSTEM_PROMPT: str = """你是一个桌面操控助手。你的任务是通过�
 1. 先用 app_open 打开目标网页/应用
 2. 等待页面加载后，调用 screenshot 截取当前屏幕
 3. 用 vision_analyze 分析截图，找到需要交互的 UI 元素（如搜索框、按钮等），获得元素坐标
-4. 用 click 点击目标元素（如搜索框）
-5. 用 type_text 输入文本（如搜索关键词）
-6. 用 key_press 按下 Enter 键执行搜索
-7. 再次调用 screenshot 截图验证操作结果
-8. 继续用 vision_analyze 查找下一步需要交互的元素（如播放按钮）
-9. 用 click 点击目标元素完成操作
-10. 最终 screenshot 验证任务完成
+4. 如果 vision_analyze 未能找到目标元素（found=false），请使用 page_analyze 工具通过 DOM 分析来查找元素坐标
+5. 用 click 点击目标元素（如搜索框）
+6. 用 type_text 输入文本（如搜索关键词）
+7. 用 key_press 按下 Enter 键执行搜索
+8. 再次调用 screenshot 截图验证操作结果
+9. 继续用 vision_analyze 查找下一步需要交互的元素（如播放按钮）
+10. 用 click 点击目标元素完成操作
+11. 最终 screenshot 验证任务完成
+
+搜索框识别策略：
+- 使用 vision_analyze 时，对搜索框的查询描述要具体，例如："页面顶部导航栏中的搜索输入框"、"带有放大镜图标的搜索框"
+- 对于网易云音乐(music.163.com)等网站，搜索框通常在顶部深色导航栏的右侧区域
+- 如果 vision_analyze 返回 found=false，立即使用 page_analyze(element_type="search") 来通过 DOM 查找搜索框
+- page_analyze 返回的坐标可以直接用于 click
 
 重要规则：
 - 每次操作前后都应 screenshot + vision_analyze 确认状态
@@ -286,6 +294,7 @@ def _get_tool_icon(tool_name: str) -> str:
     icons = {
         "screenshot": "📸",
         "vision_analyze": "👁️",
+        "page_analyze": "🔍",
         "click": "🖱️",
         "type_text": "⌨️",
         "key_press": "⌨️",
@@ -309,6 +318,8 @@ def _summarize_args(func_name: str, func_args: Dict[str, Any]) -> str:
         return f'url="{func_args.get("url", "")}"'
     if func_name == "vision_analyze":
         return f'query="{func_args.get("query", "")}"'
+    if func_name == "page_analyze":
+        return f'element_type="{func_args.get("element_type", "search")}"'
     if func_name == "shell_run":
         cmd = func_args.get("command", "")
         return f'command="{cmd[:50]}"' if len(cmd) > 50 else f'command="{cmd}"'
@@ -329,6 +340,17 @@ def _summarize_result(func_name: str, result: str) -> str:
                 descs = [e.get("description", "?") for e in elements[:3]]
                 return f"找到 {len(elements)} 个元素: {descs}"
             return f"未找到目标元素"
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if func_name == "page_analyze":
+        try:
+            data = json.loads(result)
+            found = data.get("found", False)
+            elements = data.get("elements", [])
+            if found and elements:
+                descs = [e.get("description", "?") for e in elements[:3]]
+                return f"DOM 找到 {len(elements)} 个元素: {descs}"
+            return f"DOM 未找到目标元素"
         except (json.JSONDecodeError, TypeError):
             pass
     # 默认截断
