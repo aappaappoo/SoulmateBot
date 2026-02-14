@@ -6,10 +6,27 @@ import json
 import os
 import tempfile
 import time
+from typing import Optional, Tuple
 
 from loguru import logger
 
 from task_engine.executors.desktop_executor.platform import get_screenshot_command, get_screen_resolution
+
+
+def _get_image_size(filepath: str) -> Tuple[Optional[int], Optional[int]]:
+    """
+    获取图片的像素尺寸
+
+    Returns:
+        (width, height) 或 (None, None)
+    """
+    try:
+        from PIL import Image
+        with Image.open(filepath) as img:
+            return img.size
+    except Exception:
+        pass
+    return None, None
 
 
 async def screenshot() -> str:
@@ -69,19 +86,3 @@ async def screenshot() -> str:
         return "截图超时（10秒）"
     except Exception as e:
         return f"截图异常: {e}"
-
-
-def _get_image_size(filepath: str):
-    """
-    获取图片的像素尺寸
-
-    Returns:
-        (width, height) 或 (None, None)
-    """
-    try:
-        from PIL import Image
-        with Image.open(filepath) as img:
-            return img.size
-    except Exception:
-        pass
-    return None, None

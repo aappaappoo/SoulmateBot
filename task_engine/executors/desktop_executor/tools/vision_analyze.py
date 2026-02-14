@@ -14,7 +14,7 @@
 import base64
 import json
 import os
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import aiohttp
 from loguru import logger
@@ -95,7 +95,7 @@ def _get_mime_type(image_path: str) -> str:
     return mime_map.get(ext, "image/png")
 
 
-def _get_image_size(image_path: str):
+def _get_image_size(image_path: str) -> Tuple[Optional[int], Optional[int]]:
     """
     获取图片的像素尺寸
 
@@ -389,7 +389,10 @@ async def vision_analyze(image_path: str, query: str) -> str:
                     f"将图片像素坐标转换为屏幕逻辑坐标"
                 )
                 # 先在原始坐标上绘制标注
-                draw_bounding_boxes(image_path, result["elements"])
+                annotated = draw_bounding_boxes(image_path, result["elements"])
+                if annotated:
+                    result["annotated_image"] = annotated
+                    logger.info(f"🖼️ 元素标注截图已保存: {annotated}")
                 # 再缩放坐标
                 result["elements"] = _scale_elements(
                     result["elements"], scale_factor

@@ -913,8 +913,11 @@ class TestDesktopTools:
             {"description": "按钮", "x": 400, "y": 200, "width": 100, "height": 40, "confidence": 0.9}
         ]
         scaled = _scale_elements(elements, 1.005)
-        # Should return original list since diff < 0.01
-        assert scaled is elements
+        # Should return unchanged values since diff < 0.01
+        assert scaled[0]["x"] == 400
+        assert scaled[0]["y"] == 200
+        assert scaled[0]["width"] == 100
+        assert scaled[0]["height"] == 40
 
     def test_scale_elements_multiple(self):
         """测试多个元素的坐标缩放"""
