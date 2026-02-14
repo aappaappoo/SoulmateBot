@@ -11,7 +11,17 @@ from typing import Optional
 
 from loguru import logger
 
+from config import settings
+
+# DOM 元素检测的默认置信度（低于 VLM 视觉分析的典型置信度，
+# 因为 DOM 分析不涉及视觉匹配，而是基于元素属性和选择器推断）
+_DOM_ELEMENT_CONFIDENCE = 0.85
+
+# Chrome DevTools Protocol 调试端口
+_CDP_PORT = int(getattr(settings, "cdp_port", 9222))
+
 # 用于在浏览器中执行的 JavaScript，查找页面可交互元素
+# 返回的坐标 (x, y) 为元素的中心点位置，与 vision_analyze 一致
 _FIND_ELEMENTS_JS = r"""
 (function() {
     var results = [];
@@ -58,6 +68,9 @@ async def page_analyze(element_type: str = "search") -> str:
 
     当视觉分析无法识别 UI 元素时，通过浏览器 JavaScript 注入
     来查找搜索框、输入框、按钮等可交互元素的位置坐标。
+
+    返回的坐标 (x, y) 为元素的中心点位置，与 vision_analyze 的坐标格式一致，
+    可直接传递给 click 工具使用。
 
     Args:
         element_type: 要查找的元素类型，支持 "search"（搜索框）、
@@ -121,7 +134,7 @@ async def page_analyze(element_type: str = "search") -> str:
                 "y": elem.get("y", 0),
                 "width": elem.get("width", 0),
                 "height": elem.get("height", 0),
-                "confidence": 0.85,
+                "confidence": _DOM_ELEMENT_CONFIDENCE,
             }
         )
 
@@ -173,7 +186,7 @@ async def _try_cdp_evaluate(js_code: str) -> Optional[str]:
     except ImportError:
         return None
 
-    cdp_url = "http://127.0.0.1:9222"
+    cdp_url = f"http://127.0.0.1:{_CDP_PORT}"
 
     try:
         async with aiohttp.ClientSession() as session:
