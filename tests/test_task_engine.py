@@ -594,6 +594,138 @@ class TestReporter:
 
 
 # ============================================================
+# Polisher 测试
+# ============================================================
+
+class TestPolisher:
+    """测试结果润色器"""
+
+    @pytest.mark.asyncio
+    async def test_polish_no_llm_url(self):
+        """LLM URL 未配置时应返回原始文本"""
+        from task_engine.polisher import polish
+        with patch("task_engine.polisher._POLISHER_LLM_URL", None):
+            result = await polish("✅ 播放了周杰伦的歌", "播放周杰伦的歌")
+        assert result == "✅ 播放了周杰伦的歌"
+
+    @pytest.mark.asyncio
+    async def test_polish_empty_text(self):
+        """空文本应直接返回"""
+        from task_engine.polisher import polish
+        with patch("task_engine.polisher._POLISHER_LLM_URL", "http://test:8000"):
+            result = await polish("", "test")
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_polish_success(self):
+        """LLM 成功润色时应返回润色后的文本"""
+        from task_engine.polisher import polish
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": "✅ 周杰伦的《晴天》已开始播放"}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.polisher.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.polisher._POLISHER_LLM_URL", "http://test:8000"):
+            result = await polish(
+                "✅ 已在酷狗音乐搜索并播放 '周杰伦' 的音乐：晴天，操作完成",
+                "播放周杰伦的歌"
+            )
+        assert result == "✅ 周杰伦的《晴天》已开始播放"
+
+    @pytest.mark.asyncio
+    async def test_polish_llm_api_error(self):
+        """LLM API 返回错误时应回退到原始文本"""
+        from task_engine.polisher import polish
+
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.text = AsyncMock(return_value="Internal Server Error")
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.polisher.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.polisher._POLISHER_LLM_URL", "http://test:8000"):
+            result = await polish("✅ 原始文本", "test")
+        assert result == "✅ 原始文本"
+
+    @pytest.mark.asyncio
+    async def test_polish_llm_returns_empty(self):
+        """LLM 返回空内容时应回退到原始文本"""
+        from task_engine.polisher import polish
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": "  "}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.polisher.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.polisher._POLISHER_LLM_URL", "http://test:8000"):
+            result = await polish("✅ 原始文本", "test")
+        assert result == "✅ 原始文本"
+
+    @pytest.mark.asyncio
+    async def test_polish_network_exception(self):
+        """网络异常时应回退到原始文本"""
+        from task_engine.polisher import polish
+
+        with patch("task_engine.polisher.aiohttp.ClientSession", side_effect=Exception("连接超时")), \
+             patch("task_engine.polisher._POLISHER_LLM_URL", "http://test:8000"):
+            result = await polish("✅ 原始文本", "test")
+        assert result == "✅ 原始文本"
+
+    @pytest.mark.asyncio
+    async def test_polish_with_token(self):
+        """配置了 token 时应在请求头中携带 Authorization"""
+        from task_engine.polisher import polish
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": "✅ 润色后的文本"}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.polisher.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.polisher._POLISHER_LLM_URL", "http://test:8000"), \
+             patch("task_engine.polisher._POLISHER_LLM_TOKEN", "test-token"):
+            result = await polish("✅ 原始文本", "test")
+
+        # 验证请求头包含 Authorization
+        call_args = mock_session.post.call_args
+        headers = call_args[1]["headers"] if "headers" in call_args[1] else call_args[0][1] if len(call_args[0]) > 1 else {}
+        assert headers.get("Authorization") == "Bearer test-token"
+
+
+# ============================================================
 # ShellExecutor 测试
 # ============================================================
 
