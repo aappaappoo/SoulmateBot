@@ -328,6 +328,58 @@ class TestReporter:
         text = await report(task)
         assert "⏳" in text
 
+    @pytest.mark.asyncio
+    async def test_report_success_with_music_link(self):
+        """成功结果包含音乐链接时应附加可点击链接"""
+        from task_engine.models import StepResult, Task, TaskStatus
+        from task_engine.reporter import report
+        task = Task(user_input="打开网页里的音乐输入周杰伦播放音乐")
+        task.status = TaskStatus.SUCCESS
+        task.result = StepResult(
+            success=True,
+            message="已在酷狗音乐搜索并播放 '周杰伦' 的音乐：晴天",
+            data={
+                "song_title": "晴天",
+                "artist": "周杰伦",
+                "url": "https://www.kugou.com/song/abc123.html",
+            },
+        )
+        text = await report(task)
+        assert "✅" in text
+        assert "https://www.kugou.com/song/abc123.html" in text
+        assert "🎵" in text
+        assert "周杰伦" in text
+        assert "晴天" in text
+
+    @pytest.mark.asyncio
+    async def test_report_success_without_music_data(self):
+        """成功结果不含音乐数据时不应附加链接"""
+        from task_engine.models import StepResult, Task, TaskStatus
+        from task_engine.reporter import report
+        task = Task(user_input="test")
+        task.status = TaskStatus.SUCCESS
+        task.result = StepResult(success=True, message="任务完成")
+        text = await report(task)
+        assert "✅" in text
+        assert "🎵" not in text
+        assert "🔗" not in text
+
+    @pytest.mark.asyncio
+    async def test_report_success_with_empty_url(self):
+        """成功结果 URL 为空时不应附加链接"""
+        from task_engine.models import StepResult, Task, TaskStatus
+        from task_engine.reporter import report
+        task = Task(user_input="test")
+        task.status = TaskStatus.SUCCESS
+        task.result = StepResult(
+            success=True,
+            message="播放成功",
+            data={"song_title": "晴天", "artist": "周杰伦", "url": ""},
+        )
+        text = await report(task)
+        assert "✅" in text
+        assert "🔗" not in text
+
 
 # ============================================================
 # ShellExecutor 测试
