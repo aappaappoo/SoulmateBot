@@ -20,7 +20,6 @@ pydantic-settings==2.1.0
 # Utilities
 aiohttp==3.13.3
 pillow==10.3.0
-playwright==1.58.0
 redis==5.0.1
 celery==5.3.6
 requests==2.31.0

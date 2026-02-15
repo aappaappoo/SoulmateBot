@@ -1,6 +1,8 @@
-"""桌面工具包（Playwright 方案）"""
+"""桌面工具包"""
 from task_engine.executors.desktop_executor.tools.shell_run import shell_run
 from task_engine.executors.desktop_executor.tools.app_open import app_open
+from task_engine.executors.desktop_executor.tools.screenshot import screenshot
+from task_engine.executors.desktop_executor.tools.vision_analyze import vision_analyze
 from task_engine.executors.desktop_executor.tools.click import click
 from task_engine.executors.desktop_executor.tools.type_text import type_text
 from task_engine.executors.desktop_executor.tools.key_press import key_press
@@ -10,6 +12,8 @@ from task_engine.executors.desktop_executor.tools.page_analyze import page_analy
 TOOL_REGISTRY = {
     "shell_run": shell_run,
     "app_open": app_open,
+    "screenshot": screenshot,
+    "vision_analyze": vision_analyze,
     "page_analyze": page_analyze,
     "click": click,
     "type_text": type_text,
@@ -22,11 +26,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "app_open",
-            "description": "使用 Playwright 打开浏览器并访问指定 URL",
+            "description": "打开浏览器或指定 URL",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "要打开的 URL"},
+                    "url": {"type": "string", "description": "要打开的 URL 或应用名称"},
                 },
                 "required": ["url"],
             },
@@ -35,21 +39,26 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "page_analyze",
-            "description": (
-                "通过 Playwright 分析页面可交互元素（搜索框、输入框、按钮），"
-                "返回元素描述和可用于 click/type_text 的 CSS 选择器。"
-            ),
+            "name": "screenshot",
+            "description": "屏幕截图，返回截图文件路径",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "vision_analyze",
+            "description": "使用视觉模型分析截图，识别 UI 元素坐标。返回元素描述和坐标。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "element_type": {
-                        "type": "string",
-                        "description": "要查找的元素类型：search（搜索框）、input（输入框）、button（按钮）",
-                        "enum": ["search", "input", "button"],
-                    },
+                    "image_path": {"type": "string", "description": "截图文件路径"},
+                    "query": {"type": "string", "description": "要查找的 UI 元素描述，如：搜索框、带放大镜搜索框、播放按钮"},
                 },
-                "required": ["element_type"],
+                "required": ["image_path", "query"],
             },
         },
     },
@@ -57,13 +66,14 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "click",
-            "description": "通过 CSS 选择器点击页面元素",
+            "description": "鼠标点击屏幕指定坐标",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS 选择器，如 #search-input, button.play"},
+                    "x": {"type": "integer", "description": "点击的 X 坐标"},
+                    "y": {"type": "integer", "description": "点击的 Y 坐标"},
                 },
-                "required": ["selector"],
+                "required": ["x", "y"],
             },
         },
     },
@@ -71,14 +81,13 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "type_text",
-            "description": "通过 CSS 选择器在指定输入框中填入文本",
+            "description": "在当前焦点位置输入文本（支持中文）",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "输入框的 CSS 选择器"},
                     "text": {"type": "string", "description": "要输入的文本"},
                 },
-                "required": ["selector", "text"],
+                "required": ["text"],
             },
         },
     },
@@ -86,11 +95,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "key_press",
-            "description": "按下键盘按键（如 Enter、Tab 等）",
+            "description": "按下键盘按键（如 Enter、Tab、cmd+v 等）",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "key": {"type": "string", "description": "按键名称，如 Enter、Tab"},
+                    "key": {"type": "string", "description": "按键名称，如 Return、Tab、cmd+v"},
                 },
                 "required": ["key"],
             },
@@ -110,6 +119,28 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "page_analyze",
+            "description": (
+                "通过浏览器 DOM 分析页面可交互元素（搜索框、输入框、按钮）的坐标。"
+                "当 vision_analyze 无法识别搜索框等元素时，使用此工具作为备选方案。"
+                "通过 JavaScript 注入查找页面中的 input、button 等元素并返回坐标。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "element_type": {
+                        "type": "string",
+                        "description": "要查找的元素类型：search（搜索框）、input（输入框）、button（按钮）",
+                        "enum": ["search", "input", "button"],
+                    },
+                },
+                "required": ["element_type"],
+            },
+        },
+    },
 ]
 
 __all__ = [
@@ -117,6 +148,8 @@ __all__ = [
     "TOOL_DEFINITIONS",
     "shell_run",
     "app_open",
+    "screenshot",
+    "vision_analyze",
     "page_analyze",
     "click",
     "type_text",

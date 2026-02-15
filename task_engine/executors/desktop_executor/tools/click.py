@@ -1,27 +1,49 @@
 """
-元素点击工具（Playwright 方案）
+鼠标点击工具
 
-通过 CSS 选择器定位并点击页面元素。
+使用平台工具在屏幕指定坐标执行鼠标点击。
+macOS: 使用 osascript / cliclick
+Linux: 使用 xdotool
 """
-from loguru import logger
+import asyncio
 
-from task_engine.executors.desktop_executor.tools.browser_session import get_page
+from task_engine.executors.desktop_executor.platform import detect_platform, PlatformType
 
 
-async def click(selector: str) -> str:
+async def click(x: int, y: int) -> str:
     """
-    通过选择器点击页面元素
+    在屏幕指定坐标执行鼠标点击
 
     Args:
-        selector: CSS 选择器
+        x: X 坐标
+        y: Y 坐标
 
     Returns:
         str: 操作结果描述
     """
+    plat = detect_platform()
+    if plat == PlatformType.MACOS:
+        # macOS: 使用 osascript 模拟点击
+        script = (
+            f'tell application "System Events" to click at {{{x}, {y}}}'
+        )
+        command = f"osascript -e '{script}'"
+    else:
+        # Linux: 使用 xdotool
+        command = f"xdotool mousemove {x} {y} click 1"
+
     try:
-        page = await get_page()
-        await page.click(selector, timeout=5000)
-        logger.info(f"🖱️ [click] 已点击元素: {selector}")
-        return f"已点击元素: {selector}"
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+        if proc.returncode == 0:
+            return f"已点击坐标 ({x}, {y})"
+        err = stderr.decode(errors="replace") if stderr else "未知错误"
+        return f"点击失败: {err}"
+    except asyncio.TimeoutError:
+        return "点击超时"
     except Exception as e:
-        return f"点击失败: {e}"
+        return f"点击异常: {e}"
