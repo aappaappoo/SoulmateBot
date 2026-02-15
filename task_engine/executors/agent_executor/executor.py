@@ -125,16 +125,15 @@ class AgentExecutor(BaseExecutor):
             assistant_content = llm_response.get("content", "")
 
             if assistant_content:
-                accumulated_content += assistant_content.strip() + "\n"
-                logger.info(f"💬 [AgentExecutor] LLM 回复: {assistant_content[:200]}")
+                assistant_content = assistant_content.strip() + "\n"
+                logger.debug(f"💬 [AgentExecutor] LLM 回复: {assistant_content[:]}")
 
             if not tool_calls:
                 # LLM 不再调用工具，任务完成
-                final_reply = accumulated_content if accumulated_content else assistant_content
                 logger.info(f"✅ [AgentExecutor] 任务完成（第 {iteration} 轮），LLM 无更多工具调用")
                 return StepResult(
                     success=True,
-                    message=final_reply or "AI 自主操控任务已完成",
+                    message=assistant_content or "AI 自主操控任务已完成",
                     data={"iterations": iteration},
                 )
 
