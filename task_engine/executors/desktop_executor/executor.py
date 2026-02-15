@@ -174,6 +174,19 @@ class DesktopExecutor(BaseExecutor):
                     f"{func_name}({_summarize_args(func_name, func_args)})"
                 )
 
+                # TaskGuard 执行前安全检查（Nanobot tool-call loop 模式）
+                pre_action = self._guard.pre_check(func_name, func_args)
+                if pre_action == GuardAction.ABORT:
+                    logger.warning(
+                        f"🛑 [DesktopExecutor] 安全守卫拒绝执行: "
+                        f"tool={func_name}, iteration={iteration}"
+                    )
+                    return StepResult(
+                        success=False,
+                        message=f"安全守卫终止：检测到危险操作或过多偏离",
+                        data={"iterations": iteration, "last_tool": func_name},
+                    )
+
                 # 执行工具
                 tool_fn = TOOL_REGISTRY.get(func_name)
                 if tool_fn is None:
@@ -192,9 +205,9 @@ class DesktopExecutor(BaseExecutor):
                         tool_result = f"工具执行异常: {e}"
                         logger.error(f"❌ [DesktopExecutor] 工具 {func_name} 执行异常: {e}")
 
-                # 守卫检查
-                action = self._guard.check(func_name, func_args, str(tool_result))
-                if action == GuardAction.ABORT:
+                # TaskGuard 执行后结果检查
+                post_action = self._guard.post_check(func_name, func_args, str(tool_result))
+                if post_action == GuardAction.ABORT:
                     logger.warning(
                         f"🛑 [DesktopExecutor] 安全守卫终止: "
                         f"tool={func_name}, iteration={iteration}"
@@ -204,7 +217,7 @@ class DesktopExecutor(BaseExecutor):
                         message=f"安全守卫终止：检测到危险操作或过多偏离",
                         data={"iterations": iteration, "last_tool": func_name},
                     )
-                elif action == GuardAction.SWITCH:
+                elif post_action == GuardAction.SWITCH:
                     logger.warning(
                         f"🔀 [DesktopExecutor] 守卫建议切换: "
                         f"tool={func_name}, iteration={iteration}"

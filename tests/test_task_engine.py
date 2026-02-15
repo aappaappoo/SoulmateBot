@@ -200,6 +200,95 @@ class TestTaskGuard:
         assert guard.fail_counts == {}
 
 
+class TestTaskGuardPrePostCheck:
+    """测试 TaskGuard 的 pre_check / post_check 方法（Nanobot tool-call loop 模式）"""
+
+    def test_pre_check_allow_normal(self):
+        """正常操作应通过 pre_check"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.pre_check("click", {"x": 100, "y": 200})
+        assert action == GuardAction.ALLOW
+
+    def test_pre_check_abort_on_forbidden_args(self):
+        """参数中包含登录/支付等禁止词应在 pre_check 中终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.pre_check("shell_run", {"command": "sudo rm -rf /"})
+        assert action == GuardAction.ABORT
+
+    def test_pre_check_abort_on_payment_in_tool_name(self):
+        """工具名称中包含支付等禁止词应在 pre_check 中终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.pre_check("payment_submit", {})
+        assert action == GuardAction.ABORT
+
+    def test_pre_check_drift_accumulation(self):
+        """pre_check 应累计偏离信号"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        # 偏离信号在参数中
+        guard.pre_check("click", {"target": "会员升级按钮"})
+        assert guard.drift_count == 1
+
+    def test_pre_check_drift_threshold_abort(self):
+        """pre_check 偏离累计超过阈值应终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        guard.drift_count = 2  # 已有 2 次偏离
+        action = guard.pre_check("click", {"target": "VIP升级"})
+        assert action == GuardAction.ABORT
+
+    def test_post_check_allow_normal(self):
+        """正常结果应通过 post_check"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.post_check("click", {"x": 100, "y": 200}, "已点击")
+        assert action == GuardAction.ALLOW
+
+    def test_post_check_abort_on_forbidden_result(self):
+        """结果中包含禁止操作关键词应终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.post_check("click", {}, "跳转到支付页面")
+        assert action == GuardAction.ABORT
+
+    def test_post_check_drift_in_result(self):
+        """post_check 应检测结果中的偏离信号"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        guard.post_check("vision_analyze", {}, "页面提示：会员专享内容")
+        assert guard.drift_count == 1
+
+    def test_post_check_switch_on_repeated_failure(self):
+        """post_check 应检测重复失败并建议切换"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        for _ in range(3):
+            action = guard.post_check("app_open", {"url": "https://test.com"}, "打开失败")
+        assert action == GuardAction.SWITCH
+
+    def test_pre_then_post_check_flow(self):
+        """模拟完整的 pre_check → execute → post_check 流程"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        # Step 1: pre_check 通过
+        pre = guard.pre_check("click", {"x": 100, "y": 200})
+        assert pre == GuardAction.ALLOW
+        # Step 2: 执行后 post_check
+        post = guard.post_check("click", {"x": 100, "y": 200}, "已成功点击")
+        assert post == GuardAction.ALLOW
+
+    def test_pre_check_blocks_before_execution(self):
+        """pre_check 拒绝应阻止工具执行"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        pre = guard.pre_check("type_text", {"text": "password123"})
+        assert pre == GuardAction.ABORT
+        # 不应到达 post_check
+
+
 # ============================================================
 # Platform 测试
 # ============================================================
@@ -1754,19 +1843,20 @@ class TestTaskEngineAgent:
 
     def test_skill_keywords(self, agent):
         kw = agent.skill_keywords
-        assert "desktop_control" in kw
-        assert "打开" in kw["desktop_control"]
+        # skill_keywords is now empty (LLM-based selection, no keyword matching)
+        assert kw == {}
 
     def test_skill_description(self, agent):
         desc = agent.get_skill_description("desktop_control")
         assert desc is not None
 
     def test_can_handle_high_confidence(self, agent):
+        """can_handle now returns 0.0 for non-mention messages (LLM-based selection)"""
         from src.agents.models import ChatContext, Message
         msg = Message(content="打开网页播放音乐", user_id="u1", chat_id="c1")
         ctx = ChatContext(chat_id="c1")
         confidence = agent.can_handle(msg, ctx)
-        assert confidence >= 0.75
+        assert confidence == 0.0
 
     def test_can_handle_mention(self, agent):
         from src.agents.models import ChatContext, Message
@@ -1786,16 +1876,19 @@ class TestTaskEngineAgent:
         assert agent.can_handle(msg, ctx) == 0.0
 
     def test_can_handle_single_keyword_low(self, agent):
+        """can_handle now returns 0.0 for non-mention messages (LLM-based selection)"""
         from src.agents.models import ChatContext, Message
         msg = Message(content="音乐好听", user_id="u1", chat_id="c1")
         ctx = ChatContext(chat_id="c1")
         confidence = agent.can_handle(msg, ctx)
-        assert confidence == 0.4
+        assert confidence == 0.0
 
     def test_memory_read_write(self, agent):
-        agent.memory_write("u1", {"count": 1})
+        """memory_write now only stores minimal task state (task_completed, task_count)"""
+        agent.memory_write("u1", {"task_completed": True, "task_count": 1})
         data = agent.memory_read("u1")
-        assert data["count"] == 1
+        assert data["task_completed"] is True
+        assert data["task_count"] == 1
 
     def test_memory_read_empty(self, agent):
         data = agent.memory_read("nonexistent")
@@ -1813,3 +1906,17 @@ class TestTaskEngineAgent:
         response = agent.respond(msg, ctx)
         assert isinstance(response, AgentResponse)
         assert response.agent_name == "TaskEngineAgent"
+
+    def test_memory_minimal_write_filters_extra_fields(self, agent):
+        """memory_write only stores task_completed and task_count (minimal task memory)"""
+        agent.memory_write("u1", {
+            "task_completed": True,
+            "task_count": 3,
+            "execution_details": "should not be saved",
+            "tool_calls": ["click", "type_text"],
+        })
+        data = agent.memory_read("u1")
+        assert data["task_completed"] is True
+        assert data["task_count"] == 3
+        assert "execution_details" not in data
+        assert "tool_calls" not in data

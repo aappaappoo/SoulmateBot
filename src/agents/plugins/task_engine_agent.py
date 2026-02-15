@@ -1,10 +1,10 @@
 """
 TaskEngine Agent - 任务引擎与 Agent 系统的桥接
 
-将 TaskEngine 异步执行能力桥接到 BaseAgent 同步接口，
-通过关键词匹配检测桌面操控意图。
+将 TaskEngine 异步执行能力桥接到 BaseAgent 同步接口。
+Agent 的选择完全由 LLM 根据 self._description 语义匹配决定，
+不使用关键词列表或硬编码判断逻辑。
 
-关键词命中（打开/网页/音乐/播放…）→ 高置信度
 同步 Agent 接口中桥接异步 TaskEngine.run()
 返回最终自然语言结果
 """
@@ -16,25 +16,20 @@ from src.agents.models import AgentResponse, ChatContext, Message
 
 from task_engine import TaskEngine
 
-# 桌面操控意图关键词
-_TASK_KEYWORDS: List[str] = [
-    "打开", "网页", "浏览器", "音乐", "播放",
-    "点击", "输入", "搜索歌曲", "视频", "网站",
-    "桌面", "截图", "屏幕",
-]
-
 
 class TaskEngineAgent(BaseAgent):
     """
     TaskEngine 桥接 Agent
 
-    检测桌面操控意图后，调用 TaskEngine 执行多步骤桌面任务。
+    当 LLM 根据描述判定为桌面操控意图后，调用 TaskEngine 执行多步骤桌面任务。
+    Agent 选择完全由 LLM 基于 self._description 自主决定。
     """
 
     def __init__(self, memory_store=None, **kwargs) -> None:
         self._name = "TaskEngineAgent"
         self._description = (
             "桌面操控任务引擎，支持打开浏览器、搜索音乐、播放视频等自动化操作。"
+            "适用于需要操控桌面应用、执行网页自动化、播放媒体内容等任务型请求。"
         )
         self._memory: Dict[str, Dict[str, Any]] = {}
         self._engine = TaskEngine()
@@ -53,11 +48,7 @@ class TaskEngineAgent(BaseAgent):
 
     @property
     def skill_keywords(self) -> Dict[str, List[str]]:
-        return {
-            "desktop_control": ["打开", "点击", "输入", "桌面", "截图"],
-            "music_play": ["音乐", "播放", "歌曲"],
-            "web_automation": ["网页", "浏览器", "网站"],
-        }
+        return {}
 
     def get_skill_description(self, skill_id: str) -> Optional[str]:
         descriptions = {
@@ -69,27 +60,12 @@ class TaskEngineAgent(BaseAgent):
 
     def can_handle(self, message: Message, context: ChatContext) -> float:
         """
-        判断是否为桌面操控任务
-
-        通过关键词匹配计算置信度：
-        - @提及 → 1.0
-        - 命中 ≥3 个关键词 → 0.9
-        - 命中 2 个 → 0.75
-        - 命中 1 个 → 0.4
-        - 无命中 → 0.0
+        返回基础置信度，实际选择由编排器中的 LLM 根据 description 决定。
+        仅保留 @提及 的精确匹配。
         """
         if message.has_mention(self.name):
             return 1.0
 
-        content = message.content
-        hit_count = sum(1 for kw in _TASK_KEYWORDS if kw in content)
-
-        if hit_count >= 3:
-            return 0.9
-        elif hit_count == 2:
-            return 0.75
-        elif hit_count == 1:
-            return 0.4
         return 0.0
 
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
@@ -124,7 +100,23 @@ class TaskEngineAgent(BaseAgent):
         )
 
     def memory_read(self, user_id: str) -> Dict[str, Any]:
+        """
+        读取任务执行的最小必要状态
+
+        只保留：任务完成状态 + 执行次数（极简记忆策略）
+        """
         return self._memory.get(user_id, {})
 
     def memory_write(self, user_id: str, data: Dict[str, Any]) -> None:
-        self._memory[user_id] = data
+        """
+        写入任务执行的最小必要状态
+
+        只允许记录：
+        - task_completed: 任务是否完成
+        - task_count: 任务执行次数
+        """
+        minimal_data = {
+            "task_completed": data.get("task_completed", False),
+            "task_count": data.get("task_count", 0),
+        }
+        self._memory[user_id] = minimal_data

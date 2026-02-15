@@ -54,26 +54,24 @@ class TestSearchAgent:
         assert "搜索" in search_agent.description or "search" in search_agent.description.lower()
     
     def test_can_handle_with_search_keywords(self, search_agent, sample_context):
-        """Test can_handle returns high confidence for search-related messages."""
-        # 包含多个搜索关键词的消息
+        """Test can_handle returns 0.0 for non-mention messages (LLM-based selection)."""
         message = Message(
             content="帮我搜索一下最新的新闻动态",
             user_id="test_user",
             chat_id="test_chat"
         )
         confidence = search_agent.can_handle(message, sample_context)
-        assert confidence >= 0.6
+        assert confidence == 0.0
     
     def test_can_handle_with_realtime_topics(self, search_agent, sample_context):
-        """Test can_handle returns confidence for realtime topics."""
+        """Test can_handle returns 0.0 for non-mention messages (LLM-based selection)."""
         message = Message(
             content="今天的天气怎么样？",
             user_id="test_user",
             chat_id="test_chat"
         )
         confidence = search_agent.can_handle(message, sample_context)
-        # 天气是实时话题，应该有一定置信度
-        assert confidence >= 0.5
+        assert confidence == 0.0
     
     def test_can_handle_with_mention(self, search_agent, sample_context):
         """Test can_handle returns 1.0 when agent is mentioned."""
@@ -104,10 +102,9 @@ class TestSearchAgent:
         assert "realtime_info" in skills
     
     def test_skill_keywords(self, search_agent):
-        """Test agent skill keywords."""
+        """Test agent skill keywords are empty (LLM-based selection)."""
         keywords = search_agent.skill_keywords
-        assert "web_search" in keywords
-        assert "搜索" in keywords["web_search"]
+        assert keywords == {}
     
     def test_skill_description(self, search_agent):
         """Test agent skill descriptions."""
