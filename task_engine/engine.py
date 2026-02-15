@@ -8,6 +8,7 @@ from loguru import logger
 from .executor_router import route_and_execute
 from .models import Task, TaskStatus
 from .planner import plan
+from .polisher import polish
 from .reporter import report
 from .verifier import verify
 
@@ -74,6 +75,10 @@ class TaskEngine:
         # 4. 报告
         report_text = await report(task)
         logger.debug(f"📝 [TaskEngine] 报告输出: {report_text}")
+
+        # 5. 润色
+        polished_text = await polish(report_text, user_input)
+        logger.debug(f"✨ [TaskEngine] 润色输出: {polished_text}")
         logger.debug(f"🏁 [TaskEngine] ===== 任务结束 =====")
 
-        return report_text
+        return polished_text
