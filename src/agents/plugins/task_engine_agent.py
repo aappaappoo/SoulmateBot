@@ -11,6 +11,8 @@ Agent 的选择完全由 LLM 根据 self._description 语义匹配决定，
 import asyncio
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
+
 from src.agents.base_agent import BaseAgent
 from src.agents.models import AgentResponse, ChatContext, Message
 
@@ -76,6 +78,10 @@ class TaskEngineAgent(BaseAgent):
         """
         user_input = message.get_clean_content()
 
+        logger.debug(f"🚀 [TaskEngineAgent] ===== 开始处理 =====")
+        logger.debug(f"🚀 [TaskEngineAgent] 输入: {user_input}")
+        logger.debug(f"🚀 [TaskEngineAgent] 决策: 由 LLM 编排器分配到 TaskEngineAgent")
+
         # 桥接异步 TaskEngine
         try:
             loop = asyncio.get_running_loop()
@@ -90,6 +96,9 @@ class TaskEngineAgent(BaseAgent):
                 result_text = future.result(timeout=120)
         else:
             result_text = asyncio.run(self._engine.run(user_input))
+
+        logger.debug(f"📤 [TaskEngineAgent] 输出: {result_text}")
+        logger.debug(f"🏁 [TaskEngineAgent] ===== 处理结束 =====")
 
         return AgentResponse(
             content=result_text,
