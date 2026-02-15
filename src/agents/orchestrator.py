@@ -556,10 +556,10 @@ class AgentOrchestrator:
                 result.final_response = "你好！有什么我可以帮助你的吗？"
             return result
 
-        # Agent 处理
+        # Agent 处理暂时不考虑多智能体合作
         agent_responses = await self.execute_agents(message, context, result.selected_agents)
         result.agent_responses = agent_responses
-        result.final_response = await self.synthesize_response(message, agent_responses, context)
+        result.final_response = agent_responses
 
         return result
 

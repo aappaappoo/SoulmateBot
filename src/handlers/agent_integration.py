@@ -194,7 +194,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # Fallback to database
             system_prompt = selected_bot.system_prompt
             logger.info(f"💾 Using system prompt from database for @{selected_bot.bot_username}")
-        try:
+        # try:
+        if 1:
             # 检查用户和订阅状态
             user = update.effective_user
             db_user = None
@@ -567,8 +568,8 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 记录处理信息
             if result.agent_responses:
                 logger.info(f"✅ Agent responses: {[r.agent_name for r in result.agent_responses]}")
-        except Exception as e:
-            logger.error(f"❌ Error in handle_message_with_agents: {str(e)}", exc_info=True)
+        # except Exception as e:
+        #     logger.error(f"❌ Error in handle_message_with_agents: {str(e)}", exc_info=True)
             await message.reply_text(
                 f"抱歉，我遇到了一些问题：{str(e)}\n\n"
                 "请稍后再试，或联系管理员。"
