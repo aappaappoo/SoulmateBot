@@ -34,9 +34,9 @@ from task_engine.executors.agent_executor.tools import (
 )
 
 # LLM 配置
-_EXECUTOR_LLM_URL = getattr(settings, "executor_llm_url", None) or getattr(settings, "vllm_api_url", "http://localhost:8000")
+_EXECUTOR_LLM_URL = getattr(settings, "executor_llm_url", None) or getattr(settings, "vllm_api_url", None) or "http://localhost:8000"
 _EXECUTOR_LLM_MODEL = getattr(settings, "executor_llm_model", None) or getattr(settings, "vllm_model", "default")
-_EXECUTOR_LLM_TOKEN = getattr(settings, "executor_llm_token", "") or ""
+_EXECUTOR_LLM_TOKEN = getattr(settings, "executor_llm_token", None) or getattr(settings, "vllm_api_token", None) or ""
 _MAX_ITERATIONS = getattr(settings, "max_iterations", 15) or 15
 
 # Agent system prompt - LLM 自主决策
@@ -107,10 +107,8 @@ class AgentExecutor(BaseExecutor):
             {"role": "user", "content": f"请完成以下任务：{task_text}"},
         ]
 
-        max_iters = _MAX_ITERATIONS if isinstance(_MAX_ITERATIONS, int) else 15
-
-        for iteration in range(1, max_iters + 1):
-            logger.info(f"🔄 [AgentExecutor] === 第 {iteration}/{max_iters} 轮 ===")
+        for iteration in range(1, _MAX_ITERATIONS + 1):
+            logger.info(f"🔄 [AgentExecutor] === 第 {iteration}/{_MAX_ITERATIONS} 轮 ===")
 
             # 调用 LLM 获取下一步操作
             llm_response = await self._call_llm(messages)
@@ -226,12 +224,12 @@ class AgentExecutor(BaseExecutor):
                 })
 
         logger.warning(
-            f"⏰ [AgentExecutor] 达到最大迭代次数 ({max_iters})，任务未完成"
+            f"⏰ [AgentExecutor] 达到最大迭代次数 ({_MAX_ITERATIONS})，任务未完成"
         )
         return StepResult(
             success=False,
-            message=f"达到最大迭代次数 ({max_iters})，任务未完成",
-            data={"iterations": max_iters},
+            message=f"达到最大迭代次数 ({_MAX_ITERATIONS})，任务未完成",
+            data={"iterations": _MAX_ITERATIONS},
         )
 
     async def _call_llm(self, messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

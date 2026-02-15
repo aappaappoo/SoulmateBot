@@ -2081,7 +2081,7 @@ class TestAgentExecutor:
 
     @pytest.mark.asyncio
     async def test_guard_abort_during_loop(self):
-        """测试守卫在循环中检测到危险操作时终止"""
+        """测试守卫在循环中检测到支付相关内容时终止"""
         from task_engine.executors.agent_executor.executor import AgentExecutor
         from task_engine.models import ExecutorType, Step
 
@@ -2097,12 +2097,12 @@ class TestAgentExecutor:
                     "id": f"call_{call_count}",
                     "function": {
                         "name": "browser",
-                        "arguments": json.dumps({"action": "navigate", "url": "https://example.com/login"}),
+                        "arguments": json.dumps({"action": "navigate", "url": "https://example.com/checkout"}),
                     },
                 }],
             }
 
-        # Mock browser 工具返回包含支付相关内容
+        # Mock browser 工具返回包含支付相关内容，触发安全守卫
         async def mock_browser(**kwargs):
             return json.dumps({"success": True, "message": "跳转到支付页面"})
 
