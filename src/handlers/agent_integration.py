@@ -37,6 +37,7 @@ from src.models.database import UserMemory
 from src.services.conversation_memory_service import DateParser
 from src.conversation.dialogue_strategy import enhance_prompt_with_strategy
 from src.conversation.context_builder import UnifiedContextBuilder, ContextConfig
+from src.services.conversation_cache_service import get_conversation_cache_service
 
 # 全局编排器实例（懒加载）
 _orchestrator: Optional[AgentOrchestrator] = None
@@ -249,33 +250,54 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
 
             # 发送typing指示
             await message.chat.send_action("typing")
-            # 获取对话历史
+            # 获取对话历史（优先从 Redis 缓存读取，缓存未命中时从 MySQL 加载）
             history_messages = []
-            recent_conversations = []
+            cache_history_list = []
             session_id = f"{db_user.id}_{selected_bot.id}" if db_user and selected_bot else None
-            if db_user:
+            cache_service = get_conversation_cache_service()
+            cached_history = cache_service.get_conversation_history(session_id) if session_id else None
+            if db_user and cached_history is not None:
+                # 从 Redis 缓存命中，直接构建 AgentMessage
+                for msg in cached_history:
+                    history_messages.append(AgentMessage(
+                        content=msg.get("content", ""),
+                        user_id=msg.get("role", "user"),
+                        chat_id=str(chat_id),
+                    ))
+                logger.debug(f"📦 Loaded {len(cached_history)} messages from Redis cache")
+            elif db_user:
+                # 缓存未命中，从 MySQL 加载并写入缓存
                 db_result = await db.execute(
                     select(Conversation)
                     .where(Conversation.user_id == db_user.id)
                     .where(Conversation.session_id == session_id)
                     .order_by(Conversation.timestamp.desc())
-                    .limit(50)  # 增加到50条以支持中期摘要
+                    .limit(50)
                 )
                 recent_conversations = list(db_result.scalars().all())
-                # 构建 Message 对象列表，使用 user_id 来标识 user 或 assistant
+                cache_history_list = []
                 for conv in reversed(recent_conversations):
                     if conv.is_user_message:
+                        time = conv.timestamp.strftime("%Y-%m-%d %H:%M:%S") if conv.timestamp else ""
+                        msg_dict = {"role": "user", "content": conv.message, "timestamp": time}
+                        cache_history_list.append(msg_dict)
                         history_messages.append(AgentMessage(
                             content=conv.message,
-                            user_id="user",  # 标识为用户消息
+                            user_id="user",
                             chat_id=str(chat_id),
                         ))
                     else:
+                        msg_dict = {"role": "assistant", "content": conv.response}
+                        cache_history_list.append(msg_dict)
                         history_messages.append(AgentMessage(
                             content=conv.response,
-                            user_id="assistant",  # 标识为助手消息
+                            user_id="assistant",
                             chat_id=str(chat_id)
                         ))
+                # 写入 Redis 缓存
+                if session_id and cache_history_list:
+                    cache_service.set_conversation_history(session_id, cache_history_list)
+                    logger.debug(f"💾 Cached {len(cache_history_list)} messages to Redis")
             # 🧠 创建记忆服务实例（在整个请求中复用）
             memory_service = None
             if db_user:
@@ -309,13 +331,11 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     logger.warning(f"Error retrieving memories: {e}", exc_info=True)
 
             # 构建对话历史格式（用于 UnifiedContextBuilder）
-            conversation_history_for_builder = []
-            for conv in reversed(recent_conversations):
-                time = conv.timestamp.strftime("%Y-%m-%d %H:%M:%S") if conv.timestamp else ""
-                if conv.is_user_message:
-                    conversation_history_for_builder.append({"role": "user", "content": conv.message, "timestamp": time})
-                else:
-                    conversation_history_for_builder.append({"role": "assistant", "content": conv.response})
+            # 优先使用 Redis 缓存中的数据（已是正确格式）
+            if cached_history is not None:
+                conversation_history_for_builder = cached_history
+            else:
+                conversation_history_for_builder = cache_history_list
             # 应用动态对话策略（生成策略文本）ot_config 中的 values 配置（如果存在）
             dialogue_strategy_text = None
             bot_values = get_bot_values(context)
@@ -349,9 +369,9 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     enable_proactive_strategy=True,
                 )
             )
-            # 获取之前保存的 LLM 摘要
-            summary_key = f"llm_summary_{chat_id}_{db_user.id if db_user else 'unknown'}"
-            previous_summary = context.bot_data.get(summary_key)
+            # 获取之前保存的 LLM 摘要（从 Redis 缓存）
+            user_id_str = str(db_user.id) if db_user else 'unknown'
+            previous_summary = cache_service.get_summary(str(chat_id), user_id_str)
             try:
                 builder_result = await context_builder.build_context(
                     bot_system_prompt=system_prompt or "",
@@ -392,22 +412,11 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             # 使用编排器处理消息
             orchestrator = get_orchestrator()
             result = await orchestrator.process(agent_message, chat_context)
-            # 保存 LLM 生成的摘要供下一轮使用
+            # 保存 LLM 生成的摘要供下一轮使用（写入 Redis 缓存）
             if hasattr(result, 'metadata') and result.metadata.get("conversation_summary"):
                 llm_summary = result.metadata["conversation_summary"]
-                # 存储到 context.bot_data 中，供下一轮对话使用
-                summary_key = f"llm_summary_{chat_id}_{db_user.id if db_user else 'unknown'}"
-                context.bot_data[summary_key] = llm_summary
-                # 定期清理旧的摘要（简单的大小限制）
-                # 保留最近100个摘要，防止内存泄漏
-                summary_keys = [k for k in context.bot_data.keys() if k.startswith("llm_summary_")]
-                if len(summary_keys) > 100:
-                    # 删除最旧的摘要（假设键按时间顺序添加）
-                    oldest_keys = summary_keys[:len(summary_keys) - 100]
-                    for old_key in oldest_keys:
-                        context.bot_data.pop(old_key, None)
-                    logger.debug(f"🧹 Cleaned up {len(oldest_keys)} old summaries from bot_data")
-                logger.info(f"📝 Saved LLM summary: {llm_summary.get('summary_text', '')[:50]}...")
+                cache_service.set_summary(str(chat_id), user_id_str, llm_summary)
+                logger.info(f"📝 Saved LLM summary to Redis: {llm_summary.get('summary_text', '')[:50]}...")
             # 日志记录意图类型和来源
             intent_source = result.metadata.get("intent_source", "unknown")
             logger.info(f"🎯 Intent type: {result.intent_type} | Source: {intent_source}")
@@ -472,6 +481,14 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     # 记录使用量
                     await subscription_service.record_usage(db_user, action_type="message")
                     await db.commit()
+                    # 同步更新 Redis 对话缓存
+                    if session_id:
+                        now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                        cache_service.append_conversation(
+                            session_id,
+                            {"role": "user", "content": message_text, "timestamp": now_str},
+                            {"role": "assistant", "content": response}
+                        )
                     # 🧠 保存记忆（优先使用统一分析结果，无需额外 LLM）
                     if result.memory_analysis is not None:
                         # 统一模式已返回记忆分析结果，直接使用（无论是否重要）
