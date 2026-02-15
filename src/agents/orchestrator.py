@@ -420,26 +420,21 @@ class AgentOrchestrator:
             return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK, None, None
 
     def _build_capabilities(self) -> List[AgentCapability]:
-        """构建所有Agent的能力描述列表"""
+        """构建所有Agent的能力描述列表，仅依赖 agent.description"""
         capabilities = []
         for name, agent in self.agents.items():
             cap = AgentCapability(
                 name=name,
                 description=agent.description,
-                keywords=getattr(agent, '_emotional_keywords', []) or 
-                         getattr(agent, '_tech_keywords', []) or 
-                         getattr(agent, '_tool_keywords', []),
-                is_tool=name.lower().endswith('agent') and 'tool' in name.lower()
             )
             capabilities.append(cap)
         return capabilities
     
     def _get_capabilities_prompt(self) -> str:
-        """生成Agent能力描述的提示词"""
+        """生成Agent能力描述的提示词，仅使用 description 供 LLM 语义匹配"""
         cap_list = []
         for cap in self._capabilities:
-            cap_type = "工具" if cap.is_tool else "Agent"
-            cap_list.append(f"- {cap.name} ({cap_type}): {cap.description}")
+            cap_list.append(f"- {cap.name}: {cap.description}")
         return "\n".join(cap_list)
     
     async def analyze_intent(

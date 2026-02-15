@@ -2,9 +2,11 @@
 搜索Agent - 实时网络搜索和信息检索
 
 这个Agent实现了 RAG + Web Retrieval 的标准模式，提供实时资讯查询能力。
+Agent 的选择完全由 LLM 根据 self._description 语义匹配决定，
+不使用关键词列表或硬编码判断逻辑。
 
 流程：
-1. 用户问题 → 意图识别（判断是否需要搜索）
+1. 编排器 LLM 判断用户意图匹配此 Agent 的 description
 2. 调用搜索 API → 获取 top-k snippets
 3. 网页抓取 + 文本清洗（可选）
 4. 拼接 prompt → LLM 生成回答
@@ -57,51 +59,16 @@ class SearchAgent(BaseAgent):
         self._name = "SearchAgent"
         self._description = (
             "提供实时网络搜索能力的Agent。"
-            "可以查询最新新闻、实时资讯、热点事件等。"
+            "可以查询最新新闻、实时资讯、热点事件、事实性问题、天气、股票等。"
             "使用 RAG + Web Retrieval 模式生成高质量回答。"
+            "适用于需要互联网信息补充的问题。"
         )
         self._memory = memory_store or SQLiteMemoryStore()
         self._llm_provider = llm_provider
 
-        # 搜索相关的关键词库
-        self._search_keywords = [
-            # 时效性关键词
-            "最新", "最近", "今天", "昨天", "现在", "刚刚", "实时",
-            "latest", "recent", "today", "now", "current", "breaking",
-
-            # 新闻和动态
-            "新闻", "动态", "消息", "资讯", "热点", "头条",
-            "news", "update", "headline", "trending",
-
-            # 查询意图
-            "搜索", "查询", "查一下", "查查", "搜一下", "找一下",
-            "search", "find", "look up", "google",
-
-            # 信息获取
-            "是什么", "什么是", "怎么样", "如何", "为什么",
-            "what is", "how is", "why", "when", "where", "who",
-
-            # 事件和活动
-            "发生", "事件", "活动", "比赛", "结果",
-            "event", "match", "result", "game",
-
-            # 人物和组织
-            "动态", "近况", "最新消息",
-        ]
-
-        # 需要实时信息的话题类型
-        self._realtime_topics = [
-            "天气", "股票", "汇率", "比赛", "赛事", "选举",
-            "发布会", "上市", "开售", "疫情", "政策"
-        ]
-
         # 搜索技能定义
         self._skills = ["web_search", "news_query", "realtime_info"]
-        self._skill_keywords = {
-            "web_search": ["搜索", "查询", "search", "find", "查一下"],
-            "news_query": ["新闻", "资讯", "动态", "news", "headlines"],
-            "realtime_info": ["最新", "实时", "现在", "今天", "latest", "current"]
-        }
+        self._skill_keywords = {}
         self._skill_descriptions = {
             "web_search": "网络搜索，获取互联网上的相关信息",
             "news_query": "新闻查询，获取最新的新闻资讯",
@@ -134,43 +101,14 @@ class SearchAgent(BaseAgent):
 
     def can_handle(self, message: Message, context: ChatContext) -> float:
         """
-        判断是否能处理此消息
-        
-        检查消息是否包含搜索/查询的意图
-        
-        返回值:
-            float: 置信度分数 (0.0-1.0)
+        返回基础置信度，实际选择由编排器中的 LLM 根据 description 决定。
+        仅保留 @提及 的精确匹配。
         """
         # 检查@提及
         if message.has_mention(self.name):
             return 1.0
 
-        content = message.content.lower()
-
-        # 统计搜索关键词匹配数
-        keyword_matches = sum(1 for keyword in self._search_keywords if keyword in content)
-
-        # 检查是否是需要实时信息的话题
-        realtime_match = any(topic in content for topic in self._realtime_topics)
-
-        # 根据匹配数计算置信度
-        if keyword_matches >= 3 or (keyword_matches >= 1 and realtime_match):
-            confidence = 0.9
-        elif keyword_matches == 2:
-            confidence = 0.75
-        elif keyword_matches == 1:
-            confidence = 0.6
-        elif realtime_match:
-            confidence = 0.5
-        else:
-            confidence = 0.0
-
-        # 检查问号（询问类消息）
-        if "?" in content or "？" in content:
-            if keyword_matches > 0 or realtime_match:
-                confidence = min(1.0, confidence + 0.1)
-
-        return confidence
+        return 0.0
 
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """

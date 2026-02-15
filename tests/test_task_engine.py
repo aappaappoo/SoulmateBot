@@ -1754,19 +1754,20 @@ class TestTaskEngineAgent:
 
     def test_skill_keywords(self, agent):
         kw = agent.skill_keywords
-        assert "desktop_control" in kw
-        assert "打开" in kw["desktop_control"]
+        # skill_keywords is now empty (LLM-based selection, no keyword matching)
+        assert kw == {}
 
     def test_skill_description(self, agent):
         desc = agent.get_skill_description("desktop_control")
         assert desc is not None
 
     def test_can_handle_high_confidence(self, agent):
+        """can_handle now returns 0.0 for non-mention messages (LLM-based selection)"""
         from src.agents.models import ChatContext, Message
         msg = Message(content="打开网页播放音乐", user_id="u1", chat_id="c1")
         ctx = ChatContext(chat_id="c1")
         confidence = agent.can_handle(msg, ctx)
-        assert confidence >= 0.75
+        assert confidence == 0.0
 
     def test_can_handle_mention(self, agent):
         from src.agents.models import ChatContext, Message
@@ -1786,16 +1787,19 @@ class TestTaskEngineAgent:
         assert agent.can_handle(msg, ctx) == 0.0
 
     def test_can_handle_single_keyword_low(self, agent):
+        """can_handle now returns 0.0 for non-mention messages (LLM-based selection)"""
         from src.agents.models import ChatContext, Message
         msg = Message(content="音乐好听", user_id="u1", chat_id="c1")
         ctx = ChatContext(chat_id="c1")
         confidence = agent.can_handle(msg, ctx)
-        assert confidence == 0.4
+        assert confidence == 0.0
 
     def test_memory_read_write(self, agent):
-        agent.memory_write("u1", {"count": 1})
+        """memory_write now only stores minimal task state (task_completed, task_count)"""
+        agent.memory_write("u1", {"task_completed": True, "task_count": 1})
         data = agent.memory_read("u1")
-        assert data["count"] == 1
+        assert data["task_completed"] is True
+        assert data["task_count"] == 1
 
     def test_memory_read_empty(self, agent):
         data = agent.memory_read("nonexistent")
