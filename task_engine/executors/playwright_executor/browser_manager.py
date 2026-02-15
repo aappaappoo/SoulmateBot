@@ -49,12 +49,11 @@ class BrowserManager:
                 logger.info("🌐 [BrowserManager] 启动 Chromium 浏览器")
                 self._playwright = await async_playwright().start()
                 self._browser = await self._playwright.chromium.launch(
-                    # 1. 调试阶段建议设为 False，能看到浏览器界面和播放状态
-                    headless=False,
+                    headless=True,
                     args=[
                         "--no-sandbox",
+                        "--disable-gpu",
                         "--disable-dev-shm-usage",
-                        "--audio-output-channels=2",
                     ],
                 )
             return self._browser

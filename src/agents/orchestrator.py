@@ -100,7 +100,7 @@ class AgentOrchestrator:
 4. 记忆分析
 
 【任务 1：意图识别】
-判断用户消息应如何处理，intent 只能是以下三种之一：
+判断用户消息应如何处理，intent 只能是以下两种之一：
 
 - "direct_response"：
   日常闲聊、情感陪伴、情绪沟通，你可以直接回复用户
@@ -109,9 +109,6 @@ class AgentOrchestrator:
   需要使用到下面某一个专业 Agent 处理能力来解决的时候
   ** 可用 Agent 能力如下 **：
     {agent_capabilities}
-    
-- "multi_agent"：
-  需要完成一个复杂任务而非单一智能体即可完成的使用
 
 
 当 intent 为：
@@ -436,100 +433,7 @@ class AgentOrchestrator:
         for cap in self._capabilities:
             cap_list.append(f"- {cap.name}: {cap.description}")
         return "\n".join(cap_list)
-    
-    async def analyze_intent(
-        self,
-        message: Message,
-        context: ChatContext
-    ) -> Tuple[IntentType, List[str], Dict[str, Any], IntentSource]:
-        """
-        分析用户消息的意图
-        
-        使用LLM分析消息内容，判断需要调用哪些Agent。
-        
-        Args:
-            message: 用户消息
-            context: 对话上下文
-            
-        Returns:
-            Tuple[IntentType, List[str], Dict, IntentSource]: 
-                (意图类型, 选中的Agent名称列表, 元数据, 意图识别来源)
-        """
-        # 首先使用Router的基于规则的置信度评估
-        selected_by_confidence = self._router.select_agents(message, context)
-        
-        # 如果没有LLM提供者，直接使用基于规则的结果
-        if not self.llm_provider:
-            logger.info("📌 意图识别来源: 基于规则 (无LLM提供者)")
-            if not selected_by_confidence:
-                return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.RULE_BASED
-            elif len(selected_by_confidence) == 1:
-                return IntentType.SINGLE_AGENT, [selected_by_confidence[0][0].name], {}, IntentSource.RULE_BASED
-            else:
-                agent_names = [agent.name for agent, _ in selected_by_confidence]
-                return IntentType.MULTI_AGENT, agent_names, {}, IntentSource.RULE_BASED
-        
-        # 使用LLM进行更精确的意图识别
-        try:
-            intent_prompt = f"""分析以下用户消息，判断应该如何处理。
 
-可用的Agent能力:
-{self._get_capabilities_prompt()}
-
-用户消息: {message.content}
-
-请以JSON格式回复，包含以下字段:
-- intent: "direct_response" | "single_agent" | "multi_agent" | "tool_call"
-- agents: [选中的Agent名称列表]
-- reasoning: 选择原因
-
-只返回JSON，不要其他内容。"""
-
-            response = await self.llm_provider.generate_response(
-                [{"role": "user", "content": intent_prompt}],
-                context="你是一个智能路由助手，负责分析用户意图并选择合适的处理方式。"
-            )
-            
-            # 解析LLM响应
-            try:
-                # 尝试提取JSON
-                response_text = response.strip()
-                if response_text.startswith("```"):
-                    response_text = response_text.split("```")[1]
-                    if response_text.startswith("json"):
-                        response_text = response_text[4:]
-                
-                result = json.loads(response_text)
-                intent = IntentType(result.get("intent", "direct_response"))
-                agents = result.get("agents", [])
-                metadata = {"reasoning": result.get("reasoning", "")}
-                
-                # 验证Agent名称
-                valid_agents = [a for a in agents if a in self.agents]
-                
-                logger.info("📌 意图识别来源: 基于LLM推理")
-                return intent, valid_agents, metadata, IntentSource.LLM_BASED
-                
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"解析LLM意图响应失败: {e}")
-                logger.info("📌 意图识别来源: 回退到规则 (LLM解析失败)")
-                # 回退到基于规则的结果
-                if selected_by_confidence:
-                    agent_names = [agent.name for agent, _ in selected_by_confidence]
-                    intent = IntentType.SINGLE_AGENT if len(agent_names) == 1 else IntentType.MULTI_AGENT
-                    return intent, agent_names, {}, IntentSource.FALLBACK
-                return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK
-                
-        except Exception as e:
-            logger.error(f"LLM意图分析出错: {e}")
-            logger.info("📌 意图识别来源: 回退到规则 (LLM调用失败)")
-            # 回退到基于规则的结果
-            if selected_by_confidence:
-                agent_names = [agent.name for agent, _ in selected_by_confidence]
-                intent = IntentType.SINGLE_AGENT if len(agent_names) == 1 else IntentType.MULTI_AGENT
-                return intent, agent_names, {}, IntentSource.FALLBACK
-            return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK
-    
     def generate_skill_options(
         self,
         message: Message,
@@ -590,70 +494,7 @@ class AgentOrchestrator:
                 logger.error(f"Agent {agent_name} 执行失败: {e}")
         
         return responses
-    
-    async def synthesize_response(
-        self,
-        message: Message,
-        agent_responses: List[AgentResponse],
-        context: ChatContext
-    ) -> str:
-        """
-        综合多个Agent的响应生成最终回复
-        
-        使用LLM整合所有Agent的输出，生成统一连贯的回复。
-        
-        Args:
-            message: 原始用户消息
-            agent_responses: 各Agent的响应
-            context: 对话上下文
-            
-        Returns:
-            str: 最终综合回复
-        """
-        if not agent_responses:
-            return "抱歉，我目前无法处理您的请求。请稍后再试。"
-        
-        # 如果只有一个响应，直接返回
-        if len(agent_responses) == 1:
-            return agent_responses[0].content
-        
-        # 如果没有LLM提供者，简单拼接响应
-        if not self.llm_provider:
-            combined = []
-            for resp in agent_responses:
-                combined.append(f"【{resp.agent_name}】\n{resp.content}")
-            return "\n\n".join(combined)
-        
-        # 使用LLM综合多个响应
-        try:
-            responses_text = ""
-            for resp in agent_responses:
-                responses_text += f"\n[{resp.agent_name}的分析]:\n{resp.content}\n"
-            
-            synthesis_prompt = f"""用户问题: {message.content}
 
-各专家的分析结果:
-{responses_text}
-
-请综合以上各专家的分析，生成一个完整、连贯的回复给用户。
-要求：
-1. 整合各专家的观点
-2. 保持语气一致和自然
-3. 不要提及"专家"或"分析结果"
-4. 直接回答用户的问题
-5. 回复内容中不要包含语气标注，直接输出纯文本回复"""
-
-            final_response = await self.llm_provider.generate_response(
-                [{"role": "user", "content": synthesis_prompt}],
-                context="你是一个智能助手，负责整合多个专家的意见给用户提供完整的回答。"
-            )
-            
-            return final_response
-            
-        except Exception as e:
-            logger.error(f"综合响应生成失败: {e}")
-            # 回退到简单拼接
-            return agent_responses[0].content
 
     async def process(
             self,
