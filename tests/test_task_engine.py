@@ -88,13 +88,29 @@ class TestModels:
 # ============================================================
 
 class TestPlanner:
-    """测试任务规划器"""
+    """测试任务规划器（LLM 分类模式）"""
 
     @pytest.mark.asyncio
     async def test_desktop_task_detection(self):
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("打开网页里的音乐输入周杰伦播放音乐")
+        # Mock LLM 返回 playwright 分类
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": '{"task_type": "playwright", "description": "Web 音乐播放"}'}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("打开网页里的音乐输入周杰伦播放音乐")
         assert len(task.steps) == 1
         assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
 
@@ -102,14 +118,46 @@ class TestPlanner:
     async def test_desktop_keywords_multiple_hits(self):
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("打开浏览器播放视频")
+        # Mock LLM 返回 desktop 分类
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": '{"task_type": "desktop", "description": "桌面操控"}'}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("打开浏览器播放视频")
         assert task.steps[0].executor_type == ExecutorType.DESKTOP
 
     @pytest.mark.asyncio
     async def test_non_desktop_task_fallback(self):
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("你好，今天心情不错")
+        # Mock LLM 返回 llm 分类
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": '{"task_type": "llm", "description": "普通对话"}'}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("你好，今天心情不错")
         assert len(task.steps) == 1
         assert task.steps[0].executor_type == ExecutorType.LLM
 
@@ -117,16 +165,91 @@ class TestPlanner:
     async def test_single_keyword_not_desktop(self):
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        # 只命中 1 个关键词，不应被识别为桌面任务
-        task = await plan("音乐好听")
+        # Mock LLM 返回 llm 分类（普通对话）
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": '{"task_type": "llm", "description": "普通对话"}'}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("音乐好听")
         assert task.steps[0].executor_type == ExecutorType.LLM
 
     @pytest.mark.asyncio
     async def test_task_params_contain_user_input(self):
         from task_engine.planner import plan
+        # Mock LLM 返回 desktop 分类
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": '{"task_type": "desktop", "description": "桌面操控"}'}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
         user_input = "打开网页搜索周杰伦"
-        task = await plan(user_input)
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan(user_input)
         assert task.steps[0].params["task"] == user_input
+
+    @pytest.mark.asyncio
+    async def test_llm_fallback_when_no_url(self):
+        """LLM URL 未配置时回退到 llm 类型"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        with patch("task_engine.planner._PLANNER_LLM_URL", None):
+            task = await plan("打开浏览器播放视频")
+        assert task.steps[0].executor_type == ExecutorType.LLM
+
+    @pytest.mark.asyncio
+    async def test_llm_fallback_on_api_error(self):
+        """LLM API 错误时回退到 llm 类型"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.text = AsyncMock(return_value="Internal Server Error")
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("打开浏览器播放视频")
+        assert task.steps[0].executor_type == ExecutorType.LLM
+
+    @pytest.mark.asyncio
+    async def test_parse_llm_classification_with_markdown(self):
+        """LLM 返回带 markdown 代码块的 JSON 时能正确解析"""
+        from task_engine.planner import _parse_llm_classification
+        result = _parse_llm_classification('```json\n{"task_type": "desktop", "description": "test"}\n```')
+        assert result == "desktop"
+
+    @pytest.mark.asyncio
+    async def test_parse_llm_classification_invalid_json(self):
+        """LLM 返回无效 JSON 时回退到 llm"""
+        from task_engine.planner import _parse_llm_classification
+        result = _parse_llm_classification("这不是JSON")
+        assert result == "llm"
 
 
 # ============================================================
@@ -1560,18 +1683,36 @@ class TestTaskEngine:
 
     @pytest.mark.asyncio
     async def test_desktop_flow_without_vllm(self):
-        """桌面任务在无 vLLM 时应返回失败"""
+        """桌面任务在无 LLM URL 时回退到 LLM 类型"""
         from task_engine.engine import TaskEngine
         engine = TaskEngine()
-        result = await engine.run("打开桌面截图分析屏幕")
-        assert "❌" in result or "LLM 调用失败" in result
+        with patch("task_engine.planner._PLANNER_LLM_URL", None):
+            result = await engine.run("打开桌面截图分析屏幕")
+        # 无 LLM URL 时 planner 回退到 llm 类型
+        assert "✅" in result or "LLM" in result
 
     @pytest.mark.asyncio
     async def test_playwright_flow_music(self):
-        """Web 音乐任务走 Playwright 执行器"""
+        """Web 音乐任务走 Playwright 执行器（通过 LLM 分类）"""
         from task_engine.engine import TaskEngine
         engine = TaskEngine()
-        result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
+        # Mock LLM 返回 playwright 分类
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": '{"task_type": "playwright", "description": "Web 音乐播放"}'}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
         # Playwright 执行器尝试打开浏览器搜索音乐
         # 在 CI 环境可能成功或因网络问题失败，但不应走 LLM 调用失败
         assert isinstance(result, str)
@@ -1734,14 +1875,33 @@ class TestMusicHandler:
 # ============================================================
 
 class TestPlannerWebMusic:
-    """测试 Planner 的 Web 音乐路由"""
+    """测试 Planner 的 Web 音乐路由（LLM 分类模式）"""
+
+    def _mock_llm_response(self, task_type: str):
+        """创建 LLM 分类的 mock 响应"""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
+            "choices": [{"message": {"content": json.dumps({"task_type": task_type, "description": "test"})}}]
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session
 
     @pytest.mark.asyncio
     async def test_web_music_routes_to_playwright(self):
         """Web 音乐任务应路由到 PLAYWRIGHT"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("打开网页里的音乐输入周杰伦播放音乐")
+        mock_session = self._mock_llm_response("playwright")
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("打开网页里的音乐输入周杰伦播放音乐")
         assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
 
     @pytest.mark.asyncio
@@ -1749,7 +1909,10 @@ class TestPlannerWebMusic:
         """Web 视频任务应路由到 DESKTOP（不是音乐）"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("打开浏览器播放视频")
+        mock_session = self._mock_llm_response("desktop")
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("打开浏览器播放视频")
         assert task.steps[0].executor_type == ExecutorType.DESKTOP
 
     @pytest.mark.asyncio
@@ -1757,7 +1920,10 @@ class TestPlannerWebMusic:
         """没有 web 关键词的音乐请求不走 Playwright"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("音乐好听")
+        mock_session = self._mock_llm_response("llm")
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("音乐好听")
         assert task.steps[0].executor_type == ExecutorType.LLM
 
     @pytest.mark.asyncio
@@ -1765,7 +1931,10 @@ class TestPlannerWebMusic:
         """听歌场景也应路由到 PLAYWRIGHT"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("打开网页听歌")
+        mock_session = self._mock_llm_response("playwright")
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("打开网页听歌")
         assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
 
     @pytest.mark.asyncio
@@ -1773,7 +1942,10 @@ class TestPlannerWebMusic:
         """浏览器搜索歌曲应路由到 PLAYWRIGHT"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        task = await plan("浏览器搜索歌曲周杰伦")
+        mock_session = self._mock_llm_response("playwright")
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("浏览器搜索歌曲周杰伦")
         assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
 
 
