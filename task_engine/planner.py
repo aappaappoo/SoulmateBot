@@ -154,6 +154,9 @@ def _parse_llm_classification(content: str) -> str:
         logger.warning(f"⚠️ [Planner] 未知任务类型: {task_type}，回退到 llm")
         return "llm"
 
-    except (json.JSONDecodeError, AttributeError) as e:
+    except (json.JSONDecodeError, AttributeError, TypeError) as e:
+        # JSONDecodeError: 无效 JSON
+        # AttributeError: parsed 不是 dict 时调用 .get() 失败
+        # TypeError: parsed 为 None 或非预期类型
         logger.warning(f"⚠️ [Planner] JSON 解析失败: {e}, content='{content}'")
         return "llm"
