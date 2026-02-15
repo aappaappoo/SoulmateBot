@@ -1,10 +1,10 @@
 """
-桌面操控执行器 - 核心 LLM tool-call 循环（Playwright 方案）
+桌面操控执行器 - 核心 LLM tool-call 循环
 
 ⭐ 这是整个 task_engine 中最关键的模块。
 
 执行流程：
-1. 构建 system prompt（Playwright 操控策略）
+1. 构建 system prompt（桌面操控策略）
 2. 注册 DesktopToolRegistry
 3. while 循环（max 15 次）：
    - LLM 返回 tool_call
@@ -14,9 +14,10 @@
 4. LLM 不再调用工具 → 任务完成
 
 每一步都输出详细日志：
-  🌐 打开页面 → 🔍 分析元素 → 🖱️ 点击/输入 → ✅/❌ 验证
+  📸 截图 → 👁️ 视觉分析 → 🖱️ 点击/输入 → 📸 再截图 → ✅/❌ 验证
 
 tool_call 通过 aiohttp 调 vLLM /v1/chat/completions
+（VLLMProvider 本身不支持 tools）
 """
 import json
 import time
@@ -38,30 +39,43 @@ _MAX_ITERATIONS = getattr(settings, 'max_iterations', "")
 
 
 
-# 桌面操控 system prompt（Playwright 方案）
-_SYSTEM_PROMPT: str = """你是一个网页操控助手。你的任务是通过调用工具来完成用户的网页操作请求。
-所有操作基于 Playwright 浏览器自动化，通过 CSS 选择器定位元素。
+# 桌面操控 system prompt
+_SYSTEM_PROMPT: str = """你是一个桌面操控助手。你的任务是通过调用工具来完成用户的桌面操作请求。
 
 可用工具：
-- app_open: 使用 Playwright 打开浏览器并访问 URL
-- page_analyze: 分析页面可交互元素（搜索框、输入框、按钮），返回元素描述和 CSS 选择器
-- click: 通过 CSS 选择器点击页面元素
-- type_text: 通过 CSS 选择器在输入框中填入文本
-- key_press: 按下键盘按键（如 Enter、Tab）
+- app_open: 打开浏览器/URL
+- screenshot: 屏幕截图
+- vision_analyze: 视觉分析截图，识别 UI 元素坐标。返回元素描述和坐标。
+- page_analyze: 通过浏览器 DOM 分析页面可交互元素（搜索框、输入框、按钮）的坐标。当 vision_analyze 无法识别元素时使用。
+- click: 鼠标点击指定坐标
+- type_text: 在当前焦点位置输入文本
+- key_press: 按下键盘按键
 - shell_run: 执行 shell 命令
 
 操作策略（请严格按照以下步骤执行）：
-1. 先用 app_open 打开目标网页
-2. 用 page_analyze 分析页面，获取可交互元素的 CSS 选择器
-3. 用 type_text 在搜索框中输入文本（需提供选择器和文本）
-4. 用 key_press 按下 Enter 键执行搜索
-5. 等待搜索结果后，再次用 page_analyze 查找播放相关按钮
-6. 用 click 点击播放按钮
-7. 任务完成后，用自然语言描述操作结果
+1. 先用 app_open 打开目标网页/应用
+2. 等待页面加载后，调用 screenshot 截取当前屏幕
+3. 用 vision_analyze 分析截图，找到需要交互的 UI 元素（如搜索框、按钮等），获得元素坐标
+4. 如果 vision_analyze 未能找到目标元素（found=false），请使用 page_analyze 工具通过 DOM 分析来查找元素坐标
+5. 用 click 点击目标元素（如搜索框）
+6. 用 type_text 输入文本（如搜索关键词）
+7. 用 key_press 按下 Enter 键执行搜索
+8. 再次调用 screenshot 截图验证操作结果
+9. 继续用 vision_analyze 查找下一步需要交互的元素（如播放按钮）
+10. 用 click 点击目标元素完成操作
+11. 最终 screenshot 验证任务完成
+
+搜索框识别策略：
+- 使用 vision_analyze 时，对搜索框的查询描述要具体，例如："页面顶部导航栏中的搜索输入框"、"带有放大镜图标的搜索框"
+- 对于酷狗音乐(kugou.com)等网站，搜索框通常在顶部深色导航栏的右侧区域
+- 如果 vision_analyze 返回 found=false，立即使用 page_analyze(element_type="search") 来通过 DOM 查找搜索框
+- page_analyze 返回的坐标可以直接用于 click
 
 重要规则：
-- page_analyze 返回的 selector 可直接用于 click 和 type_text
-- 先 page_analyze 获取选择器，再用选择器操作
+- 每次操作前后都应 screenshot + vision_analyze 确认状态
+- vision_analyze 返回的坐标可直接用于 click
+- 点击搜索框后再用 type_text 输入文本
+- 输入完成后用 key_press 按 Enter 键
 - 不要尝试登录、支付、输入密码等敏感操作
 - 如果某个网站需要登录才能使用，尝试其他网站
 - 任务完成后，用自然语言描述操作结果
@@ -278,6 +292,8 @@ class DesktopExecutor(BaseExecutor):
 def _get_tool_icon(tool_name: str) -> str:
     """根据工具名称返回对应的日志图标"""
     icons = {
+        "screenshot": "📸",
+        "vision_analyze": "👁️",
         "page_analyze": "🔍",
         "click": "🖱️",
         "type_text": "⌨️",
@@ -290,14 +306,18 @@ def _get_tool_icon(tool_name: str) -> str:
 
 def _summarize_args(func_name: str, func_args: Dict[str, Any]) -> str:
     """简要描述工具参数，避免日志过长"""
+    if func_name == "screenshot":
+        return ""
     if func_name == "click":
-        return f'selector="{func_args.get("selector", "")}"'
+        return f"x={func_args.get('x')}, y={func_args.get('y')}"
     if func_name == "type_text":
-        return f'selector="{func_args.get("selector", "")}", text="{func_args.get("text", "")}"'
+        return f'text="{func_args.get("text", "")}"'
     if func_name == "key_press":
         return f'key="{func_args.get("key", "")}"'
     if func_name == "app_open":
         return f'url="{func_args.get("url", "")}"'
+    if func_name == "vision_analyze":
+        return f'query="{func_args.get("query", "")}"'
     if func_name == "page_analyze":
         return f'element_type="{func_args.get("element_type", "search")}"'
     if func_name == "shell_run":
@@ -308,7 +328,18 @@ def _summarize_args(func_name: str, func_args: Dict[str, Any]) -> str:
 
 def _summarize_result(func_name: str, result: str) -> str:
     """简要描述工具执行结果，避免日志过长"""
-    if func_name == "page_analyze":
+    if func_name == "screenshot":
+        try:
+            data = json.loads(result)
+            path = data.get("file_path", "")
+            scale = data.get("scale_factor")
+            if scale:
+                return f"{path} (scale={scale})"
+            return path
+        except (json.JSONDecodeError, TypeError):
+            return result[:200]
+    if func_name == "vision_analyze":
+        # 尝试解析 JSON 提取关键信息
         try:
             data = json.loads(result)
             found = data.get("found", False)
@@ -317,6 +348,17 @@ def _summarize_result(func_name: str, result: str) -> str:
                 descs = [e.get("description", "?") for e in elements[:3]]
                 return f"找到 {len(elements)} 个元素: {descs}"
             return f"未找到目标元素"
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if func_name == "page_analyze":
+        try:
+            data = json.loads(result)
+            found = data.get("found", False)
+            elements = data.get("elements", [])
+            if found and elements:
+                descs = [e.get("description", "?") for e in elements[:3]]
+                return f"DOM 找到 {len(elements)} 个元素: {descs}"
+            return f"DOM 未找到目标元素"
         except (json.JSONDecodeError, TypeError):
             pass
     # 默认截断
