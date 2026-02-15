@@ -288,23 +288,6 @@ class TestTaskGuardPrePostCheck:
         assert pre == GuardAction.ABORT
         # 不应到达 post_check
 
-    def test_memory_minimal_write(self):
-        """TaskEngineAgent memory_write 只保存最小必要状态"""
-        from src.agents.plugins.task_engine_agent import TaskEngineAgent
-        agent = TaskEngineAgent()
-        # 尝试写入额外字段
-        agent.memory_write("u1", {
-            "task_completed": True,
-            "task_count": 3,
-            "execution_details": "这些不应被保存",
-            "tool_calls": ["click", "type_text"],
-        })
-        data = agent.memory_read("u1")
-        assert data["task_completed"] is True
-        assert data["task_count"] == 3
-        assert "execution_details" not in data
-        assert "tool_calls" not in data
-
 
 # ============================================================
 # Platform 测试
@@ -1923,3 +1906,17 @@ class TestTaskEngineAgent:
         response = agent.respond(msg, ctx)
         assert isinstance(response, AgentResponse)
         assert response.agent_name == "TaskEngineAgent"
+
+    def test_memory_minimal_write_filters_extra_fields(self, agent):
+        """memory_write only stores task_completed and task_count (minimal task memory)"""
+        agent.memory_write("u1", {
+            "task_completed": True,
+            "task_count": 3,
+            "execution_details": "should not be saved",
+            "tool_calls": ["click", "type_text"],
+        })
+        data = agent.memory_read("u1")
+        assert data["task_completed"] is True
+        assert data["task_count"] == 3
+        assert "execution_details" not in data
+        assert "tool_calls" not in data
