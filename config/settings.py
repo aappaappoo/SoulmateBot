@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     executor_llm_token: Optional[str] = None
     max_iterations: Optional[int] = 5
 
+    # Browser Control Server (浏览器控制服务)
+    browser_server_url: Optional[str] = None
+
     vlm_api_url: Optional[str] = None
     vlm_model: Optional[str] = None
     vlm_api_token: Optional[str] = None
