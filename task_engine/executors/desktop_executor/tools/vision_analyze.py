@@ -5,16 +5,22 @@
 使用 vLLM 的 OpenAI 兼容 API，支持视觉模型（如 Qwen-VL, LLaVA 等）。
 
 当 VLM 识别到需要点击的具体元素时，会在截图上绘制红色边框标注。
+
+坐标映射：
+  VLM 返回的坐标基于截图的像素尺寸。在 macOS Retina/HiDPI 屏幕上，
+  截图像素分辨率（如 2880x1800）通常是屏幕逻辑分辨率（如 1440x900）的 2 倍。
+  而 click 工具使用的是屏幕逻辑坐标，因此需要将 VLM 坐标除以缩放因子。
 """
 import base64
 import json
 import os
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import aiohttp
 from loguru import logger
 
 from config import settings
+from task_engine.executors.desktop_executor.platform import get_screen_resolution
 
 # VLM 配置（优先使用 VLM 专用配置，回退到 executor LLM 配置）
 _VLM_URL = (
@@ -87,6 +93,51 @@ def _get_mime_type(image_path: str) -> str:
         ".bmp": "image/bmp",
     }
     return mime_map.get(ext, "image/png")
+
+
+def _get_image_size(image_path: str) -> Tuple[Optional[int], Optional[int]]:
+    """
+    获取图片的像素尺寸
+
+    Returns:
+        (width, height) 或 (None, None)
+    """
+    try:
+        from PIL import Image
+        with Image.open(image_path) as img:
+            return img.size
+    except Exception:
+        pass
+    return None, None
+
+
+def _scale_elements(elements: List[dict], scale_factor: float) -> List[dict]:
+    """
+    将 VLM 返回的图片像素坐标按缩放因子转换为屏幕逻辑坐标
+
+    在 macOS Retina 等 HiDPI 屏幕上，截图像素尺寸是逻辑分辨率的 N 倍，
+    VLM 返回的坐标基于图片像素，而 click 工具使用逻辑坐标。
+    因此需要将坐标除以缩放因子。
+
+    Args:
+        elements: VLM 返回的元素列表，坐标为图片像素坐标
+        scale_factor: 缩放因子（图片像素 / 屏幕逻辑），如 Retina 屏为 2.0
+
+    Returns:
+        坐标已转换为屏幕逻辑坐标的元素列表
+    """
+    if abs(scale_factor - 1.0) < 0.01:
+        return elements
+
+    scaled = []
+    for elem in elements:
+        e = dict(elem)
+        e["x"] = int(round(e.get("x", 0) / scale_factor))
+        e["y"] = int(round(e.get("y", 0) / scale_factor))
+        e["width"] = int(round(e.get("width", 0) / scale_factor))
+        e["height"] = int(round(e.get("height", 0) / scale_factor))
+        scaled.append(e)
+    return scaled
 
 
 def draw_bounding_boxes(image_path: str, elements: List[dict]) -> Optional[str]:
@@ -328,12 +379,31 @@ async def vision_analyze(image_path: str, query: str) -> str:
         logger.info(f"👁️ VLM 分析完成: query={query}")
         result = _parse_vlm_response(content, query)
 
-        # 在截图上绘制识别到的元素边框
+        # 坐标缩放：将 VLM 的图片像素坐标映射到屏幕逻辑坐标
         if result.get("found") and result.get("elements"):
-            annotated = draw_bounding_boxes(image_path, result["elements"])
-            if annotated:
-                result["annotated_image"] = annotated
-                logger.info(f"🖼️ 元素标注截图已保存: {annotated}")
+            scale_factor = await _get_scale_factor(image_path)
+            if scale_factor and abs(scale_factor - 1.0) > 0.01:
+                logger.info(
+                    f"📐 [vision_analyze] 坐标缩放: "
+                    f"scale_factor={scale_factor:.2f}, "
+                    f"将图片像素坐标转换为屏幕逻辑坐标"
+                )
+                # 先在原始坐标上绘制标注
+                annotated = draw_bounding_boxes(image_path, result["elements"])
+                if annotated:
+                    result["annotated_image"] = annotated
+                    logger.info(f"🖼️ 元素标注截图已保存: {annotated}")
+                # 再缩放坐标
+                result["elements"] = _scale_elements(
+                    result["elements"], scale_factor
+                )
+                result["scale_factor"] = round(scale_factor, 2)
+            else:
+                # 无缩放，直接绘制标注
+                annotated = draw_bounding_boxes(image_path, result["elements"])
+                if annotated:
+                    result["annotated_image"] = annotated
+                    logger.info(f"🖼️ 元素标注截图已保存: {annotated}")
 
         return json.dumps(result, ensure_ascii=False)
     except (KeyError, IndexError) as e:
@@ -347,3 +417,27 @@ async def vision_analyze(image_path: str, query: str) -> str:
             },
             ensure_ascii=False,
         )
+
+
+async def _get_scale_factor(image_path: str) -> Optional[float]:
+    """
+    计算截图像素坐标到屏幕逻辑坐标的缩放因子
+
+    对比截图图片的实际像素宽度和屏幕的逻辑分辨率宽度，
+    得出缩放因子。在 macOS Retina 屏上通常为 2.0。
+
+    Args:
+        image_path: 截图文件路径
+
+    Returns:
+        缩放因子（如 2.0），无法计算时返回 None
+    """
+    img_w, _ = _get_image_size(image_path)
+    if not img_w:
+        return None
+
+    screen_res = await get_screen_resolution()
+    if not screen_res or screen_res[0] <= 0:
+        return None
+
+    return img_w / screen_res[0]
