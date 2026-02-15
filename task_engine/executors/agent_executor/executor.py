@@ -106,7 +106,7 @@ class AgentExecutor(BaseExecutor):
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"请完成以下任务：{task_text}"},
         ]
-
+        accumulated_content = ""
         for iteration in range(1, _MAX_ITERATIONS + 1):
             logger.info(f"🔄 [AgentExecutor] === 第 {iteration}/{_MAX_ITERATIONS} 轮 ===")
 
@@ -125,14 +125,16 @@ class AgentExecutor(BaseExecutor):
             assistant_content = llm_response.get("content", "")
 
             if assistant_content:
+                accumulated_content += assistant_content.strip() + "\n"
                 logger.info(f"💬 [AgentExecutor] LLM 回复: {assistant_content[:200]}")
 
             if not tool_calls:
                 # LLM 不再调用工具，任务完成
+                final_reply = accumulated_content if accumulated_content else assistant_content
                 logger.info(f"✅ [AgentExecutor] 任务完成（第 {iteration} 轮），LLM 无更多工具调用")
                 return StepResult(
                     success=True,
-                    message=assistant_content or "AI 自主操控任务已完成",
+                    message=final_reply or "AI 自主操控任务已完成",
                     data={"iterations": iteration},
                 )
 
@@ -194,7 +196,7 @@ class AgentExecutor(BaseExecutor):
                         tool_result = f"工具执行异常: {e}"
                         logger.error(f"❌ [AgentExecutor] 工具 {func_name} 执行异常: {e}")
 
-                # TaskGuard 执行后结果检查
+                # # TaskGuard 执行后结果检查
                 # post_action = self._guard.post_check(func_name, func_args, str(tool_result))
                 # if post_action == GuardAction.ABORT:
                 #     logger.warning(

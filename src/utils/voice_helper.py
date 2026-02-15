@@ -185,7 +185,7 @@ async def send_voice_or_text_reply(message,
         return "text", full_content
 
 
-async def send_multi_text_messages(message, messages: list, delay_seconds: float = 0.5, parse_mode=None) -> None:
+async def send_multi_text_messages(message, messages: list, delay_seconds: float = 0.5, parse_mode="Markdown") -> None:
     """
     发送多条文本消息，模拟真人聊天的节奏
     

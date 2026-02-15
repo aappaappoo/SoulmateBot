@@ -102,6 +102,27 @@ class BrowserControlServer:
         # ref ID 映射表: ref -> locator 信息
         self._ref_map: Dict[str, Dict[str, Any]] = {}
 
+    async def _ensure_page(self) -> bool:
+        """确保 page 对象可用，崩溃时自动恢复"""
+        if not self._page or not self._context:
+            return False
+        try:
+            await self._page.evaluate("() => true")
+            return True
+        except Exception:
+            logger.warning("🔄 [Browser] 页面不可用，尝试恢复...")
+            try:
+                try:
+                    await self._page.close()
+                except Exception:
+                    pass
+                self._page = await self._context.new_page()
+                logger.info("✅ [Browser] 新页面创建成功")
+                return True
+            except Exception as e:
+                logger.error(f"❌ [Browser] 页面恢复失败: {e}")
+                return False
+
     async def start_browser(self) -> Dict[str, Any]:
         """启动浏览器实例"""
         async with self._lock:
@@ -120,7 +141,7 @@ class BrowserControlServer:
                         "--disable-gpu",
                         "--disable-dev-shm-usage",
                         "--disable-blink-features=AutomationControlled",
-                        # 稳定性参数（不用 --single-process）
+                        # 稳定性与内存优化
                         "--disable-software-rasterizer",
                         "--disable-extensions",
                         "--disable-background-networking",
@@ -130,11 +151,8 @@ class BrowserControlServer:
                         "--disable-renderer-backgrounding",
                         "--disable-backgrounding-occluded-windows",
                         "--disable-ipc-flooding-protection",
-                        # 内存优化
-                        "--js-flags=--max-old-space-size=256",
                         "--renderer-process-limit=1",
-                        "--disable-features=TranslateUI",
-                        "--disable-component-update",
+                        "--js-flags=--max-old-space-size=256",
                     ],
                 )
                 self._context = await self._browser.new_context(
@@ -143,45 +161,17 @@ class BrowserControlServer:
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 )
                 self._page = await self._context.new_page()
-
-                # 监听页面崩溃事件，自动标记
-                self._page.on("crash", lambda: logger.error("💥 [Browser] 页面崩溃事件触发！"))
-
                 logger.info("✅ [Browser] 浏览器启动成功")
                 return {"success": True, "message": "Browser started successfully"}
             except Exception as e:
                 logger.error(f"❌ [Browser] 启动失败: {e}")
                 return {"success": False, "error": str(e)}
 
-    async def _ensure_page(self) -> bool:
-        """确保 page 对象可用，如果崩溃则自动恢复"""
-        if not self._page:
-            return False
-        try:
-            # 尝试一个轻量操作来检查 page 是否存活
-            await self._page.evaluate("() => true")
-            return True
-        except Exception:
-            logger.warning("🔄 [Browser] 页面不可用，尝试恢复...")
-            try:
-                try:
-                    await self._page.close()
-                except Exception:
-                    pass
-                self._page = await self._context.new_page()
-                self._page.on("crash", lambda: logger.error("💥 [Browser] 页面崩溃事件触发！"))
-                logger.info("✅ [Browser] 页面恢复成功")
-                return True
-            except Exception as e:
-                logger.error(f"❌ [Browser] 页面恢复失败: {e}")
-                return False
-
     async def navigate(self, url: str) -> Dict[str, Any]:
         """导航到指定 URL"""
         if not self._page:
             return {"success": False, "error": "Browser not started"}
 
-        # 导航前检查并恢复页面
         if not await self._ensure_page():
             return {"success": False, "error": "Page is not available and recovery failed"}
 
@@ -190,49 +180,31 @@ class BrowserControlServer:
             try:
                 logger.info(f"🌐 [Browser] 导航到: {url} (尝试 {attempt + 1}/{max_retries})")
                 await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                # 短暂等待页面渲染
+                # 短暂等待页面渲染，不用 networkidle 避免超时
                 await self._page.wait_for_timeout(2000)
                 logger.info(f"✅ [Browser] 导航成功: {url}")
                 return {"success": True, "url": url, "title": await self._page.title()}
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"❌ [Browser] 导航失败 (尝试 {attempt + 1}): {error_msg}")
-
-                # 如果是页面崩溃/关闭，尝试恢复后重试
-                if "crash" in error_msg.lower() or "closed" in error_msg.lower():
-                    if attempt < max_retries - 1:
-                        logger.warning("🔄 [Browser] 检测到页面崩溃/关闭，恢复中...")
-                        if await self._ensure_page():
-                            continue  # 恢复成功，重试导航
-                        else:
-                            return {"success": False, "error": f"Page crashed and recovery failed: {error_msg}"}
-
+                if ("crash" in error_msg.lower() or "closed" in error_msg.lower()) and attempt < max_retries - 1:
+                    logger.warning("🔄 [Browser] 页面崩溃，恢复中...")
+                    if await self._ensure_page():
+                        continue
                 return {"success": False, "error": error_msg}
-
         return {"success": False, "error": "Navigation failed after all retries"}
 
-
     async def snapshot(self) -> Dict[str, Any]:
-        """
-        获取页面 accessibility tree 快照
-
-        返回扁平化的元素列表，每个元素包含：
-        - ref: 引用 ID (e1, e2, e3...)
-        - role: ARIA role (button, link, textbox...)
-        - name: 可访问名称
-        - value: 当前值（输入框等）
-        - description: 描述信息
-        """
+        """获取页面 accessibility tree 快照"""
         if not self._page:
             return {"success": False, "error": "Browser not started"}
-        # 先确保 page 可用
+
         if not await self._ensure_page():
-            return {"success": False, "error": "Page is not available and recovery failed"}
+            return {"success": False, "error": "Page crashed, recovered but needs re-navigation. Please navigate first."}
+
         try:
             logger.info("📸 [Browser] 获取页面快照...")
 
-            # 使用 JavaScript 获取页面可交互元素
-            # 获取常见的可交互元素和它们的属性
             js_code = """
             () => {
                 const elements = [];
@@ -241,53 +213,56 @@ class BrowserControlServer:
                     '[role="button"]', '[role="link"]', '[role="textbox"]',
                     '[onclick]', '[role="tab"]', '[role="menuitem"]'
                 ];
-                
+
                 const allElements = document.querySelectorAll(selectors.join(','));
-                
+
                 allElements.forEach((el, index) => {
-                    // 跳过不可见元素
                     const style = window.getComputedStyle(el);
                     if (style.display === 'none' || style.visibility === 'hidden') {
                         return;
                     }
-                    
+
                     const tagName = el.tagName.toLowerCase();
                     let role = el.getAttribute('role') || tagName;
-                    
-                    // 映射标签名到 ARIA role
+
                     if (tagName === 'a') role = 'link';
                     if (tagName === 'button') role = 'button';
                     if (tagName === 'input') role = el.type === 'text' ? 'textbox' : el.type;
                     if (tagName === 'textarea') role = 'textbox';
                     if (tagName === 'select') role = 'combobox';
-                    
+
                     const innerText = el.innerText ? el.innerText.trim().substring(0, 100) : '';
-                    const name = el.getAttribute('aria-label') || 
+                    const name = el.getAttribute('aria-label') ||
                                 el.getAttribute('title') ||
                                 el.getAttribute('placeholder') ||
-                                innerText || 
-                                el.value || 
+                                innerText ||
+                                el.value ||
                                 '';
-                    
+
                     const value = el.value || '';
-                    
+
+                    // 获取元素在 DOM 中的唯一索引，用于精确定位
+                    const rect = el.getBoundingClientRect();
+
                     elements.push({
                         role: role,
                         name: name,
                         value: value,
                         tagName: tagName,
                         id: el.id || '',
-                        className: el.className || '',
+                        className: typeof el.className === 'string' ? el.className : '',
+                        // 新增坐标信息，用于 fallback 定位
+                        x: Math.round(rect.x + rect.width / 2),
+                        y: Math.round(rect.y + rect.height / 2),
                     });
                 });
-                
+
                 return elements;
             }
             """
 
             raw_elements = await self._page.evaluate(js_code)
 
-            # 分配 ref ID
             elements = []
             self._ref_map = {}
 
@@ -305,13 +280,14 @@ class BrowserControlServer:
 
                 elements.append(element)
 
-                # 保存到 ref 映射表（用于后续 act 操作定位）
                 self._ref_map[ref_id] = {
                     "role": elem["role"],
                     "name": elem["name"],
                     "tagName": elem["tagName"],
                     "id": elem.get("id", ""),
                     "className": elem.get("className", ""),
+                    "x": elem.get("x", 0),
+                    "y": elem.get("y", 0),
                 }
 
             logger.info(f"✅ [Browser] 快照完成，共 {len(elements)} 个元素")
@@ -323,34 +299,33 @@ class BrowserControlServer:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"❌ [Browser] 快照失败: {error_msg}")
-            # 崩溃时自动恢复
             if "crash" in error_msg.lower() or "closed" in error_msg.lower():
                 await self._ensure_page()
             return {"success": False, "error": error_msg}
 
     async def act(
-            self,
-            kind: Optional[str] = None,
-            ref: Optional[str] = None,
-            value: Optional[str] = None,
-            coordinate: Optional[str] = None,
+        self,
+        kind: Optional[str] = None,
+        ref: Optional[str] = None,
+        value: Optional[str] = None,
+        coordinate: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not self._page:
             return {"success": False, "error": "Browser not started"}
-        # 先确保 page 可用
-        if not await self._ensure_page():
-            return {"success": False, "error": "Page is not available and recovery failed"}
 
         if not kind:
             return {"success": False, "error": "Missing 'kind' parameter"}
 
+        # 修复 1：操作前检查页面是否存活
+        if not await self._ensure_page():
+            return {"success": False, "error": "Page crashed and recovery failed"}
+
         try:
             logger.info(f"🎯 [Browser] 执行操作: kind={kind}, ref={ref}, value={value}")
 
-            # ===== 全局操作（不需要 ref 或 coordinate） =====
+            # ===== 修复 2：全局操作（不需要 ref 也不需要 coordinate） =====
             if not ref and not coordinate:
                 if kind == "scroll":
-                    # 全局向下滚动页面
                     await self._page.evaluate("window.scrollBy(0, 500)")
                     logger.info("✅ [Browser] 全局页面向下滚动成功")
                     return {"success": True, "action": "scroll", "detail": "scrolled down 500px"}
@@ -370,8 +345,8 @@ class BrowserControlServer:
                     return {"success": True, "action": "type", "value": value}
 
                 else:
-                    return {"success": False,
-                            "error": f"Action '{kind}' requires 'ref' or 'coordinate' parameter"}
+                    return {"success": False, "error": f"Action '{kind}' requires 'ref' or 'coordinate' parameter"}
+
             # 通过坐标定位（fallback）
             if coordinate and not ref:
                 try:
@@ -397,9 +372,10 @@ class BrowserControlServer:
             tag_name = ref_info.get("tagName", "")
             elem_id = ref_info.get("id", "")
             class_name = ref_info.get("className", "")
+            center_x = ref_info.get("x", 0)
+            center_y = ref_info.get("y", 0)
 
-            # 根据元素信息定位元素
-            # 优先使用 ID，然后尝试其他方式
+            # ===== 修复 3：元素定位逻辑 — 处理多匹配 + 坐标兜底 =====
             locator = None
             try:
                 # 1. 优先使用 ID
@@ -409,12 +385,11 @@ class BrowserControlServer:
                 elif name and role in ["button", "link", "textbox", "combobox"]:
                     try:
                         candidate = self._page.get_by_role(role, name=name)
-                        # 检查是否匹配多个元素，如果是则取第一个
                         count = await candidate.count()
                         if count == 1:
                             locator = candidate
                         elif count > 1:
-                            logger.warning(f"⚠️ [Browser] get_by_role 匹配到 {count} 个元素，使用第一个")
+                            logger.warning(f"⚠️ [Browser] get_by_role 匹配到 {count} 个元素，使用 .first")
                             locator = candidate.first
                     except Exception:
                         pass
@@ -422,12 +397,13 @@ class BrowserControlServer:
                 if locator is None and name:
                     if tag_name == "button":
                         candidate = self._page.get_by_role("button", name=name)
-                        locator = candidate.first if await candidate.count() > 1 else candidate
+                        count = await candidate.count()
+                        locator = candidate.first if count > 1 else (candidate if count == 1 else None)
                     elif tag_name == "a":
                         candidate = self._page.get_by_role("link", name=name)
-                        locator = candidate.first if await candidate.count() > 1 else candidate
+                        count = await candidate.count()
+                        locator = candidate.first if count > 1 else (candidate if count == 1 else None)
                     elif tag_name in ["input", "textarea"]:
-                        # 使用 Playwright 的内置方法而不是 CSS 选择器
                         locator = self._page.get_by_placeholder(name)
                         if await locator.count() == 0:
                             locator = self._page.locator(tag_name).first
@@ -436,9 +412,22 @@ class BrowserControlServer:
                     locator = self._page.locator(tag_name).first
 
                 if locator is None or await locator.count() == 0:
+                    # 5. 终极兜底：使用 snapshot 时记录的坐标点击
+                    if center_x and center_y and kind == "click":
+                        await self._page.mouse.click(center_x, center_y)
+                        logger.info(f"✅ [Browser] 坐标兜底点击成功: ({center_x}, {center_y})")
+                        return {"success": True, "action": "click", "ref": ref, "fallback": "coordinate"}
                     return {"success": False, "error": f"Cannot locate element with ref={ref}"}
             except Exception as e:
                 logger.warning(f"⚠️ [Browser] 定位器创建失败: {e}")
+                # 兜底坐标点击
+                if center_x and center_y and kind == "click":
+                    try:
+                        await self._page.mouse.click(center_x, center_y)
+                        logger.info(f"✅ [Browser] 定位失败后坐标兜底点击: ({center_x}, {center_y})")
+                        return {"success": True, "action": "click", "ref": ref, "fallback": "coordinate"}
+                    except Exception:
+                        pass
                 return {"success": False, "error": f"Failed to create locator: {e}"}
 
             # 执行操作
@@ -487,7 +476,6 @@ class BrowserControlServer:
             if "crash" in error_msg.lower() or "closed" in error_msg.lower():
                 await self._ensure_page()
             return {"success": False, "error": error_msg}
-
 
     async def close_browser(self) -> Dict[str, Any]:
         """关闭浏览器"""
