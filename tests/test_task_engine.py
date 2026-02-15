@@ -200,6 +200,112 @@ class TestTaskGuard:
         assert guard.fail_counts == {}
 
 
+class TestTaskGuardPrePostCheck:
+    """测试 TaskGuard 的 pre_check / post_check 方法（Nanobot tool-call loop 模式）"""
+
+    def test_pre_check_allow_normal(self):
+        """正常操作应通过 pre_check"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.pre_check("click", {"x": 100, "y": 200})
+        assert action == GuardAction.ALLOW
+
+    def test_pre_check_abort_on_forbidden_args(self):
+        """参数中包含登录/支付等禁止词应在 pre_check 中终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.pre_check("shell_run", {"command": "sudo rm -rf /"})
+        assert action == GuardAction.ABORT
+
+    def test_pre_check_abort_on_payment_in_tool_name(self):
+        """工具名称中包含支付等禁止词应在 pre_check 中终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.pre_check("payment_submit", {})
+        assert action == GuardAction.ABORT
+
+    def test_pre_check_drift_accumulation(self):
+        """pre_check 应累计偏离信号"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        # 偏离信号在参数中
+        guard.pre_check("click", {"target": "会员升级按钮"})
+        assert guard.drift_count == 1
+
+    def test_pre_check_drift_threshold_abort(self):
+        """pre_check 偏离累计超过阈值应终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        guard.drift_count = 2  # 已有 2 次偏离
+        action = guard.pre_check("click", {"target": "VIP升级"})
+        assert action == GuardAction.ABORT
+
+    def test_post_check_allow_normal(self):
+        """正常结果应通过 post_check"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.post_check("click", {"x": 100, "y": 200}, "已点击")
+        assert action == GuardAction.ALLOW
+
+    def test_post_check_abort_on_forbidden_result(self):
+        """结果中包含禁止操作关键词应终止"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        action = guard.post_check("click", {}, "跳转到支付页面")
+        assert action == GuardAction.ABORT
+
+    def test_post_check_drift_in_result(self):
+        """post_check 应检测结果中的偏离信号"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        guard.post_check("vision_analyze", {}, "页面提示：会员专享内容")
+        assert guard.drift_count == 1
+
+    def test_post_check_switch_on_repeated_failure(self):
+        """post_check 应检测重复失败并建议切换"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        for _ in range(3):
+            action = guard.post_check("app_open", {"url": "https://test.com"}, "打开失败")
+        assert action == GuardAction.SWITCH
+
+    def test_pre_then_post_check_flow(self):
+        """模拟完整的 pre_check → execute → post_check 流程"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        # Step 1: pre_check 通过
+        pre = guard.pre_check("click", {"x": 100, "y": 200})
+        assert pre == GuardAction.ALLOW
+        # Step 2: 执行后 post_check
+        post = guard.post_check("click", {"x": 100, "y": 200}, "已成功点击")
+        assert post == GuardAction.ALLOW
+
+    def test_pre_check_blocks_before_execution(self):
+        """pre_check 拒绝应阻止工具执行"""
+        from task_engine.executors.desktop_executor.guard import GuardAction, TaskGuard
+        guard = TaskGuard()
+        pre = guard.pre_check("type_text", {"text": "password123"})
+        assert pre == GuardAction.ABORT
+        # 不应到达 post_check
+
+    def test_memory_minimal_write(self):
+        """TaskEngineAgent memory_write 只保存最小必要状态"""
+        from src.agents.plugins.task_engine_agent import TaskEngineAgent
+        agent = TaskEngineAgent()
+        # 尝试写入额外字段
+        agent.memory_write("u1", {
+            "task_completed": True,
+            "task_count": 3,
+            "execution_details": "这些不应被保存",
+            "tool_calls": ["click", "type_text"],
+        })
+        data = agent.memory_read("u1")
+        assert data["task_completed"] is True
+        assert data["task_count"] == 3
+        assert "execution_details" not in data
+        assert "tool_calls" not in data
+
+
 # ============================================================
 # Platform 测试
 # ============================================================
