@@ -32,7 +32,7 @@ from src.agents import (
     AgentOrchestrator, AgentLoader, Message as AgentMessage,
     ChatContext, IntentType, skill_button_generator, skill_registry
 )
-from datetime import datetime
+from datetime import datetime, timezone
 from src.models.database import UserMemory
 from src.services.conversation_memory_service import DateParser
 from src.conversation.dialogue_strategy import enhance_prompt_with_strategy
@@ -255,7 +255,9 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             cache_history_list = []
             session_id = f"{db_user.id}_{selected_bot.id}" if db_user and selected_bot else None
             cache_service = get_conversation_cache_service()
-            cached_history = cache_service.get_conversation_history(session_id) if session_id else None
+            cached_history = None
+            if db_user and session_id:
+                cached_history = cache_service.get_conversation_history(session_id)
             if db_user and cached_history is not None:
                 # 从 Redis 缓存命中，直接构建 AgentMessage
                 for msg in cached_history:
@@ -483,7 +485,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     await db.commit()
                     # 同步更新 Redis 对话缓存
                     if session_id:
-                        now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                         cache_service.append_conversation(
                             session_id,
                             {"role": "user", "content": message_text, "timestamp": now_str},
