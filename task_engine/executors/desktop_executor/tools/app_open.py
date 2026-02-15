@@ -1,36 +1,26 @@
 """
-打开浏览器或 URL 工具
+打开浏览器或 URL 工具（Playwright 方案）
 """
-import asyncio
+from loguru import logger
 
-from task_engine.executors.desktop_executor.platform import get_open_command
+from task_engine.executors.desktop_executor.tools.browser_session import get_page
 
 
 async def app_open(url: str) -> str:
     """
-    打开浏览器并访问指定 URL
+    使用 Playwright 打开浏览器并访问指定 URL
 
     Args:
-        url: 要打开的 URL 或应用名称
+        url: 要打开的 URL
 
     Returns:
         str: 操作结果描述
     """
-    open_cmd = get_open_command()
-    command = f'{open_cmd} "{url}"'
-
     try:
-        proc = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-        if proc.returncode == 0:
-            return f"已打开: {url}"
-        err = stderr.decode(errors="replace") if stderr else "未知错误"
-        return f"打开失败: {err}"
-    except asyncio.TimeoutError:
-        return "打开超时（10秒）"
+        page = await get_page()
+        await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        title = await page.title()
+        logger.info(f"🌐 [app_open] 已打开: {url}, 标题: {title}")
+        return f"已打开: {url}，页面标题: {title}"
     except Exception as e:
-        return f"打开异常: {e}"
+        return f"打开失败: {e}"
