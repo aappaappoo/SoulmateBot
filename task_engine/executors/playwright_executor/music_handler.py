@@ -10,9 +10,8 @@ Web 音乐搜索与播放处理器
 - 酷狗音乐 (kugou.com)
 """
 import asyncio
-import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 
 from loguru import logger
 
@@ -21,6 +20,20 @@ try:
 except ImportError:
     Page = None  # type: ignore
     PlaywrightTimeout = Exception  # type: ignore
+
+# 页面加载等待时间（秒）
+_PAGE_LOAD_DELAY = 2
+# 搜索结果加载等待时间（秒）
+_SEARCH_RESULT_DELAY = 3
+# 歌曲页面加载等待时间（秒）
+_SONG_PAGE_DELAY = 3
+
+# 从用户输入中去除的操作指令词
+_NOISE_WORDS: List[str] = [
+    "打开", "网页里的", "网页", "音乐", "输入", "播放",
+    "搜索", "歌曲", "歌", "浏览器", "网站", "听",
+    "里的", "的", "里", "帮我", "请", "去",
+]
 
 
 @dataclass
@@ -48,14 +61,8 @@ def extract_search_keyword(user_input: str) -> str:
         str: 提取的搜索关键词
     """
     # 去除常见的操作指令词，保留核心搜索词
-    noise_words = [
-        "打开", "网页里的", "网页", "音乐", "输入", "播放",
-        "搜索", "歌曲", "歌", "浏览器", "网站", "听",
-        "里的", "的", "里", "帮我", "请", "去",
-    ]
-
     text = user_input.strip()
-    for word in noise_words:
+    for word in _NOISE_WORDS:
         text = text.replace(word, " ")
 
     # 清理多余空格，取最长非空片段
@@ -100,7 +107,7 @@ async def search_and_play_music(page: "Page", keyword: str) -> MusicResult:
         )
 
     # 等待页面基本加载
-    await asyncio.sleep(2)
+    await asyncio.sleep(_PAGE_LOAD_DELAY)
 
     # 搜索流程
     result = await _kugou_search_and_play(page, keyword)
@@ -136,7 +143,7 @@ async def _kugou_search_and_play(page: "Page", keyword: str) -> MusicResult:
     except Exception as e:
         return MusicResult(success=False, message=f"搜索页面加载失败: {e}")
 
-    await asyncio.sleep(3)
+    await asyncio.sleep(_SEARCH_RESULT_DELAY)
 
     # 尝试查找并点击第一首歌
     play_result = await _try_click_first_song(page, keyword)
@@ -146,7 +153,7 @@ async def _kugou_search_and_play(page: "Page", keyword: str) -> MusicResult:
     # 策略2: 尝试在当前页面找搜索框并输入
     search_filled = await _try_fill_search_box(page, keyword)
     if search_filled:
-        await asyncio.sleep(3)
+        await asyncio.sleep(_SEARCH_RESULT_DELAY)
         play_result = await _try_click_first_song(page, keyword)
         if play_result.success:
             return play_result
@@ -226,7 +233,7 @@ async def _try_click_first_song(page: "Page", keyword: str) -> MusicResult:
                     await song_link.click()
 
                 new_page = await new_page_info.value
-                await asyncio.sleep(3)
+                await asyncio.sleep(_SONG_PAGE_DELAY)
 
                 logger.info(f"🎵 [MusicHandler] 已打开歌曲: {song_title}")
 
@@ -257,11 +264,11 @@ async def _try_click_first_song(page: "Page", keyword: str) -> MusicResult:
                 async with page.context.expect_page(timeout=10000) as new_page_info:
                     await link.click()
                 new_page = await new_page_info.value
-                await asyncio.sleep(3)
+                await asyncio.sleep(_SONG_PAGE_DELAY)
                 await _try_click_play_button(new_page)
             except PlaywrightTimeout:
                 # 没有打开新页面，可能在当前页面操作
-                await asyncio.sleep(2)
+                await asyncio.sleep(_PAGE_LOAD_DELAY)
                 await _try_click_play_button(page)
 
             return MusicResult(
