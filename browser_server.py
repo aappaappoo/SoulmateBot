@@ -116,43 +116,106 @@ class BrowserControlServer:
                     headless=True,
                     args=[
                         "--no-sandbox",
+                        "--disable-setuid-sandbox",
                         "--disable-gpu",
                         "--disable-dev-shm-usage",
                         "--disable-blink-features=AutomationControlled",
+                        # 稳定性参数（不用 --single-process）
+                        "--disable-software-rasterizer",
+                        "--disable-extensions",
+                        "--disable-background-networking",
+                        "--disable-sync",
+                        "--disable-translate",
+                        "--no-first-run",
+                        "--disable-renderer-backgrounding",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-ipc-flooding-protection",
+                        # 内存优化
+                        "--js-flags=--max-old-space-size=256",
+                        "--renderer-process-limit=1",
+                        "--disable-features=TranslateUI",
+                        "--disable-component-update",
                     ],
                 )
                 self._context = await self._browser.new_context(
                     viewport={"width": 1280, "height": 720},
-                    locale="zh-CN",  # 可通过环境变量配置: os.getenv("BROWSER_LOCALE", "zh-CN")
+                    locale="zh-CN",
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 )
                 self._page = await self._context.new_page()
+
+                # 监听页面崩溃事件，自动标记
+                self._page.on("crash", lambda: logger.error("💥 [Browser] 页面崩溃事件触发！"))
+
                 logger.info("✅ [Browser] 浏览器启动成功")
                 return {"success": True, "message": "Browser started successfully"}
             except Exception as e:
                 logger.error(f"❌ [Browser] 启动失败: {e}")
                 return {"success": False, "error": str(e)}
 
+    async def _ensure_page(self) -> bool:
+        """确保 page 对象可用，如果崩溃则自动恢复"""
+        if not self._page:
+            return False
+        try:
+            # 尝试一个轻量操作来检查 page 是否存活
+            await self._page.evaluate("() => true")
+            return True
+        except Exception:
+            logger.warning("🔄 [Browser] 页面不可用，尝试恢复...")
+            try:
+                try:
+                    await self._page.close()
+                except Exception:
+                    pass
+                self._page = await self._context.new_page()
+                self._page.on("crash", lambda: logger.error("💥 [Browser] 页面崩溃事件触发！"))
+                logger.info("✅ [Browser] 页面恢复成功")
+                return True
+            except Exception as e:
+                logger.error(f"❌ [Browser] 页面恢复失败: {e}")
+                return False
+
     async def navigate(self, url: str) -> Dict[str, Any]:
         """导航到指定 URL"""
         if not self._page:
             return {"success": False, "error": "Browser not started"}
 
-        try:
-            logger.info(f"🌐 [Browser] 导航到: {url}")
-            await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            # 等待页面稳定
-            await self._page.wait_for_load_state("networkidle", timeout=10000)
-            logger.info(f"✅ [Browser] 导航成功: {url}")
-            return {"success": True, "url": url, "title": await self._page.title()}
-        except Exception as e:
-            logger.error(f"❌ [Browser] 导航失败: {e}")
-            return {"success": False, "error": str(e)}
+        # 导航前检查并恢复页面
+        if not await self._ensure_page():
+            return {"success": False, "error": "Page is not available and recovery failed"}
+
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🌐 [Browser] 导航到: {url} (尝试 {attempt + 1}/{max_retries})")
+                await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                # 短暂等待页面渲染
+                await self._page.wait_for_timeout(2000)
+                logger.info(f"✅ [Browser] 导航成功: {url}")
+                return {"success": True, "url": url, "title": await self._page.title()}
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ [Browser] 导航失败 (尝试 {attempt + 1}): {error_msg}")
+
+                # 如果是页面崩溃/关闭，尝试恢复后重试
+                if "crash" in error_msg.lower() or "closed" in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        logger.warning("🔄 [Browser] 检测到页面崩溃/关闭，恢复中...")
+                        if await self._ensure_page():
+                            continue  # 恢复成功，重试导航
+                        else:
+                            return {"success": False, "error": f"Page crashed and recovery failed: {error_msg}"}
+
+                return {"success": False, "error": error_msg}
+
+        return {"success": False, "error": "Navigation failed after all retries"}
+
 
     async def snapshot(self) -> Dict[str, Any]:
         """
         获取页面 accessibility tree 快照
-        
+
         返回扁平化的元素列表，每个元素包含：
         - ref: 引用 ID (e1, e2, e3...)
         - role: ARIA role (button, link, textbox...)
@@ -162,10 +225,12 @@ class BrowserControlServer:
         """
         if not self._page:
             return {"success": False, "error": "Browser not started"}
-
+        # 先确保 page 可用
+        if not await self._ensure_page():
+            return {"success": False, "error": "Page is not available and recovery failed"}
         try:
             logger.info("📸 [Browser] 获取页面快照...")
-            
+
             # 使用 JavaScript 获取页面可交互元素
             # 获取常见的可交互元素和它们的属性
             js_code = """
@@ -219,27 +284,27 @@ class BrowserControlServer:
                 return elements;
             }
             """
-            
+
             raw_elements = await self._page.evaluate(js_code)
-            
+
             # 分配 ref ID
             elements = []
             self._ref_map = {}
-            
+
             for index, elem in enumerate(raw_elements):
                 ref_id = f"e{index + 1}"
-                
+
                 element = {
                     "ref": ref_id,
                     "role": elem["role"],
                     "name": elem["name"],
                 }
-                
+
                 if elem.get("value"):
                     element["value"] = elem["value"]
-                
+
                 elements.append(element)
-                
+
                 # 保存到 ref 映射表（用于后续 act 操作定位）
                 self._ref_map[ref_id] = {
                     "role": elem["role"],
@@ -248,7 +313,7 @@ class BrowserControlServer:
                     "id": elem.get("id", ""),
                     "className": elem.get("className", ""),
                 }
-            
+
             logger.info(f"✅ [Browser] 快照完成，共 {len(elements)} 个元素")
             return {
                 "success": True,
@@ -256,27 +321,25 @@ class BrowserControlServer:
                 "count": len(elements),
             }
         except Exception as e:
-            logger.error(f"❌ [Browser] 快照失败: {e}")
-            return {"success": False, "error": str(e)}
+            error_msg = str(e)
+            logger.error(f"❌ [Browser] 快照失败: {error_msg}")
+            # 崩溃时自动恢复
+            if "crash" in error_msg.lower() or "closed" in error_msg.lower():
+                await self._ensure_page()
+            return {"success": False, "error": error_msg}
 
     async def act(
-        self,
-        kind: Optional[str] = None,
-        ref: Optional[str] = None,
-        value: Optional[str] = None,
-        coordinate: Optional[str] = None,
+            self,
+            kind: Optional[str] = None,
+            ref: Optional[str] = None,
+            value: Optional[str] = None,
+            coordinate: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        执行页面操作
-        
-        Args:
-            kind: 操作类型 (click, type, hover, press, scroll)
-            ref: 元素引用 ID
-            value: 输入值（type 时使用）或按键名称（press 时使用）
-            coordinate: 坐标 "x,y"（备选定位方式）
-        """
         if not self._page:
             return {"success": False, "error": "Browser not started"}
+        # 先确保 page 可用
+        if not await self._ensure_page():
+            return {"success": False, "error": "Page is not available and recovery failed"}
 
         if not kind:
             return {"success": False, "error": "Missing 'kind' parameter"}
@@ -284,6 +347,31 @@ class BrowserControlServer:
         try:
             logger.info(f"🎯 [Browser] 执行操作: kind={kind}, ref={ref}, value={value}")
 
+            # ===== 全局操作（不需要 ref 或 coordinate） =====
+            if not ref and not coordinate:
+                if kind == "scroll":
+                    # 全局向下滚动页面
+                    await self._page.evaluate("window.scrollBy(0, 500)")
+                    logger.info("✅ [Browser] 全局页面向下滚动成功")
+                    return {"success": True, "action": "scroll", "detail": "scrolled down 500px"}
+
+                elif kind == "press":
+                    if not value:
+                        return {"success": False, "error": "Missing 'value' for press action"}
+                    await self._page.keyboard.press(value)
+                    logger.info(f"✅ [Browser] 全局按键成功: {value}")
+                    return {"success": True, "action": "press", "key": value}
+
+                elif kind == "type":
+                    if not value:
+                        return {"success": False, "error": "Missing 'value' for type action"}
+                    await self._page.keyboard.type(value)
+                    logger.info(f"✅ [Browser] 全局输入成功: {value}")
+                    return {"success": True, "action": "type", "value": value}
+
+                else:
+                    return {"success": False,
+                            "error": f"Action '{kind}' requires 'ref' or 'coordinate' parameter"}
             # 通过坐标定位（fallback）
             if coordinate and not ref:
                 try:
@@ -320,15 +408,24 @@ class BrowserControlServer:
                 # 2. 尝试根据 role 和 name
                 elif name and role in ["button", "link", "textbox", "combobox"]:
                     try:
-                        locator = self._page.get_by_role(role, name=name)
+                        candidate = self._page.get_by_role(role, name=name)
+                        # 检查是否匹配多个元素，如果是则取第一个
+                        count = await candidate.count()
+                        if count == 1:
+                            locator = candidate
+                        elif count > 1:
+                            logger.warning(f"⚠️ [Browser] get_by_role 匹配到 {count} 个元素，使用第一个")
+                            locator = candidate.first
                     except Exception:
                         pass
                 # 3. 尝试根据文本内容
                 if locator is None and name:
                     if tag_name == "button":
-                        locator = self._page.get_by_role("button", name=name)
+                        candidate = self._page.get_by_role("button", name=name)
+                        locator = candidate.first if await candidate.count() > 1 else candidate
                     elif tag_name == "a":
-                        locator = self._page.get_by_role("link", name=name)
+                        candidate = self._page.get_by_role("link", name=name)
+                        locator = candidate.first if await candidate.count() > 1 else candidate
                     elif tag_name in ["input", "textarea"]:
                         # 使用 Playwright 的内置方法而不是 CSS 选择器
                         locator = self._page.get_by_placeholder(name)
@@ -337,7 +434,7 @@ class BrowserControlServer:
                 # 4. 最后尝试标签名
                 if locator is None:
                     locator = self._page.locator(tag_name).first
-                
+
                 if locator is None or await locator.count() == 0:
                     return {"success": False, "error": f"Cannot locate element with ref={ref}"}
             except Exception as e:
@@ -346,7 +443,7 @@ class BrowserControlServer:
 
             # 执行操作
             from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-            
+
             try:
                 if kind == "click":
                     await locator.click(timeout=5000)
@@ -379,14 +476,18 @@ class BrowserControlServer:
 
                 else:
                     return {"success": False, "error": f"Unknown action kind: {kind}"}
-            
+
             except PlaywrightTimeoutError:
                 logger.error(f"❌ [Browser] 操作超时: kind={kind}, ref={ref}")
                 return {"success": False, "error": f"Operation timeout for ref={ref}"}
 
         except Exception as e:
-            logger.error(f"❌ [Browser] 操作失败: {e}")
-            return {"success": False, "error": str(e)}
+            error_msg = str(e)
+            logger.error(f"❌ [Browser] 操作失败: {error_msg}")
+            if "crash" in error_msg.lower() or "closed" in error_msg.lower():
+                await self._ensure_page()
+            return {"success": False, "error": error_msg}
+
 
     async def close_browser(self) -> Dict[str, Any]:
         """关闭浏览器"""
@@ -404,7 +505,7 @@ class BrowserControlServer:
                 if self._playwright:
                     await self._playwright.stop()
                     self._playwright = None
-                
+
                 self._ref_map = {}
                 logger.info("✅ [Browser] 浏览器已关闭")
                 return {"success": True, "message": "Browser closed successfully"}
@@ -473,7 +574,7 @@ async def act_handler(request: web.Request) -> web.Response:
         ref = data.get("ref")
         value = data.get("value")
         coordinate = data.get("coordinate")
-        
+
         result = await browser_controller.act(
             kind=kind,
             ref=ref,
@@ -499,13 +600,13 @@ async def stop_handler(request: web.Request) -> web.Response:
 async def unified_browser_handler(request: web.Request) -> web.Response:
     """
     统一浏览器操作入口（兼容现有 tools.py）
-    
+
     根据 action 字段分发到对应的处理器
     """
     try:
         data = await request.json()
         action = data.get("action")
-        
+
         if not action:
             return web.json_response(
                 {"success": False, "error": "Missing 'action' parameter"},
@@ -567,14 +668,14 @@ async def unified_browser_handler(request: web.Request) -> web.Response:
 def create_app() -> web.Application:
     """创建 aiohttp 应用"""
     app = web.Application()
-    
+
     # 注册路由
     app.router.add_get("/", health_handler)
     app.router.add_get("/health", health_handler)
-    
+
     # 统一入口（兼容现有 tools.py）
     app.router.add_post("/browser", unified_browser_handler)
-    
+
     # 独立路由（openclaw 风格）
     app.router.add_post("/start", start_handler)
     app.router.add_post("/navigate", navigate_handler)
@@ -582,7 +683,7 @@ def create_app() -> web.Application:
     app.router.add_post("/act", act_handler)
     app.router.add_post("/stop", stop_handler)
     app.router.add_post("/close", stop_handler)
-    
+
     return app
 
 
@@ -600,11 +701,11 @@ def main() -> None:
         format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level="INFO",
     )
-    
+
     # 创建应用
     app = create_app()
     app.on_cleanup.append(cleanup_on_shutdown)
-    
+
     # 启动服务器
     port = 9222
     logger.info(f"🚀 Browser Control Server starting on http://localhost:{port}")
@@ -616,7 +717,7 @@ def main() -> None:
     logger.info(f"   - POST /act              - 执行页面操作")
     logger.info(f"   - POST /stop             - 关闭浏览器")
     logger.info(f"   - GET  /health           - 健康检查")
-    
+
     web.run_app(app, host="0.0.0.0", port=port, access_log=None)
 
 

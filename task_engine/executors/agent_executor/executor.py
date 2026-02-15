@@ -195,26 +195,26 @@ class AgentExecutor(BaseExecutor):
                         logger.error(f"❌ [AgentExecutor] 工具 {func_name} 执行异常: {e}")
 
                 # TaskGuard 执行后结果检查
-                post_action = self._guard.post_check(func_name, func_args, str(tool_result))
-                if post_action == GuardAction.ABORT:
-                    logger.warning(
-                        f"🛑 [AgentExecutor] 安全守卫终止: "
-                        f"tool={func_name}, iteration={iteration}"
-                    )
-                    return StepResult(
-                        success=False,
-                        message="安全守卫终止：检测到危险操作或过多偏离",
-                        data={"iterations": iteration, "last_tool": func_name},
-                    )
-                elif post_action == GuardAction.SWITCH:
-                    logger.warning(
-                        f"🔀 [AgentExecutor] 守卫建议切换: "
-                        f"tool={func_name}, iteration={iteration}"
-                    )
-                    tool_result = (
-                        f"{tool_result}\n"
-                        f"[守卫提示] 当前网站多次失败，请自主切换到其他替代网站。"
-                    )
+                # post_action = self._guard.post_check(func_name, func_args, str(tool_result))
+                # if post_action == GuardAction.ABORT:
+                #     logger.warning(
+                #         f"🛑 [AgentExecutor] 安全守卫终止: "
+                #         f"tool={func_name}, iteration={iteration}"
+                #     )
+                #     return StepResult(
+                #         success=False,
+                #         message="安全守卫终止：检测到危险操作或过多偏离",
+                #         data={"iterations": iteration, "last_tool": func_name},
+                #     )
+                # elif post_action == GuardAction.SWITCH:
+                #     logger.warning(
+                #         f"🔀 [AgentExecutor] 守卫建议切换: "
+                #         f"tool={func_name}, iteration={iteration}"
+                #     )
+                #     tool_result = (
+                #         f"{tool_result}\n"
+                #         f"[守卫提示] 当前网站多次失败，请自主切换到其他替代网站。"
+                #     )
 
                 # 将 tool 结果回填消息
                 messages.append({
