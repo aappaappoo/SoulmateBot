@@ -123,8 +123,8 @@ class BrowserControlServer:
                 )
                 self._context = await self._browser.new_context(
                     viewport={"width": 1280, "height": 720},
-                    locale="zh-CN",
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    locale="zh-CN",  # 可通过环境变量配置: os.getenv("BROWSER_LOCALE", "zh-CN")
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 )
                 self._page = await self._context.new_page()
                 logger.info("✅ [Browser] 浏览器启动成功")
@@ -196,10 +196,11 @@ class BrowserControlServer:
                     if (tagName === 'textarea') role = 'textbox';
                     if (tagName === 'select') role = 'combobox';
                     
+                    const innerText = el.innerText ? el.innerText.trim().substring(0, 100) : '';
                     const name = el.getAttribute('aria-label') || 
                                 el.getAttribute('title') ||
                                 el.getAttribute('placeholder') ||
-                                el.innerText?.trim().substring(0, 100) || 
+                                innerText || 
                                 el.value || 
                                 '';
                     
@@ -329,50 +330,59 @@ class BrowserControlServer:
                     elif tag_name == "a":
                         locator = self._page.get_by_role("link", name=name)
                     elif tag_name in ["input", "textarea"]:
-                        locator = self._page.locator(f"{tag_name}[placeholder*='{name}']").first
-                        if not locator:
-                            locator = self._page.locator(f"{tag_name}").first
+                        # 使用 Playwright 的内置方法而不是 CSS 选择器
+                        locator = self._page.get_by_placeholder(name)
+                        if await locator.count() == 0:
+                            locator = self._page.locator(tag_name).first
                 # 4. 最后尝试标签名
                 if locator is None:
                     locator = self._page.locator(tag_name).first
                 
-                if locator is None:
+                if locator is None or await locator.count() == 0:
                     return {"success": False, "error": f"Cannot locate element with ref={ref}"}
             except Exception as e:
+                logger.warning(f"⚠️ [Browser] 定位器创建失败: {e}")
                 return {"success": False, "error": f"Failed to create locator: {e}"}
 
             # 执行操作
-            if kind == "click":
-                await locator.click(timeout=5000)
-                logger.info(f"✅ [Browser] 点击成功: ref={ref}")
-                return {"success": True, "action": "click", "ref": ref}
+            from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+            
+            try:
+                if kind == "click":
+                    await locator.click(timeout=5000)
+                    logger.info(f"✅ [Browser] 点击成功: ref={ref}")
+                    return {"success": True, "action": "click", "ref": ref}
 
-            elif kind == "type":
-                if not value:
-                    return {"success": False, "error": "Missing 'value' for type action"}
-                await locator.fill(value, timeout=5000)
-                logger.info(f"✅ [Browser] 输入成功: ref={ref}, value={value}")
-                return {"success": True, "action": "type", "ref": ref, "value": value}
+                elif kind == "type":
+                    if not value:
+                        return {"success": False, "error": "Missing 'value' for type action"}
+                    await locator.fill(value, timeout=5000)
+                    logger.info(f"✅ [Browser] 输入成功: ref={ref}, value={value}")
+                    return {"success": True, "action": "type", "ref": ref, "value": value}
 
-            elif kind == "hover":
-                await locator.hover(timeout=5000)
-                logger.info(f"✅ [Browser] 悬停成功: ref={ref}")
-                return {"success": True, "action": "hover", "ref": ref}
+                elif kind == "hover":
+                    await locator.hover(timeout=5000)
+                    logger.info(f"✅ [Browser] 悬停成功: ref={ref}")
+                    return {"success": True, "action": "hover", "ref": ref}
 
-            elif kind == "scroll" or kind == "scrollIntoView":
-                await locator.scroll_into_view_if_needed(timeout=5000)
-                logger.info(f"✅ [Browser] 滚动成功: ref={ref}")
-                return {"success": True, "action": "scroll", "ref": ref}
+                elif kind == "scroll" or kind == "scrollIntoView":
+                    await locator.scroll_into_view_if_needed(timeout=5000)
+                    logger.info(f"✅ [Browser] 滚动成功: ref={ref}")
+                    return {"success": True, "action": "scroll", "ref": ref}
 
-            elif kind == "press":
-                if not value:
-                    return {"success": False, "error": "Missing 'value' for press action"}
-                await locator.press(value, timeout=5000)
-                logger.info(f"✅ [Browser] 按键成功: ref={ref}, key={value}")
-                return {"success": True, "action": "press", "ref": ref, "key": value}
+                elif kind == "press":
+                    if not value:
+                        return {"success": False, "error": "Missing 'value' for press action"}
+                    await locator.press(value, timeout=5000)
+                    logger.info(f"✅ [Browser] 按键成功: ref={ref}, key={value}")
+                    return {"success": True, "action": "press", "ref": ref, "key": value}
 
-            else:
-                return {"success": False, "error": f"Unknown action kind: {kind}"}
+                else:
+                    return {"success": False, "error": f"Unknown action kind: {kind}"}
+            
+            except PlaywrightTimeoutError:
+                logger.error(f"❌ [Browser] 操作超时: kind={kind}, ref={ref}")
+                return {"success": False, "error": f"Operation timeout for ref={ref}"}
 
         except Exception as e:
             logger.error(f"❌ [Browser] 操作失败: {e}")
