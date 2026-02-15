@@ -94,7 +94,7 @@ class TestPlanner:
     async def test_desktop_task_detection(self):
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        # Mock LLM 返回 playwright 分类
+        # Mock LLM 返回 playwright 分类 → 兼容映射到 agent
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={
@@ -112,13 +112,13 @@ class TestPlanner:
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             task = await plan("打开网页里的音乐输入周杰伦播放音乐")
         assert len(task.steps) == 1
-        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+        assert task.steps[0].executor_type == ExecutorType.AGENT
 
     @pytest.mark.asyncio
     async def test_desktop_keywords_multiple_hits(self):
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
-        # Mock LLM 返回 desktop 分类
+        # Mock LLM 返回 desktop 分类 → 兼容映射到 agent
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={
@@ -135,7 +135,7 @@ class TestPlanner:
         with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             task = await plan("打开浏览器播放视频")
-        assert task.steps[0].executor_type == ExecutorType.DESKTOP
+        assert task.steps[0].executor_type == ExecutorType.AGENT
 
     @pytest.mark.asyncio
     async def test_non_desktop_task_fallback(self):
@@ -242,7 +242,7 @@ class TestPlanner:
         """LLM 返回带 markdown 代码块的 JSON 时能正确解析"""
         from task_engine.planner import _parse_llm_classification
         result = _parse_llm_classification('```json\n{"task_type": "desktop", "description": "test"}\n```')
-        assert result == "desktop"
+        assert result == "agent"
 
     @pytest.mark.asyncio
     async def test_parse_llm_classification_invalid_json(self):
@@ -1693,10 +1693,10 @@ class TestTaskEngine:
 
     @pytest.mark.asyncio
     async def test_playwright_flow_music(self):
-        """Web 音乐任务走 Playwright 执行器（通过 LLM 分类）"""
+        """Web 音乐任务走 Agent 执行器（通过 LLM 分类，playwright 映射到 agent）"""
         from task_engine.engine import TaskEngine
         engine = TaskEngine()
-        # Mock LLM 返回 playwright 分类
+        # Mock LLM 返回 playwright 分类 → 兼容映射到 agent
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={
@@ -1713,8 +1713,8 @@ class TestTaskEngine:
         with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
-        # Playwright 执行器尝试打开浏览器搜索音乐
-        # 在 CI 环境可能成功或因网络问题失败，但不应走 LLM 调用失败
+        # Agent 执行器尝试调用 LLM + browser tool
+        # 在 CI 环境可能因 LLM/browser server 不可用而失败，但应返回字符串结果
         assert isinstance(result, str)
         assert len(result) > 0
 
@@ -1875,7 +1875,7 @@ class TestMusicHandler:
 # ============================================================
 
 class TestPlannerWebMusic:
-    """测试 Planner 的 Web 音乐路由（LLM 分类模式）"""
+    """测试 Planner 的 Web 音乐路由（LLM 分类模式，playwright/desktop 映射到 agent）"""
 
     def _mock_llm_response(self, task_type: str):
         """创建 LLM 分类的 mock 响应"""
@@ -1894,30 +1894,30 @@ class TestPlannerWebMusic:
         return mock_session
 
     @pytest.mark.asyncio
-    async def test_web_music_routes_to_playwright(self):
-        """Web 音乐任务应路由到 PLAYWRIGHT"""
+    async def test_web_music_routes_to_agent(self):
+        """Web 音乐任务应路由到 AGENT"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
         mock_session = self._mock_llm_response("playwright")
         with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             task = await plan("打开网页里的音乐输入周杰伦播放音乐")
-        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+        assert task.steps[0].executor_type == ExecutorType.AGENT
 
     @pytest.mark.asyncio
-    async def test_web_video_stays_desktop(self):
-        """Web 视频任务应路由到 DESKTOP（不是音乐）"""
+    async def test_web_video_routes_to_agent(self):
+        """Web 视频任务应路由到 AGENT（desktop 映射到 agent）"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
         mock_session = self._mock_llm_response("desktop")
         with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             task = await plan("打开浏览器播放视频")
-        assert task.steps[0].executor_type == ExecutorType.DESKTOP
+        assert task.steps[0].executor_type == ExecutorType.AGENT
 
     @pytest.mark.asyncio
     async def test_pure_music_no_web_stays_llm(self):
-        """没有 web 关键词的音乐请求不走 Playwright"""
+        """没有 web 关键词的音乐请求不走 Agent"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
         mock_session = self._mock_llm_response("llm")
@@ -1928,25 +1928,36 @@ class TestPlannerWebMusic:
 
     @pytest.mark.asyncio
     async def test_web_music_listen(self):
-        """听歌场景也应路由到 PLAYWRIGHT"""
+        """听歌场景也应路由到 AGENT"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
         mock_session = self._mock_llm_response("playwright")
         with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             task = await plan("打开网页听歌")
-        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+        assert task.steps[0].executor_type == ExecutorType.AGENT
 
     @pytest.mark.asyncio
     async def test_browser_music_search(self):
-        """浏览器搜索歌曲应路由到 PLAYWRIGHT"""
+        """浏览器搜索歌曲应路由到 AGENT"""
         from task_engine.models import ExecutorType
         from task_engine.planner import plan
         mock_session = self._mock_llm_response("playwright")
         with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
              patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
             task = await plan("浏览器搜索歌曲周杰伦")
-        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+        assert task.steps[0].executor_type == ExecutorType.AGENT
+
+    @pytest.mark.asyncio
+    async def test_agent_type_direct(self):
+        """直接返回 agent 类型应路由到 AGENT"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        mock_session = self._mock_llm_response("agent")
+        with patch("task_engine.planner.aiohttp.ClientSession", return_value=mock_session), \
+             patch("task_engine.planner._PLANNER_LLM_URL", "http://test:8000"):
+            task = await plan("搜索周杰伦的歌曲")
+        assert task.steps[0].executor_type == ExecutorType.AGENT
 
 
 # ============================================================
@@ -1954,7 +1965,7 @@ class TestPlannerWebMusic:
 # ============================================================
 
 class TestExecutorRouterPlaywright:
-    """测试执行器路由对 Playwright 的支持"""
+    """测试执行器路由对 Playwright 和 Agent 的支持"""
 
     @pytest.mark.asyncio
     async def test_route_playwright(self):
@@ -1965,18 +1976,32 @@ class TestExecutorRouterPlaywright:
         executor = _get_executor(ExecutorType.PLAYWRIGHT)
         assert isinstance(executor, PlaywrightExecutor)
 
+    @pytest.mark.asyncio
+    async def test_route_agent(self):
+        """AGENT 类型应路由到 AgentExecutor"""
+        from task_engine.executor_router import _get_executor
+        from task_engine.executors.agent_executor.executor import AgentExecutor
+        from task_engine.models import ExecutorType
+        executor = _get_executor(ExecutorType.AGENT)
+        assert isinstance(executor, AgentExecutor)
+
 
 # ============================================================
 # Models Playwright 测试
 # ============================================================
 
 class TestModelsPlaywright:
-    """测试 Playwright 相关数据模型"""
+    """测试 Playwright 和 Agent 相关数据模型"""
 
     def test_playwright_executor_type(self):
         """PLAYWRIGHT 枚举值应存在"""
         from task_engine.models import ExecutorType
         assert ExecutorType.PLAYWRIGHT == "playwright"
+
+    def test_agent_executor_type(self):
+        """AGENT 枚举值应存在"""
+        from task_engine.models import ExecutorType
+        assert ExecutorType.AGENT == "agent"
 
     def test_step_with_playwright_type(self):
         """Step 应支持 PLAYWRIGHT 类型"""
@@ -1988,10 +2013,220 @@ class TestModelsPlaywright:
         )
         assert step.executor_type == ExecutorType.PLAYWRIGHT
 
+    def test_step_with_agent_type(self):
+        """Step 应支持 AGENT 类型"""
+        from task_engine.models import ExecutorType, Step
+        step = Step(
+            executor_type=ExecutorType.AGENT,
+            description="AI 自主操控任务",
+            params={"task": "搜索周杰伦音乐"},
+        )
+        assert step.executor_type == ExecutorType.AGENT
+
 
 # ============================================================
-# TaskEngineAgent 测试
+# AgentExecutor 测试
 # ============================================================
+
+class TestAgentExecutor:
+    """测试 AI 自主操控执行器"""
+
+    @pytest.mark.asyncio
+    async def test_missing_task_param(self):
+        """缺少 task 参数应返回失败"""
+        from task_engine.executors.agent_executor.executor import AgentExecutor
+        from task_engine.models import ExecutorType, Step
+        executor = AgentExecutor()
+        step = Step(executor_type=ExecutorType.AGENT, description="test", params={})
+        result = await executor.execute(step)
+        assert result.success is False
+        assert "缺少" in result.message
+
+    @pytest.mark.asyncio
+    async def test_llm_call_failure_returns_error(self):
+        """LLM 调用失败应返回错误"""
+        from task_engine.executors.agent_executor.executor import AgentExecutor
+        from task_engine.models import ExecutorType, Step
+        executor = AgentExecutor()
+        step = Step(
+            executor_type=ExecutorType.AGENT,
+            description="test",
+            params={"task": "搜索周杰伦音乐"},
+        )
+        # LLM 未运行，_call_llm 会返回 None
+        result = await executor.execute(step)
+        assert result.success is False
+        assert "LLM 调用失败" in result.message
+
+    @pytest.mark.asyncio
+    async def test_tool_call_loop_completion(self):
+        """测试 LLM 返回无 tool_calls 时正常完成"""
+        from task_engine.executors.agent_executor.executor import AgentExecutor
+        from task_engine.models import ExecutorType, Step
+
+        executor = AgentExecutor()
+
+        async def mock_call_llm(messages):
+            return {"content": "已为你打开音乐网站并播放周杰伦的《晴天》🎵", "tool_calls": None}
+
+        executor._call_llm = mock_call_llm
+        step = Step(
+            executor_type=ExecutorType.AGENT,
+            description="test",
+            params={"task": "播放周杰伦音乐"},
+        )
+        result = await executor.execute(step)
+        assert result.success is True
+        assert "周杰伦" in result.message
+
+    @pytest.mark.asyncio
+    async def test_guard_abort_during_loop(self):
+        """测试守卫在循环中检测到支付相关内容时终止"""
+        from task_engine.executors.agent_executor.executor import AgentExecutor
+        from task_engine.models import ExecutorType, Step
+
+        executor = AgentExecutor()
+        call_count = 0
+
+        async def mock_call_llm(messages):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "content": "",
+                "tool_calls": [{
+                    "id": f"call_{call_count}",
+                    "function": {
+                        "name": "browser",
+                        "arguments": json.dumps({"action": "navigate", "url": "https://example.com/checkout"}),
+                    },
+                }],
+            }
+
+        # Mock browser 工具返回包含支付相关内容，触发安全守卫
+        async def mock_browser(**kwargs):
+            return json.dumps({"success": True, "message": "跳转到支付页面"})
+
+        with patch.dict(
+            "task_engine.executors.agent_executor.tools.TOOL_REGISTRY",
+            {"browser": mock_browser},
+        ):
+            executor._call_llm = mock_call_llm
+            step = Step(
+                executor_type=ExecutorType.AGENT,
+                description="test",
+                params={"task": "测试"},
+            )
+            result = await executor.execute(step)
+            assert result.success is False
+            assert "安全守卫终止" in result.message
+
+    @pytest.mark.asyncio
+    async def test_multi_step_browser_flow(self):
+        """测试多步骤浏览器操作流程（启动→导航→快照→输入→完成）"""
+        from task_engine.executors.agent_executor.executor import AgentExecutor
+        from task_engine.models import ExecutorType, Step
+
+        executor = AgentExecutor()
+        call_count = 0
+
+        async def mock_call_llm(messages):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {
+                            "name": "browser",
+                            "arguments": json.dumps({"action": "start"}),
+                        },
+                    }],
+                }
+            elif call_count == 2:
+                return {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call_2",
+                        "function": {
+                            "name": "browser",
+                            "arguments": json.dumps({"action": "navigate", "url": "https://music.163.com"}),
+                        },
+                    }],
+                }
+            elif call_count == 3:
+                return {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call_3",
+                        "function": {
+                            "name": "browser",
+                            "arguments": json.dumps({"action": "snapshot"}),
+                        },
+                    }],
+                }
+            else:
+                return {"content": "已为你在网易云音乐搜索并播放周杰伦的音乐🎵", "tool_calls": None}
+
+        async def mock_browser(**kwargs):
+            action = kwargs.get("action", "")
+            if action == "start":
+                return json.dumps({"success": True, "message": "浏览器已启动"})
+            elif action == "navigate":
+                return json.dumps({"success": True, "message": f"已导航到 {kwargs.get('url')}"})
+            elif action == "snapshot":
+                return json.dumps({
+                    "success": True,
+                    "elements": [
+                        {"ref": "e1", "type": "textbox", "description": "搜索框"},
+                        {"ref": "e5", "type": "button", "description": "搜索按钮"},
+                    ],
+                })
+            return json.dumps({"success": True})
+
+        with patch.dict(
+            "task_engine.executors.agent_executor.tools.TOOL_REGISTRY",
+            {"browser": mock_browser},
+        ):
+            executor._call_llm = mock_call_llm
+            step = Step(
+                executor_type=ExecutorType.AGENT,
+                description="test",
+                params={"task": "播放周杰伦音乐"},
+            )
+            result = await executor.execute(step)
+            assert result.success is True
+            assert "周杰伦" in result.message
+            assert result.data["iterations"] == 4
+
+
+class TestAgentBrowserTools:
+    """测试 Agent 浏览器工具定义"""
+
+    def test_tool_registry_has_browser(self):
+        """工具注册表应包含 browser 工具"""
+        from task_engine.executors.agent_executor.tools import TOOL_REGISTRY
+        assert "browser" in TOOL_REGISTRY
+
+    def test_tool_definitions_structure(self):
+        """工具定义应包含正确的结构"""
+        from task_engine.executors.agent_executor.tools import TOOL_DEFINITIONS
+        assert len(TOOL_DEFINITIONS) == 1
+        tool = TOOL_DEFINITIONS[0]
+        assert tool["type"] == "function"
+        assert tool["function"]["name"] == "browser"
+        params = tool["function"]["parameters"]
+        assert "action" in params["properties"]
+        assert params["properties"]["action"]["enum"] == ["start", "navigate", "snapshot", "act", "close"]
+
+    @pytest.mark.asyncio
+    async def test_browser_tool_connection_error(self):
+        """browser control server 不可用时应返回错误"""
+        from task_engine.executors.agent_executor.tools import browser_tool
+        result = await browser_tool(action="start")
+        result_data = json.loads(result)
+        assert result_data["success"] is False
+        assert "error" in result_data
 
 class TestTaskEngineAgent:
     """测试 TaskEngine Agent 桥接"""

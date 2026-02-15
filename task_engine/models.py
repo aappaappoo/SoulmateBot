@@ -19,6 +19,7 @@ class ExecutorType(str, Enum):
     LLM = "llm"
     DESKTOP = "desktop"
     PLAYWRIGHT = "playwright"
+    AGENT = "agent"
 
 
 class TaskStatus(str, Enum):

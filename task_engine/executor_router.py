@@ -1,5 +1,5 @@
 """
-执行器路由 - shell / llm / desktop / playwright 分发
+执行器路由 - shell / llm / desktop / playwright / agent 分发
 
 根据 Step.executor_type 将步骤路由到对应的执行器。
 """
@@ -8,6 +8,7 @@ from task_engine.executors.shell_executor import ShellExecutor
 from task_engine.executors.llm_executor import LLMExecutor
 from task_engine.executors.desktop_executor import DesktopExecutor
 from task_engine.executors.playwright_executor import PlaywrightExecutor
+from task_engine.executors.agent_executor import AgentExecutor
 
 
 # 延迟实例化的执行器缓存
@@ -25,6 +26,8 @@ def _get_executor(executor_type: ExecutorType):
             _executors[executor_type] = DesktopExecutor()
         elif executor_type == ExecutorType.PLAYWRIGHT:
             _executors[executor_type] = PlaywrightExecutor()
+        elif executor_type == ExecutorType.AGENT:
+            _executors[executor_type] = AgentExecutor()
     return _executors[executor_type]
 
 

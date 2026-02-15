@@ -1,11 +1,12 @@
 """
-任务规划器 - 使用 LLM 识别 desktop / playwright 任务，生成对应 step
+任务规划器 - 使用 LLM 自然理解用户意图
 
 设计理念：
 - 使用 LLM 对用户输入进行语义理解和意图分类
-- 分为三类：playwright（web 音乐场景）、desktop（桌面操控）、llm（普通文本）
+- 分为两类：agent（需要浏览器/操控/自动化的任务）、llm（普通文本问答）
+- 不使用硬编码分类，完全由 LLM 自然理解决策
 - 只返回 1 个 step
-- planner 只做粗粒度规划，细节由各执行器内部自主决定
+- planner 只做粗粒度规划，细节由 agent 执行器内部 LLM 自主决定
 """
 import json
 
@@ -24,12 +25,11 @@ _PLANNER_LLM_TOKEN = getattr(settings, "executor_llm_token", None) or getattr(se
 _CLASSIFY_SYSTEM_PROMPT = """你是一个任务意图分类器。根据用户输入，判断任务类型并返回 JSON。
 
 任务类型说明：
-- "playwright"：用户想通过网页浏览器播放音乐或搜索歌曲（web 音乐播放场景）
-- "desktop"：用户想操控桌面应用，如打开浏览器、点击按钮、输入文本、播放视频、下载安装软件、截图等
-- "llm"：普通的对话或文本问答，不涉及桌面操控或网页自动化
+- "agent"：用户想要执行需要浏览器操作、网页自动化、搜索信息、播放媒体、桌面操控等需要实际动作的任务
+- "llm"：普通的对话或文本问答，不涉及任何自动化操作
 
 你必须只返回以下 JSON 格式，不要添加任何其他文本：
-{"task_type": "playwright" | "desktop" | "llm", "description": "简短描述任务内容"}
+{"task_type": "agent" | "llm", "description": "简短描述任务内容"}
 """
 
 
@@ -47,16 +47,10 @@ async def plan(user_input: str) -> Task:
 
     task_type = await _classify_task_with_llm(user_input)
 
-    if task_type == "playwright":
+    if task_type == "agent":
         step = Step(
-            executor_type=ExecutorType.PLAYWRIGHT,
-            description="Web 音乐播放任务",
-            params={"task": user_input},
-        )
-    elif task_type == "desktop":
-        step = Step(
-            executor_type=ExecutorType.DESKTOP,
-            description="桌面操控任务",
+            executor_type=ExecutorType.AGENT,
+            description="AI 自主操控任务",
             params={"task": user_input},
         )
     else:
@@ -78,7 +72,7 @@ async def _classify_task_with_llm(text: str) -> str:
         text: 用户输入文本
 
     Returns:
-        str: 任务类型 ("playwright" | "desktop" | "llm")
+        str: 任务类型 ("agent" | "llm")
     """
     if not _PLANNER_LLM_URL:
         logger.warning("⚠️ [Planner] LLM URL 未配置，回退到 llm 类型")
@@ -134,7 +128,7 @@ def _parse_llm_classification(content: str) -> str:
         content: LLM 返回的原始文本
 
     Returns:
-        str: 任务类型 ("playwright" | "desktop" | "llm")
+        str: 任务类型 ("agent" | "llm")
     """
     try:
         # 尝试提取 JSON（处理可能的 markdown 代码块包裹）
@@ -148,8 +142,12 @@ def _parse_llm_classification(content: str) -> str:
         parsed = json.loads(json_str)
         task_type = parsed.get("task_type", "llm").lower()
 
-        if task_type in ("playwright", "desktop", "llm"):
-            return task_type
+        # 兼容旧分类：playwright/desktop 映射到 agent
+        if task_type in ("agent", "playwright", "desktop"):
+            return "agent"
+
+        if task_type == "llm":
+            return "llm"
 
         logger.warning(f"⚠️ [Planner] 未知任务类型: {task_type}，回退到 llm")
         return "llm"
