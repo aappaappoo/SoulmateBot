@@ -559,49 +559,12 @@ class AgentOrchestrator:
         # Agent 处理暂时不考虑多智能体合作
         agent_responses = await self.execute_agents(message, context, result.selected_agents)
         result.agent_responses = agent_responses
-        result.final_response = agent_responses
-
-        return result
-
-    async def process_skill_callback(
-        self,
-        skill_name: str,
-        message: Message,
-        context: ChatContext
-    ) -> OrchestratorResult:
-        """
-        处理用户的技能选择回调
-        
-        当用户点击技能按钮后，执行相应的Agent。
-        
-        Args:
-            skill_name: 用户选择的技能（Agent）名称
-            message: 原始用户消息
-            context: 对话上下文
-            
-        Returns:
-            OrchestratorResult: 处理结果
-        """
-        result = OrchestratorResult(
-            intent_type=IntentType.SINGLE_AGENT,
-            selected_agents=[skill_name]
-        )
-        
-        if skill_name not in self.agents:
-            result.final_response = f"抱歉，技能 '{skill_name}' 不可用。"
-            return result
-        
-        # 执行选中的Agent
-        agent_responses = await self.execute_agents(message, context, [skill_name])
-        result.agent_responses = agent_responses
-        
         if agent_responses:
             result.final_response = agent_responses[0].content
         else:
-            result.final_response = "抱歉，处理请求时发生错误。"
-        
+            result.final_response = ""
         return result
-    
+
     def add_agent(self, agent: BaseAgent) -> None:
         """动态添加Agent"""
         self.agents[agent.name] = agent
