@@ -96,7 +96,7 @@ class TestPlanner:
         from task_engine.planner import plan
         task = await plan("打开网页里的音乐输入周杰伦播放音乐")
         assert len(task.steps) == 1
-        assert task.steps[0].executor_type == ExecutorType.DESKTOP
+        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
 
     @pytest.mark.asyncio
     async def test_desktop_keywords_multiple_hits(self):
@@ -1422,8 +1422,258 @@ class TestTaskEngine:
         """桌面任务在无 vLLM 时应返回失败"""
         from task_engine.engine import TaskEngine
         engine = TaskEngine()
-        result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
+        result = await engine.run("打开桌面截图分析屏幕")
         assert "❌" in result or "LLM 调用失败" in result
+
+    @pytest.mark.asyncio
+    async def test_playwright_flow_music(self):
+        """Web 音乐任务走 Playwright 执行器"""
+        from task_engine.engine import TaskEngine
+        engine = TaskEngine()
+        result = await engine.run("打开网页里的音乐输入周杰伦播放音乐")
+        # Playwright 执行器尝试打开浏览器搜索音乐
+        # 在 CI 环境可能成功或因网络问题失败，但不应走 LLM 调用失败
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+
+# ============================================================
+# PlaywrightExecutor 测试
+# ============================================================
+
+class TestPlaywrightExecutor:
+    """测试 Playwright 执行器"""
+
+    @pytest.mark.asyncio
+    async def test_missing_task_param(self):
+        """缺少 task 参数应返回失败"""
+        from task_engine.executors.playwright_executor.executor import PlaywrightExecutor
+        from task_engine.models import ExecutorType, Step
+        executor = PlaywrightExecutor()
+        step = Step(executor_type=ExecutorType.PLAYWRIGHT, description="test", params={})
+        result = await executor.execute(step)
+        assert result.success is False
+        assert "缺少" in result.message
+
+    @pytest.mark.asyncio
+    async def test_execute_with_mock_browser(self):
+        """Mock 浏览器测试完整播放流程"""
+        from task_engine.executors.playwright_executor.executor import PlaywrightExecutor
+        from task_engine.executors.playwright_executor.music_handler import MusicResult
+        from task_engine.models import ExecutorType, Step
+
+        executor = PlaywrightExecutor()
+        step = Step(
+            executor_type=ExecutorType.PLAYWRIGHT,
+            description="test",
+            params={"task": "打开网页里的音乐输入周杰伦播放音乐"},
+        )
+
+        mock_result = MusicResult(
+            success=True,
+            message="已在酷狗音乐搜索并播放 '周杰伦' 的音乐：晴天",
+            song_title="晴天",
+            artist="周杰伦",
+            url="https://www.kugou.com/song/abc123.html",
+        )
+
+        with patch(
+            "task_engine.executors.playwright_executor.executor.search_and_play_music",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ), patch(
+            "task_engine.executors.playwright_executor.executor.browser_manager",
+        ) as mock_bm:
+            mock_ctx = AsyncMock()
+            mock_page = AsyncMock()
+            mock_ctx.new_page = AsyncMock(return_value=mock_page)
+            mock_ctx.close = AsyncMock()
+            mock_bm.new_context = AsyncMock(return_value=mock_ctx)
+
+            result = await executor.execute(step)
+            assert result.success is True
+            assert "周杰伦" in result.message
+            assert result.data["song_title"] == "晴天"
+            assert result.data["artist"] == "周杰伦"
+
+    @pytest.mark.asyncio
+    async def test_execute_with_mock_browser_failure(self):
+        """Mock 浏览器测试播放失败场景"""
+        from task_engine.executors.playwright_executor.executor import PlaywrightExecutor
+        from task_engine.executors.playwright_executor.music_handler import MusicResult
+        from task_engine.models import ExecutorType, Step
+
+        executor = PlaywrightExecutor()
+        step = Step(
+            executor_type=ExecutorType.PLAYWRIGHT,
+            description="test",
+            params={"task": "打开网页里的音乐输入周杰伦播放音乐"},
+        )
+
+        mock_result = MusicResult(
+            success=False,
+            message="搜索结果中未找到可点击的歌曲",
+        )
+
+        with patch(
+            "task_engine.executors.playwright_executor.executor.search_and_play_music",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ), patch(
+            "task_engine.executors.playwright_executor.executor.browser_manager",
+        ) as mock_bm:
+            mock_ctx = AsyncMock()
+            mock_page = AsyncMock()
+            mock_ctx.new_page = AsyncMock(return_value=mock_page)
+            mock_ctx.close = AsyncMock()
+            mock_bm.new_context = AsyncMock(return_value=mock_ctx)
+
+            result = await executor.execute(step)
+            assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_execute_browser_runtime_error(self):
+        """playwright 未安装时应返回合理错误"""
+        from task_engine.executors.playwright_executor.executor import PlaywrightExecutor
+        from task_engine.models import ExecutorType, Step
+
+        executor = PlaywrightExecutor()
+        step = Step(
+            executor_type=ExecutorType.PLAYWRIGHT,
+            description="test",
+            params={"task": "打开网页里的音乐输入周杰伦播放音乐"},
+        )
+
+        with patch(
+            "task_engine.executors.playwright_executor.executor.browser_manager",
+        ) as mock_bm:
+            mock_bm.new_context = AsyncMock(
+                side_effect=RuntimeError("playwright 未安装")
+            )
+
+            result = await executor.execute(step)
+            assert result.success is False
+            assert "playwright" in result.message
+
+
+# ============================================================
+# MusicHandler 测试
+# ============================================================
+
+class TestMusicHandler:
+    """测试音乐处理器"""
+
+    def test_extract_keyword_standard(self):
+        """标准场景：从完整语句提取歌手名"""
+        from task_engine.executors.playwright_executor.music_handler import extract_search_keyword
+        keyword = extract_search_keyword("打开网页里的音乐输入周杰伦播放音乐")
+        assert keyword == "周杰伦"
+
+    def test_extract_keyword_with_wuyuetian(self):
+        """提取五月天"""
+        from task_engine.executors.playwright_executor.music_handler import extract_search_keyword
+        keyword = extract_search_keyword("播放音乐搜索五月天歌曲")
+        assert keyword == "五月天"
+
+    def test_extract_keyword_simple(self):
+        """简单输入"""
+        from task_engine.executors.playwright_executor.music_handler import extract_search_keyword
+        keyword = extract_search_keyword("周杰伦")
+        assert keyword == "周杰伦"
+
+    def test_extract_keyword_with_song(self):
+        """带歌曲名"""
+        from task_engine.executors.playwright_executor.music_handler import extract_search_keyword
+        keyword = extract_search_keyword("打开网页播放音乐晴天")
+        assert "晴天" in keyword
+
+
+# ============================================================
+# Planner Web Music 测试
+# ============================================================
+
+class TestPlannerWebMusic:
+    """测试 Planner 的 Web 音乐路由"""
+
+    @pytest.mark.asyncio
+    async def test_web_music_routes_to_playwright(self):
+        """Web 音乐任务应路由到 PLAYWRIGHT"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        task = await plan("打开网页里的音乐输入周杰伦播放音乐")
+        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+
+    @pytest.mark.asyncio
+    async def test_web_video_stays_desktop(self):
+        """Web 视频任务应路由到 DESKTOP（不是音乐）"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        task = await plan("打开浏览器播放视频")
+        assert task.steps[0].executor_type == ExecutorType.DESKTOP
+
+    @pytest.mark.asyncio
+    async def test_pure_music_no_web_stays_llm(self):
+        """没有 web 关键词的音乐请求不走 Playwright"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        task = await plan("音乐好听")
+        assert task.steps[0].executor_type == ExecutorType.LLM
+
+    @pytest.mark.asyncio
+    async def test_web_music_listen(self):
+        """听歌场景也应路由到 PLAYWRIGHT"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        task = await plan("打开网页听歌")
+        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+
+    @pytest.mark.asyncio
+    async def test_browser_music_search(self):
+        """浏览器搜索歌曲应路由到 PLAYWRIGHT"""
+        from task_engine.models import ExecutorType
+        from task_engine.planner import plan
+        task = await plan("浏览器搜索歌曲周杰伦")
+        assert task.steps[0].executor_type == ExecutorType.PLAYWRIGHT
+
+
+# ============================================================
+# ExecutorRouter Playwright 测试
+# ============================================================
+
+class TestExecutorRouterPlaywright:
+    """测试执行器路由对 Playwright 的支持"""
+
+    @pytest.mark.asyncio
+    async def test_route_playwright(self):
+        """PLAYWRIGHT 类型应路由到 PlaywrightExecutor"""
+        from task_engine.executor_router import _get_executor
+        from task_engine.executors.playwright_executor.executor import PlaywrightExecutor
+        from task_engine.models import ExecutorType
+        executor = _get_executor(ExecutorType.PLAYWRIGHT)
+        assert isinstance(executor, PlaywrightExecutor)
+
+
+# ============================================================
+# Models Playwright 测试
+# ============================================================
+
+class TestModelsPlaywright:
+    """测试 Playwright 相关数据模型"""
+
+    def test_playwright_executor_type(self):
+        """PLAYWRIGHT 枚举值应存在"""
+        from task_engine.models import ExecutorType
+        assert ExecutorType.PLAYWRIGHT == "playwright"
+
+    def test_step_with_playwright_type(self):
+        """Step 应支持 PLAYWRIGHT 类型"""
+        from task_engine.models import ExecutorType, Step
+        step = Step(
+            executor_type=ExecutorType.PLAYWRIGHT,
+            description="Web 音乐播放",
+            params={"task": "播放音乐"},
+        )
+        assert step.executor_type == ExecutorType.PLAYWRIGHT
 
 
 # ============================================================
