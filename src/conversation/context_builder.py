@@ -5,21 +5,22 @@ Unified Context Builder - 统一上下文构建器
 
 消息结构：
 1. System Prompt（包含人设 + 长期记忆 + 对话策略）
-2. 短期对话历史（最近 3-5 轮完整内容）
+2. 短期对话历史（最近 3-5 轮完整内容，数据源来自内存数据库）
 3. 当前用户消息
 
 功能：
-- 分割历史（短期 vs 中期）
-- 生成中期摘要（支持缓存）
+- 提取短期历史（来自内存数据库）
+- 整合中期摘要（来自内存数据库中的 LLM 摘要缓存）
 - 整合所有上下文
 - 构建最终消息列表
 - Token 预算管理
 - 历史对话过滤（URL、简单寒暄等）
+- 非 DIRECT_RESPONSE 内容仅记录事项成功/失败
 """
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 from loguru import logger
-from .summary_service import ConversationSummaryService, ConversationSummary
+from .summary_service import ConversationSummaryService
 from src.utils.history_filter import HistoryFilter, get_history_filter
 
 
@@ -32,8 +33,6 @@ class ContextConfig:
     """
     # 对话历史分层
     short_term_rounds: int = 5  # 短期历史轮数（最近 N 轮）
-    mid_term_start: int = 5  # 中期历史开始轮次
-    mid_term_end: int = 20  # 中期历史结束轮次
 
     # 长期记忆
     max_memories: int = 10  # 最多包含的长期记忆数量
@@ -70,12 +69,13 @@ class UnifiedContextBuilder:
     统一上下文构建器
     
     核心职责：
-    1. 将对话历史分层（短期、中期、长期）
-    2. 生成中期对话摘要
+    1. 从内存数据库中提取短期对话历史
+    2. 整合中期摘要（来自内存数据库中的 LLM 摘要缓存）
     3. 构建增强的 System Prompt
     4. 整合所有组件到最终消息列表
     5. 管理 token 预算
     6. 过滤不重要的历史内容（URL、简单寒暄等）
+    7. 非 DIRECT_RESPONSE 内容仅记录事项成功/失败
     """
 
     def __init__(
@@ -146,28 +146,17 @@ class UnifiedContextBuilder:
             if filtered_count > 0:
                 logger.debug(f"🔍 过滤了 {filtered_count} 条不重要的历史消息")
 
-        # 1. 分割对话历史
-        short_term, mid_term = self._split_history(conversation_history)
-        logger.debug(f"分割对话历史: 短期={len(short_term)}条, 中期={len(mid_term)}条")
+        # 1. 提取短期对话历史（数据源来自内存数据库）
+        short_term = self._get_short_term_history(conversation_history)
+        logger.debug(f"短期对话历史: {len(short_term)}条")
 
-        # 2. 生成中期摘要（如果有中期对话）
-        mid_term_summary = None
-        if mid_term:
-            mid_term_summary = await self.summary_service.summarize_conversations(
-                mid_term,
-                use_llm=self.config.use_llm_summary,
-                max_summary_length=self.config.max_summary_length
-            )
-            logger.debug(f"生成中期摘要: {mid_term_summary.summary_text[:50]}...")
-
-        # 3. 格式化长期记忆
+        # 2. 格式化长期记忆
         memory_context = self._format_memories(user_memories)
-        # 5. 构建增强的 System Prompt（包含对话历史）
+        # 3. 构建增强的 System Prompt（中期记忆来自内存数据库中的 llm_generated_summary）
         enhanced_system_prompt = self._build_enhanced_system_prompt(
             bot_system_prompt=bot_system_prompt,
             memory_context=memory_context,
-            mid_term_summary=mid_term_summary,
-            llm_generated_summary=llm_generated_summary,  # 传递 LLM 摘要
+            llm_generated_summary=llm_generated_summary,
             dialogue_strategy=dialogue_strategy,
             short_term_history=short_term,
             persona=persona
@@ -195,68 +184,38 @@ class UnifiedContextBuilder:
             token_estimate=token_estimate,
             metadata={
                 "short_term_count": len(short_term),
-                "mid_term_count": len(mid_term),
-                "has_mid_term_summary": mid_term_summary is not None,
+                "has_llm_summary": llm_generated_summary is not None,
                 "memory_count": len(user_memories) if user_memories else 0,
                 "filtered_history_count": filtered_count,
                 "history_filter_enabled": self.config.enable_history_filter
             }
         )
 
-    def _split_history(
+    def _get_short_term_history(
             self,
             conversation_history: List[Dict[str, str]]
-    ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+    ) -> List[Dict[str, str]]:
         """
-        分割对话历史为短期和中期
+        从内存数据库的对话历史中提取短期历史
         
         短期：最近 N 轮（configs.short_term_rounds）
-        中期：第 M 到 N 轮（configs.mid_term_start 到 configs.mid_term_end）
         
         Returns:
-            (short_term, mid_term): 短期历史和中期历史
+            短期历史消息列表
         """
         if not conversation_history:
-            return [], []
+            return []
 
-        # 计算短期历史的消息数量
-        # 注意：一轮对话通常包含一条用户消息和一条助手消息
-        # 但我们按实际消息数计算，不假设每轮恰好两条
         user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
         num_user_messages = len(user_messages)
 
-        # 短期：取最近 N 轮对话（基于用户消息数）
         if num_user_messages <= self.config.short_term_rounds:
-            # 所有历史都是短期
-            return conversation_history, []
+            return conversation_history
 
-        # 找到倒数第 N 条用户消息的位置
         user_msg_indices = [i for i, msg in enumerate(conversation_history) if msg.get("role") == "user"]
         short_term_start_idx = user_msg_indices[-self.config.short_term_rounds]
 
-        # 短期历史从该位置到结尾
-        short_term = conversation_history[short_term_start_idx:]
-
-        # 剩余的历史（不包括短期部分）
-        remaining = conversation_history[:short_term_start_idx]
-
-        if not remaining:
-            return short_term, []
-        remaining_user_indices = [i for i, msg in enumerate(remaining) if msg.get("role") == "user"]
-        num_remaining_users = len(remaining_user_indices)
-        # 我们应该从 remaining 的末尾开始
-        # 简化理解：中期就是 remaining 中最近的 (mid_term_end - short_term_rounds) 轮
-        mid_term_rounds = min(
-            self.config.mid_term_end - self.config.short_term_rounds,
-            num_remaining_users
-        )
-
-        if mid_term_rounds > 0:
-            mid_term_start_idx = remaining_user_indices[-mid_term_rounds]
-            mid_term = remaining[mid_term_start_idx:]
-        else:
-            mid_term = []
-        return short_term, mid_term
+        return conversation_history[short_term_start_idx:]
 
     def _format_memories(self, user_memories: Optional[List[Dict[str, Any]]]) -> str:
         """
@@ -292,8 +251,7 @@ class UnifiedContextBuilder:
             self,
             bot_system_prompt: str,
             memory_context: str,
-            mid_term_summary: Optional[ConversationSummary],
-            llm_generated_summary: Optional[Dict] = None,  # 新增：LLM 生成的摘要
+            llm_generated_summary: Optional[Dict] = None,
             dialogue_strategy: Optional[str] = None,
             short_term_history: Optional[List[Dict[str, str]]] = None,
             persona: Optional[Any] = None
@@ -311,7 +269,7 @@ class UnifiedContextBuilder:
                 memory_lines = memory_lines[1:]  # 去掉第一行标题
             if memory_lines:
                 memory_sections.append("【历史重要记忆】\n" + '\n'.join(memory_lines))
-        # 2. 中期摘要记忆
+        # 2. 中期摘要记忆（来自内存数据库）
         summary_text = ""
         if llm_generated_summary and isinstance(llm_generated_summary, dict):
             key_elements = llm_generated_summary.get('key_elements', {})
@@ -324,12 +282,6 @@ class UnifiedContextBuilder:
 关键要素：时间={format_list(key_elements.get('time', []))}，地点={format_list(key_elements.get('place', []))}，人物={format_list(key_elements.get('people', []))}
 话题：{format_list(llm_generated_summary.get('topics', []))}
 用户状态：{llm_generated_summary.get('user_state', '')}"""
-        elif mid_term_summary:
-            summary_text = f"""【中期摘要记忆】
-{mid_term_summary.summary_text}
-讨论话题：{', '.join(mid_term_summary.key_topics[:3])}"""
-            if mid_term_summary.emotion_trajectory:
-                summary_text += f"\n情绪变化：{mid_term_summary.emotion_trajectory}"
         if summary_text:
             memory_sections.append(summary_text.strip())
 
@@ -405,6 +357,7 @@ class UnifiedContextBuilder:
         """
         将短期对话历史格式化为嵌入 system prompt 的文本
         使用特殊标记防止 LLM 模仿此格式输出
+        对于非 DIRECT_RESPONSE 的内容，仅记录事项是否成功
         Args:
             short_term_history: 短期对话历史
         Returns:
@@ -418,12 +371,22 @@ class UnifiedContextBuilder:
             role = msg.get("role", "").lower()
             content = msg.get("content", "")
             timestamp = msg.get("timestamp", "")
+            intent_type = msg.get("intent_type", "")
             time_prefix = f"[{timestamp}] " if timestamp else ""
             if role == "user":
                 history_lines.append(f"{time_prefix}| User: {content}")
             elif role == "assistant":
-                content = content.replace("[MSG_SPLIT]", "")
-                history_lines.append(f"Assistant: {content}")
+                # 非 DIRECT_RESPONSE 的内容仅记录事项是否成功
+                if intent_type and intent_type != "direct_response":
+                    status = msg.get("task_status", "completed")
+                    agent_name = msg.get("agent_name", "")
+                    if agent_name:
+                        history_lines.append(f"Assistant: [任务{agent_name}执行{status}]")
+                    else:
+                        history_lines.append(f"Assistant: [任务执行{status}]")
+                else:
+                    content = content.replace("[MSG_SPLIT]", "")
+                    history_lines.append(f"Assistant: {content}")
         if not history_lines:
             return ""
         history_text = """

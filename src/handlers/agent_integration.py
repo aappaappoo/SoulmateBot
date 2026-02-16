@@ -359,8 +359,6 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             context_builder = UnifiedContextBuilder(
                 config=ContextConfig(
                     short_term_rounds=5,
-                    mid_term_start=3,
-                    mid_term_end=20,
                     max_memories=8,
                     use_llm_summary=False,  # 使用规则摘要节省 token
                     enable_proactive_strategy=True,
@@ -493,10 +491,25 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                             session_id,
                             {"role": "user", "content": message_text, "timestamp": now_str}
                         )
-                        redis_history.add_message(
-                            session_id,
-                            {"role": "assistant", "content": response}
-                        )
+                        # 非 DIRECT_RESPONSE 仅记录事项是否成功
+                        if result.intent_type != IntentType.DIRECT_RESPONSE and result.selected_agents:
+                            agent_names = ",".join(result.selected_agents)
+                            task_status = "成功" if response else "失败"
+                            redis_history.add_message(
+                                session_id,
+                                {
+                                    "role": "assistant",
+                                    "content": f"[任务{agent_names}执行{task_status}]",
+                                    "intent_type": result.intent_type.value,
+                                    "agent_name": agent_names,
+                                    "task_status": task_status
+                                }
+                            )
+                        else:
+                            redis_history.add_message(
+                                session_id,
+                                {"role": "assistant", "content": response}
+                            )
                     # 记录使用量
                     await subscription_service.record_usage(db_user, action_type="message")
                     await db.commit()

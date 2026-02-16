@@ -197,22 +197,12 @@ handle_message_with_agents()                          # 入口 → agent_integra
             │       └── [enable_disk_storage]
             │               └── _store_filtered_content() → JSON 文件
             │
-            │  ── Step 1：分割对话历史 ──
-            ├── _split_history(filtered_history)
+            │  ── Step 1：提取短期对话历史（来自内存数据库） ──
+            ├── _get_short_term_history(filtered_history)
             │       ├── 统计 user 消息数
-            │       ├── short_term = 最近 5 轮 user 消息及之后的所有消息
-            │       └── mid_term   = short_term 之前的, 最多 (20-5)=15 轮
+            │       └── short_term = 最近 5 轮 user 消息及之后的所有消息
             │
-            │  ── Step 2：生成中期摘要 ──
-            ├── ConversationSummaryService.summarize_conversations(mid_term)
-            │       ├── [use_llm=True & llm_provider] → _summarize_with_llm()
-            │       │       └── 调用 LLM → JSON {summary_text, key_topics, emotion_trajectory, user_needs}
-            │       └── [默认/回退]       → _summarize_with_rules()
-            │               ├── _extract_topics()              # 关键词匹配 → 话题列表
-            │               ├── _analyze_emotion_trajectory()  # 情绪关键词 → "整体积极/消极/波动/平稳"
-            │               ├── _identify_user_needs()         # 需求关键词 → ["倾诉","建议",...]
-            │               └── _generate_rule_based_summary() # 拼装文本
-            │
+            │  ── Step 2：中期摘要来自内存数据库中的 llm_generated_summary ──
             │  ── Step 3：格式化长期记忆 ──
             ├── _format_memories(user_memories)
             │       └── 最多 max_memories(8) 条

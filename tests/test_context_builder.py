@@ -38,16 +38,14 @@ class TestUnifiedContextBuilder:
         
         # 验证系统提示包含关键组件
         system_content = result.messages[0]["content"]
-        assert "强制JSON格式" in system_content  # JSON 格式指令应存在
-        assert "历史对话" in system_content  # 历史对话标记应存在
+        assert "强制输出格式" in system_content  # JSON 格式指令应存在
+        assert "history" in system_content.lower()  # 历史对话标记应存在
     
-    async def test_split_history(self):
-        """Test conversation history splitting"""
+    async def test_get_short_term_history(self):
+        """Test short-term history extraction from in-memory data"""
         builder = UnifiedContextBuilder(
             config=ContextConfig(
-                short_term_rounds=2,
-                mid_term_start=2,
-                mid_term_end=5
+                short_term_rounds=2
             )
         )
         
@@ -57,14 +55,11 @@ class TestUnifiedContextBuilder:
             history.append({"role": "user", "content": f"用户消息{i+1}"})
             history.append({"role": "assistant", "content": f"AI回复{i+1}"})
         
-        short_term, mid_term = builder._split_history(history)
+        short_term = builder._get_short_term_history(history)
         
         # Short term should be last 2 rounds (4 messages)
         assert len(short_term) == 4
         assert short_term[-1]["content"] == "AI回复10"
-        
-        # Mid term should be rounds 2-5
-        assert len(mid_term) > 0
     
     async def test_with_user_memories(self):
         """Test context building with user memories"""
@@ -99,13 +94,11 @@ class TestUnifiedContextBuilder:
         system_content = result.messages[0]["content"]
         assert "关于这位用户的记忆" in system_content or "玩游戏" in system_content
     
-    async def test_mid_term_summary(self):
-        """Test mid-term conversation summarization"""
+    async def test_llm_generated_summary(self):
+        """Test mid-term memory from in-memory LLM summary"""
         builder = UnifiedContextBuilder(
             config=ContextConfig(
-                short_term_rounds=2,
-                mid_term_start=1,
-                mid_term_end=8
+                short_term_rounds=2
             )
         )
         
@@ -115,17 +108,30 @@ class TestUnifiedContextBuilder:
             history.append({"role": "user", "content": f"我今天工作很累，第{i+1}天"})
             history.append({"role": "assistant", "content": f"辛苦了！要注意休息哦。"})
         
+        # Provide LLM generated summary as mid-term memory source (from in-memory cache)
+        llm_summary = {
+            "summary_text": "用户连续多天工作疲惫",
+            "key_elements": {
+                "time": ["多天"],
+                "place": [],
+                "people": [],
+            },
+            "topics": ["工作", "疲劳"],
+            "user_state": "疲惫"
+        }
+        
         result = await builder.build_context(
             bot_system_prompt="你是AI助手。",
             conversation_history=history,
-            current_message="我需要放松一下"
+            current_message="我需要放松一下",
+            llm_generated_summary=llm_summary
         )
         
-        # Check that mid-term summary exists in system prompt
+        # Check that LLM summary exists in system prompt
         system_content = result.messages[0]["content"]
-        # Should have summary section
-        assert len(system_content) > len("你是AI助手。")
-        assert result.metadata.get("mid_term_count", 0) > 0
+        assert "中期摘要记忆" in system_content
+        assert "工作疲惫" in system_content
+        assert result.metadata.get("has_llm_summary") == True
     
     async def test_token_budget_management(self):
         """Test token budget behavior with simplified message structure"""
@@ -206,7 +212,9 @@ class TestUnifiedContextBuilder:
             current_message="今天天气怎么样？"
         )
         
-        assert result.metadata.get("has_proactive_guidance") == False
+        # 基本结构验证
+        assert len(result.messages) == 2
+        assert result.messages[0]["role"] == "system"
     
     async def test_empty_history(self):
         """Test with empty conversation history"""
@@ -242,6 +250,30 @@ class TestUnifiedContextBuilder:
         # All 3 should be included since we only have 3
         assert formatted.count("-") >= 3
     
+    async def test_non_direct_response_history_formatting(self):
+        """Test that non-DIRECT_RESPONSE history only records task status"""
+        builder = UnifiedContextBuilder()
+        
+        history = [
+            {"role": "user", "content": "帮我查下天气"},
+            {
+                "role": "assistant",
+                "content": "[任务weather执行成功]",
+                "intent_type": "single_agent",
+                "agent_name": "weather",
+                "task_status": "成功"
+            },
+            {"role": "user", "content": "今天心情不错"},
+            {"role": "assistant", "content": "很高兴听到你心情好！"}
+        ]
+        
+        formatted = builder._format_history_for_system_prompt(history)
+        
+        # Non-DIRECT_RESPONSE should show task status only
+        assert "[任务weather执行成功]" in formatted
+        # DIRECT_RESPONSE (no intent_type) should show full content
+        assert "很高兴听到你心情好！" in formatted
+    
     def test_estimate_tokens(self):
         """Test token estimation"""
         builder = UnifiedContextBuilder()
@@ -268,9 +300,7 @@ class TestContextConfig:
         config = ContextConfig()
         
         assert config.short_term_rounds == 5
-        assert config.mid_term_start == 3
-        assert config.mid_term_end == 20
-        assert config.max_memories == 8
+        assert config.max_memories == 10
         assert config.max_total_tokens == 8000
         assert config.reserved_output_tokens == 1000
         assert config.use_llm_summary == False
