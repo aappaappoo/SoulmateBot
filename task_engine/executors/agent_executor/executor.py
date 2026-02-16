@@ -80,6 +80,7 @@ class AgentExecutor(BaseExecutor):
     通过 LLM + browser tool 循环实现全自主任务执行。
     LLM 自主决定目标网站、关键词提取、操作步骤，无需硬编码。
     """
+    enable_polish = True  # 润色
 
     def __init__(self) -> None:
         self._guard = TaskGuard()

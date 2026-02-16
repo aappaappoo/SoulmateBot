@@ -81,8 +81,9 @@ async def polish(report_text: str, user_input: str) -> str:
                     return report_text
 
                 result = await response.json()
+                print(">>>>>>",result)
                 polished = result["choices"][0]["message"]["content"].strip()
-
+                print(polished)
                 if not polished:
                     logger.warning("⚠️ [Polisher] LLM 返回空内容，使用原始文本")
                     return report_text

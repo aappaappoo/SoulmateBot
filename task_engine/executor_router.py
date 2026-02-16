@@ -42,4 +42,4 @@ async def route_and_execute(step: Step) -> StepResult:
         StepResult: 执行结果
     """
     executor = _get_executor(step.executor_type)
-    return await executor.execute(step)
+    return await executor.run(step)

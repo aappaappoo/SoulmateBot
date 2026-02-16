@@ -78,7 +78,6 @@ class TaskEngine:
 
         # 5. 润色
         polished_text = await polish(report_text, user_input)
-        logger.debug(f"✨ [TaskEngine] 润色输出: {polished_text}")
         logger.debug(f"🏁 [TaskEngine] ===== 任务结束 =====")
 
         return polished_text
