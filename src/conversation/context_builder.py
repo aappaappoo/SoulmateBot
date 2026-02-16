@@ -378,7 +378,7 @@ class UnifiedContextBuilder:
             elif role == "assistant":
                 # 非 DIRECT_RESPONSE 的内容仅记录事项是否成功
                 if intent_type and intent_type != "direct_response":
-                    status = msg.get("task_status", "completed")
+                    status = msg.get("task_status", "成功")
                     agent_name = msg.get("agent_name", "")
                     if agent_name:
                         history_lines.append(f"Assistant: [任务{agent_name}执行{status}]")
