@@ -253,14 +253,14 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             recent_conversations = []
             session_id = f"{db_user.id}_{selected_bot.id}" if db_user and selected_bot else None
 
-            # 从 Redis 获取近期对话记录
-            redis_history = get_redis_conversation_history()
+            # 从内存获取近期对话记录（短期+中期记忆）
+            memory_history = get_redis_conversation_history()
             conversation_history_for_builder = []
             if session_id:
-                conversation_history_for_builder = redis_history.get_history(session_id)
+                conversation_history_for_builder = memory_history.get_history(session_id)
                 if conversation_history_for_builder:
                     logger.debug(
-                        f"📦 从 Redis 获取到 {len(conversation_history_for_builder)} 条近期对话记录"
+                        f"📦 从内存获取到 {len(conversation_history_for_builder)} 条近期对话记录"
                     )
 
             if db_user:
@@ -269,7 +269,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     .where(Conversation.user_id == db_user.id)
                     .where(Conversation.session_id == session_id)
                     .order_by(Conversation.timestamp.desc())
-                    .limit(50)  # 增加到50条以支持中期摘要
+                    .limit(50)
                 )
                 recent_conversations = list(db_result.scalars().all())
                 # 构建 Message 对象列表，使用 user_id 来标识 user 或 assistant
@@ -286,19 +286,6 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                             user_id="assistant",  # 标识为助手消息
                             chat_id=str(chat_id)
                         ))
-
-            # 如果 Redis 中没有近期记录，从数据库构建并同步到 Redis
-            if not conversation_history_for_builder and recent_conversations:
-                for conv in reversed(recent_conversations):
-                    time_str = conv.timestamp.strftime("%Y-%m-%d %H:%M:%S") if conv.timestamp else ""
-                    if conv.is_user_message:
-                        msg = {"role": "user", "content": conv.message, "timestamp": time_str}
-                    else:
-                        msg = {"role": "assistant", "content": conv.response}
-                    conversation_history_for_builder.append(msg)
-                    # 同步到 Redis
-                    if session_id:
-                        redis_history.add_message(session_id, msg)
             # 🧠 创建记忆服务实例（在整个请求中复用）
             memory_service = None
             if db_user:
@@ -472,16 +459,24 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     message_type=message_type
                 )
                 db.add(bot_conv)
-                # 同步近期对话记录到 Redis
+                # 同步近期对话记录到内存（短期+中期记忆）
+                # 对于非DIRECT_RESPONSE的内容，仅记录事项是否成功，不记录详细内容
                 if session_id:
                     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                    redis_history.add_message(
+                    memory_history.add_message(
                         session_id,
                         {"role": "user", "content": message_text, "timestamp": now_str}
                     )
-                    redis_history.add_message(
+                    if result.intent_type == IntentType.DIRECT_RESPONSE:
+                        history_response = response
+                    else:
+                        # 非DIRECT_RESPONSE：仅记录事项是否成功
+                        agent_names = ", ".join(result.selected_agents) if result.selected_agents else "agent"
+                        success = bool(result.agent_responses and result.final_response)
+                        history_response = f"[{agent_names}] 任务{'成功' if success else '失败'}"
+                    memory_history.add_message(
                         session_id,
-                        {"role": "assistant", "content": response}
+                        {"role": "assistant", "content": history_response}
                     )
                 # 记录使用量
                 await subscription_service.record_usage(db_user, action_type="message")

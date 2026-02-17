@@ -1,26 +1,23 @@
 """
-Redis 近期对话记录服务的单元测试
+内存对话记录服务的单元测试
 
 测试内容：
-- 内存降级模式下的消息增删查
+- 内存存储下的消息增删查
 - 消息数量限制
 - 会话清空
+- 多用户多Bot隔离
 """
 import pytest
-from unittest.mock import patch, MagicMock
 
 
-class TestRedisConversationHistory:
-    """测试 Redis 对话记录存储（降级到内存模式）"""
+class TestInMemoryConversationHistory:
+    """测试内存对话记录存储"""
 
     @pytest.fixture
     def history_service(self):
-        """创建使用内存降级的对话记录服务"""
-        with patch("src.services.redis_conversation_history.settings") as mock_settings:
-            mock_settings.redis_url = None
-            from src.services.redis_conversation_history import RedisConversationHistory
-            service = RedisConversationHistory()
-        return service
+        """创建内存对话记录服务"""
+        from src.services.redis_conversation_history import InMemoryConversationHistory
+        return InMemoryConversationHistory()
 
     def test_add_and_get_message(self, history_service):
         """添加消息后应能正确获取"""
@@ -100,3 +97,34 @@ class TestRedisConversationHistory:
 
         history = history_service.get_history(session_id)
         assert history[0]["timestamp"] == "2026-02-15 10:00:00"
+
+    def test_multi_user_multi_bot_isolation(self, history_service):
+        """不同用户和Bot组合的对话应完全隔离"""
+        # user1_bot1
+        history_service.add_message("1_1", {"role": "user", "content": "用户1对Bot1"})
+        # user1_bot2
+        history_service.add_message("1_2", {"role": "user", "content": "用户1对Bot2"})
+        # user2_bot1
+        history_service.add_message("2_1", {"role": "user", "content": "用户2对Bot1"})
+
+        h1_1 = history_service.get_history("1_1")
+        h1_2 = history_service.get_history("1_2")
+        h2_1 = history_service.get_history("2_1")
+
+        assert len(h1_1) == 1
+        assert len(h1_2) == 1
+        assert len(h2_1) == 1
+        assert h1_1[0]["content"] == "用户1对Bot1"
+        assert h1_2[0]["content"] == "用户1对Bot2"
+        assert h2_1[0]["content"] == "用户2对Bot1"
+
+    def test_backward_compat_aliases(self):
+        """向后兼容别名应可用"""
+        from src.services.redis_conversation_history import (
+            RedisConversationHistory,
+            get_redis_conversation_history,
+            InMemoryConversationHistory,
+            get_conversation_history,
+        )
+        assert RedisConversationHistory is InMemoryConversationHistory
+        assert get_redis_conversation_history is get_conversation_history
