@@ -471,9 +471,9 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                         history_response = response
                     else:
                         # 非DIRECT_RESPONSE：仅记录事项是否成功
-                        agent_names = ", ".join(result.selected_agents) if result.selected_agents else "agent"
+                        agent_label = ", ".join(result.selected_agents) if result.selected_agents else "agent"
                         success = bool(result.agent_responses and result.final_response)
-                        history_response = f"[{agent_names}] 任务{'成功' if success else '失败'}"
+                        history_response = f"[{agent_label}] 任务{'成功' if success else '失败'}"
                     memory_history.add_message(
                         session_id,
                         {"role": "assistant", "content": history_response}

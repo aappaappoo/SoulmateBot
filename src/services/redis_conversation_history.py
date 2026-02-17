@@ -5,7 +5,7 @@
 实现多用户多Bot下的记忆隔离。服务端关闭后数据自动消失。
 
 短期记忆：最近 5 轮用户消息及后续
-中期记忆：最近 6～20 轮用户消息及后续
+中期记忆：第 6～20 轮用户消息及后续
 """
 from typing import Dict, List, Optional
 
@@ -20,7 +20,7 @@ class InMemoryConversationHistory:
     - 使用内存字典存储，通过 session_id（{user_id}_{bot_id}）实现多用户多Bot隔离
     - 服务端关闭后数据自动消失
     - 短期记忆来自最近 5 轮用户消息及后续
-    - 中期记忆来自最近 6～20 轮用户消息及后续
+    - 中期记忆来自第 6～20 轮用户消息及后续
     """
 
     MAX_MESSAGES = 50  # 最大存储消息数
