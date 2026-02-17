@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     executor_llm_token: Optional[str] = None
     max_iterations: Optional[int] = 5
 
+    polisher_llm_url: Optional[str] = None
+    polisher_llm_model: Optional[str] = None
+    polisher_llm_token: Optional[str] = None
+
     # Browser Control Server (浏览器控制服务)
     browser_server_url: Optional[str] = None
 

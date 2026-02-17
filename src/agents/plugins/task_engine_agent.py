@@ -30,8 +30,9 @@ class TaskEngineAgent(BaseAgent):
     def __init__(self, memory_store=None, **kwargs) -> None:
         self._name = "TaskEngineAgent"
         self._description = (
-            "桌面操控任务引擎，支持打开浏览器、搜索音乐、播放视频等自动化操作。"
+            "支持打开浏览器、搜索音乐、播放视频等自动化操作。"
             "适用于需要操控桌面应用、执行网页自动化、播放媒体内容等任务型请求。"
+            "当用明确说明这是一个任务的时候这一定需要被调用"
         )
         self._memory: Dict[str, Dict[str, Any]] = {}
         self._engine = TaskEngine()
@@ -93,7 +94,7 @@ class TaskEngineAgent(BaseAgent):
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(asyncio.run, self._engine.run(user_input))
-                result_text = future.result(timeout=120)
+                result_text = future.result(timeout=360)
         else:
             result_text = asyncio.run(self._engine.run(user_input))
 

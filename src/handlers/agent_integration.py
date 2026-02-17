@@ -60,8 +60,6 @@ def get_orchestrator() -> AgentOrchestrator:
         _orchestrator = AgentOrchestrator(
             agents=agents,
             llm_provider=conversation_service.provider,
-            enable_skills=True,
-            skill_threshold=3,
             enable_unified_mode=True
         )
 
@@ -429,141 +427,129 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             intent_source = result.metadata.get("intent_source", "unknown")
             logger.info(f"🎯 Intent type: {result.intent_type} | Source: {intent_source}")
             logger.info(f"📋 Selected agents: {result.selected_agents}")
-            # 处理不同类型的结果
-            if result.intent_type == IntentType.SKILL_SELECTION:
-                # 需要用户选择技能，生成按钮
-                keyboard = build_skill_keyboard(result.skill_options)
-                # 保存原始消息到context，供回调使用
-                context.user_data["pending_skill_message"] = message_text
-                context.user_data["pending_skill_chat_id"] = chat_id
-                await message.reply_text(
-                    result.final_response,
-                    reply_markup=keyboard
-                )
-            else:
-                # 使用编排器的响应
-                response = result.final_response
-                if isinstance(response, tuple):
-                    response = response[0] if response else ""
-                elif response is None:
-                    response = ""
-                parse_mode = None
-                if result.agent_responses:
-                    # 获取第一个 agent 的 parse_mode
-                    for agent_resp in result.agent_responses:
-                        if hasattr(agent_resp, 'metadata') and agent_resp.metadata:
-                            parse_mode = agent_resp.metadata.get('parse_mode')
-                            if parse_mode:
-                                break
-                # 发送回复（根据用户语音设置决定是语音还是文本）
-                message_type, _ = await send_voice_or_text_reply(
-                    message=message,
+            # 使用编排器的响应
+            response = result.final_response
+            if isinstance(response, tuple):
+                response = response[0] if response else ""
+            elif response is None:
+                response = ""
+            parse_mode = None
+            if result.agent_responses:
+                # 获取第一个 agent 的 parse_mode
+                for agent_resp in result.agent_responses:
+                    if hasattr(agent_resp, 'metadata') and agent_resp.metadata:
+                        parse_mode = agent_resp.metadata.get('parse_mode')
+                        if parse_mode:
+                            break
+            # 发送回复（根据用户语音设置决定是语音还是文本）
+            message_type, _ = await send_voice_or_text_reply(
+                message=message,
+                response=response,
+                bot=selected_bot,
+                subscription_service=subscription_service if db_user else None,
+                db_user=db_user,
+                user_id=update.effective_user.id if update.effective_user else None,
+                parse_mode=parse_mode
+            )
+            # 保存对话到数据库
+            if db_user and response:
+                user_conv = Conversation(
+                    user_id=db_user.id,
+                    session_id=session_id,
+                    message=message_text,
                     response=response,
-                    bot=selected_bot,
-                    subscription_service=subscription_service if db_user else None,
-                    db_user=db_user,
-                    user_id=update.effective_user.id if update.effective_user else None,
-                    parse_mode=parse_mode
+                    is_user_message=True,
+                    message_type="text"
                 )
-                # 保存对话到数据库
-                if db_user and response:
-                    user_conv = Conversation(
-                        user_id=db_user.id,
-                        session_id=session_id,
-                        message=message_text,
-                        response=response,
-                        is_user_message=True,
-                        message_type="text"
+                db.add(user_conv)
+                # 保存机器人回复（记录消息类型）
+                bot_conv = Conversation(
+                    user_id=db_user.id,
+                    session_id=session_id,
+                    message=message_text,
+                    response=response,
+                    is_user_message=False,
+                    message_type=message_type
+                )
+                db.add(bot_conv)
+                # 同步近期对话记录到 Redis
+                if session_id:
+                    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                    redis_history.add_message(
+                        session_id,
+                        {"role": "user", "content": message_text, "timestamp": now_str}
                     )
-                    db.add(user_conv)
-                    # 保存机器人回复（记录消息类型）
-                    bot_conv = Conversation(
-                        user_id=db_user.id,
-                        session_id=session_id,
-                        message=message_text,
-                        response=response,
-                        is_user_message=False,
-                        message_type=message_type
+                    redis_history.add_message(
+                        session_id,
+                        {"role": "assistant", "content": response}
                     )
-                    db.add(bot_conv)
-                    # 同步近期对话记录到 Redis
-                    if session_id:
-                        now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                        redis_history.add_message(
-                            session_id,
-                            {"role": "user", "content": message_text, "timestamp": now_str}
-                        )
-                        redis_history.add_message(
-                            session_id,
-                            {"role": "assistant", "content": response}
-                        )
-                    # 记录使用量
-                    await subscription_service.record_usage(db_user, action_type="message")
-                    await db.commit()
-                    # 🧠 保存记忆（优先使用统一分析结果，无需额外 LLM）
-                    if result.memory_analysis is not None:
-                        # 统一模式已返回记忆分析结果，直接使用（无论是否重要）
-                        if result.memory_analysis.is_important:
-                            try:
-                                # 检查重要性级别
-                                importance_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-                                level = result.memory_analysis.importance_level or "low"
-                                if importance_order.get(level, 0) >= importance_order.get("medium", 1):
-                                    # 解析日期
-                                    event_date = None
-                                    if result.memory_analysis.event_date:
-                                        try:
-                                            event_date = datetime.strptime(result.memory_analysis.event_date,"%Y-%m-%d")
-                                        except ValueError:
-                                            pass
-                                    if not event_date and result.memory_analysis.raw_date_expression:
-                                        event_date = DateParser().parse(result.memory_analysis.raw_date_expression)
-                                    if not event_date:
-                                        event_date = DateParser().parse_from_message(message_text)
-                                    # 生成 Embedding
-                                    embedding, embedding_model = None, None
-                                    if memory_service and memory_service.embedding_service:
-                                        try:
-                                            embed_result = await memory_service.embedding_service.embed_text(
-                                                result.memory_analysis.event_summary or message_text[:200]
-                                            )
-                                            embedding, embedding_model = embed_result.embedding, embed_result.model
-                                        except Exception as e:
-                                            logger.warning(f"Embedding error: {e}")
-                                    # 保存记忆
-                                    memory = UserMemory(
-                                        user_id=db_user.id,
-                                        bot_id=selected_bot.id if selected_bot else None,
-                                        event_summary=result.memory_analysis.event_summary or message_text[:200],
-                                        user_message=message_text,
-                                        bot_response=response,
-                                        importance=result.memory_analysis.importance_level or "medium",
-                                        event_type=result.memory_analysis.event_type,
-                                        keywords=result.memory_analysis.keywords or [],
-                                        event_date=event_date,
-                                        embedding=embedding,
-                                        embedding_model=embedding_model
-                                    )
-                                    db.add(memory)
-                                    logger.info(f"🧠 Saved memory from unified analysis (0 extra LLM calls)")
-                            except Exception as e:
-                                logger.warning(f"Error saving memory: {e}")
-                        else:
-                            # 统一模式判断不重要，直接跳过，不再回退调用
-                            logger.debug(f"🧠 Skipping memory save - unified analysis determined not important")
-                    elif memory_service:
-                        # 只有在非统一模式（result.memory_analysis is None）时才回退
+                # 记录使用量
+                await subscription_service.record_usage(db_user, action_type="message")
+                await db.commit()
+                # 🧠 保存记忆（优先使用统一分析结果，无需额外 LLM）
+                if result.memory_analysis is not None:
+                    # 统一模式已返回记忆分析结果，直接使用（无论是否重要）
+                    if result.memory_analysis.is_important:
                         try:
-                            saved_memory = await memory_service.extract_and_save_important_events(
-                                user_id=db_user.id,
-                                bot_id=selected_bot.id if selected_bot else None,
-                                user_message=message_text,
-                                bot_response=response
-                            )
-                            if saved_memory:
-                                logger.info(f"🧠 Saved memory (legacy mode): {saved_memory.event_summary[:50]}...")
+                            # 检查重要性级别
+                            importance_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+                            level = result.memory_analysis.importance_level or "low"
+                            if importance_order.get(level, 0) >= importance_order.get("medium", 1):
+                                # 解析日期
+                                event_date = None
+                                if result.memory_analysis.event_date:
+                                    try:
+                                        event_date = datetime.strptime(result.memory_analysis.event_date,"%Y-%m-%d")
+                                    except ValueError:
+                                        pass
+                                if not event_date and result.memory_analysis.raw_date_expression:
+                                    event_date = DateParser().parse(result.memory_analysis.raw_date_expression)
+                                if not event_date:
+                                    event_date = DateParser().parse_from_message(message_text)
+                                # 生成 Embedding
+                                embedding, embedding_model = None, None
+                                if memory_service and memory_service.embedding_service:
+                                    try:
+                                        embed_result = await memory_service.embedding_service.embed_text(
+                                            result.memory_analysis.event_summary or message_text[:200]
+                                        )
+                                        embedding, embedding_model = embed_result.embedding, embed_result.model
+                                    except Exception as e:
+                                        logger.warning(f"Embedding error: {e}")
+                                # 保存记忆
+                                memory = UserMemory(
+                                    user_id=db_user.id,
+                                    bot_id=selected_bot.id if selected_bot else None,
+                                    event_summary=result.memory_analysis.event_summary or message_text[:200],
+                                    user_message=message_text,
+                                    bot_response=response,
+                                    importance=result.memory_analysis.importance_level or "medium",
+                                    event_type=result.memory_analysis.event_type,
+                                    keywords=result.memory_analysis.keywords or [],
+                                    event_date=event_date,
+                                    embedding=embedding,
+                                    embedding_model=embedding_model
+                                )
+                                db.add(memory)
+                                logger.info(f"🧠 Saved memory from unified analysis (0 extra LLM calls)")
                         except Exception as e:
                             logger.warning(f"Error saving memory: {e}")
+                    else:
+                        # 统一模式判断不重要，直接跳过，不再回退调用
+                        logger.debug(f"🧠 Skipping memory save - unified analysis determined not important")
+                elif memory_service:
+                    # 只有在非统一模式（result.memory_analysis is None）时才回退
+                    try:
+                        saved_memory = await memory_service.extract_and_save_important_events(
+                            user_id=db_user.id,
+                            bot_id=selected_bot.id if selected_bot else None,
+                            user_message=message_text,
+                            bot_response=response
+                        )
+                        if saved_memory:
+                            logger.info(f"🧠 Saved memory (legacy mode): {saved_memory.event_summary[:50]}...")
+                    except Exception as e:
+                        logger.warning(f"Error saving memory: {e}")
             # 记录处理信息
             if result.agent_responses:
                 logger.info(f"✅ Agent responses: {[r.agent_name for r in result.agent_responses]}")

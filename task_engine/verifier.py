@@ -4,6 +4,7 @@
 根据 StepResult 判断任务整体是否成功。
 """
 from .models import StepResult, Task, TaskStatus
+from loguru import logger
 
 
 async def verify(task: Task) -> Task:
@@ -30,5 +31,5 @@ async def verify(task: Task) -> Task:
             task.status = TaskStatus.ABORTED
         else:
             task.status = TaskStatus.FAILED
-
+    logger.info(f"✅ [TaskEngine] 验证完成: status={task.status.value}")
     return task

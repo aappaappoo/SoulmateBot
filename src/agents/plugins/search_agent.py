@@ -60,8 +60,8 @@ class SearchAgent(BaseAgent):
         self._description = (
             "提供实时网络搜索能力的Agent。"
             "可以查询最新新闻、实时资讯、热点事件、事实性问题、天气、股票等。"
-            "使用 RAG + Web Retrieval 模式生成高质量回答。"
             "适用于需要互联网信息补充的问题。"
+            "当用明确说明需要进行网络搜索时需要被调用"
         )
         self._memory = memory_store or SQLiteMemoryStore()
         self._llm_provider = llm_provider
