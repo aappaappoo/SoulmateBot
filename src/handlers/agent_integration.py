@@ -395,6 +395,7 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
             orchestrator = get_orchestrator()
             result = await orchestrator.process(agent_message, chat_context)
             # 保存 LLM 生成的摘要供下一轮使用
+            llm_summary = ""
             if hasattr(result, 'metadata') and result.metadata.get("conversation_summary"):
                 llm_summary = result.metadata["conversation_summary"]
                 # 存储到 context.bot_data 中，供下一轮对话使用
@@ -470,10 +471,11 @@ async def handle_message_with_agents(update: Update, context: ContextTypes.DEFAU
                     if result.intent_type == IntentType.DIRECT_RESPONSE:
                         history_response = response
                     else:
-                        # 非DIRECT_RESPONSE：仅记录事项是否成功
+                        if len(response) > 200:
+                            response = response[:100]+f"(截断)...|摘要：{llm_summary}"
                         agent_label = ", ".join(result.selected_agents) if result.selected_agents else "agent"
                         success = bool(result.agent_responses and result.final_response)
-                        history_response = f"[{agent_label}] 任务{'成功' if success else '失败'}"
+                        history_response = f"[{agent_label}] 任务{'成功' if success else '失败'}｜{response}"
                     memory_history.add_message(
                         session_id,
                         {"role": "assistant", "content": history_response}

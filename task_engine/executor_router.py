@@ -7,7 +7,6 @@ from task_engine.models import ExecutorType, Step, StepResult
 from task_engine.executors.shell_executor import ShellExecutor
 from task_engine.executors.llm_executor import LLMExecutor
 from task_engine.executors.desktop_executor import DesktopExecutor
-from task_engine.executors.playwright_executor import PlaywrightExecutor
 from task_engine.executors.agent_executor import AgentExecutor
 
 
@@ -24,8 +23,6 @@ def _get_executor(executor_type: ExecutorType):
             _executors[executor_type] = LLMExecutor()
         elif executor_type == ExecutorType.DESKTOP:
             _executors[executor_type] = DesktopExecutor()
-        elif executor_type == ExecutorType.PLAYWRIGHT:
-            _executors[executor_type] = PlaywrightExecutor()
         elif executor_type == ExecutorType.AGENT:
             _executors[executor_type] = AgentExecutor()
     return _executors[executor_type]

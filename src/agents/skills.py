@@ -70,28 +70,7 @@ class SkillRegistry:
         """初始化技能注册表"""
         self._skills: Dict[str, Skill] = {}
         self._category_skills: Dict[SkillCategory, List[str]] = {}
-        
-        # 注册默认技能
-        self._register_default_skills()
-    
-    def _register_default_skills(self):
-        """注册默认技能"""
-        default_skills = [
-            Skill(
-                id="web_search",
-                name="网络搜索",
-                description="实时网络搜索、新闻资讯、最新动态查询",
-                category=SkillCategory.TOOLS,
-                icon="🔍",
-                agent_name="SearchAgent",
-                keywords=["搜索", "查询", "新闻", "最新", "动态", "资讯", "search", "news", "latest"],
-                priority=10
-            ),
-        ]
-        
-        for skill in default_skills:
-            self.register(skill)
-    
+
     def register(self, skill: Skill) -> None:
         """
         注册技能

@@ -449,7 +449,7 @@ class UnifiedContextBuilder:
     "intent": "direct_response" | "single_agent" | "multi_agent",
     "agents": [],
     "reasoning": "判断理由",
-    
+    "task_input": "用户完整任务指令",
     "conversation_summary": {{
         "summary_text": "综合整个对话的摘要文本（100字以内）",
         "key_elements": {{

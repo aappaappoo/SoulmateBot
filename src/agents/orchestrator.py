@@ -125,11 +125,13 @@ class AgentOrchestrator:
     - 如需拆分为多条消息，用 [MSG_SPLIT] 分隔
     
   - 才允许填写emotion/emotion_description 
-
+  - task_input 字段为空
+  
 - 当 intent != "direct_response" 时：
   - direct_reply 必须为 ""
   - emotion 必须为 null
   - emotion_description 必须为 null
+  - task_input 字段不能为空
 
 【任务 3：对话摘要生成】
 基于【完整对话历史 + 当前消息】生成一个“累积摘要”。
@@ -207,7 +209,7 @@ class AgentOrchestrator:
             self,
             message: Message,
             context: ChatContext
-    ) -> Tuple[IntentType, List[str], Dict[str, Any], IntentSource, Optional[str], Optional[MemoryAnalysis]]:
+    ) -> Tuple[IntentType, List[str], Dict[str, Any], IntentSource, Optional[str], Optional[MemoryAnalysis], Any]:
         """
         统一分析：一次 LLM 调用完成意图识别 + 回复生成 + 记忆分析
         """
@@ -316,8 +318,7 @@ class AgentOrchestrator:
             try:
                 data = json.loads(json_text)
             except json.JSONDecodeError as je:
-                logger.error(f"❌ [Orchestrator] JSON parse error: {je}")
-                logger.error(f"📝 [Orchestrator] Failed JSON text: {json_text[:500]}...")
+                logger.error(f"❌ [Orchestrator] JSON parse error: {je}，Failed JSON text: {json_text[:]}...")
                 raise
 
             intent = IntentType(data.get("intent", "direct_response"))
@@ -368,7 +369,9 @@ class AgentOrchestrator:
             logger.info(
                 f"📌 统一模式 | intent={intent} | is_important={memory_analysis.is_important} | emotion={emotion}" + (
                     f" | emotion_description={emotion_description}" if emotion_description else ""))
-            return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis
+            # 解析完整指令
+            task_input = data.get("task_input")
+            return intent, agents, metadata, IntentSource.LLM_UNIFIED, direct_reply, memory_analysis, task_input
 
         except Exception as e:
             import traceback
@@ -379,8 +382,8 @@ class AgentOrchestrator:
                 f"⚠️ 回退到规则模式，selected_by_confidence has {len(selected_by_confidence) if selected_by_confidence else 0} agents")
             if selected_by_confidence:
                 return IntentType.AGENTS_RESPONSE, [
-                    selected_by_confidence[0][0].name], {}, IntentSource.FALLBACK, None, None
-            return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK, None, None
+                    selected_by_confidence[0][0].name], {}, IntentSource.FALLBACK, None, None, None
+            return IntentType.DIRECT_RESPONSE, [], {}, IntentSource.FALLBACK, None, None, None
 
     def _build_capabilities(self) -> List[AgentCapability]:
         """构建所有Agent的能力描述列表，仅依赖 agent.description"""
@@ -439,7 +442,7 @@ class AgentOrchestrator:
         # 根据配置选择处理模式
         if self.enable_unified_mode and self.llm_provider:
             # 🔑 统一模式
-            intent_type, agent_names, metadata, intent_source, direct_reply, memory_analysis = \
+            intent_type, agent_names, metadata, intent_source, direct_reply, memory_analysis, task_input = \
                 await self.analyze_intent_unified(message, context)
 
             result.intent_type = intent_type
@@ -458,9 +461,8 @@ class AgentOrchestrator:
                 result.final_response = final_response
                 return result
             else:
-                # Agent
-                # print("调试===>", result.selected_agents)
-                # result.selected_agents = ["TaskEngineAgent"]
+                # 获取完整的任务指令
+                message.content = task_input
                 if result.selected_agents:
                     agent_responses = await self.execute_agents(message, context, result.selected_agents)
                     result.agent_responses = agent_responses
