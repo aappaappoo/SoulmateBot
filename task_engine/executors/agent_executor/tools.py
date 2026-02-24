@@ -20,9 +20,7 @@ from loguru import logger
 from config import settings
 
 # browser control server 配置
-_BROWSER_SERVER_URL = (
-    getattr(settings, "browser_server_url", None) or "http://localhost:9222"
-)
+_BROWSER_SERVER_URL = (getattr(settings, "browser_server_url", None) or "http://localhost:9222")
 
 
 async def browser_tool(
@@ -61,25 +59,22 @@ async def browser_tool(
         payload["value"] = value
     if coordinate is not None:
         payload["coordinate"] = coordinate
-
-    logger.info(f"🌐 [BrowserTool] action={action}, payload={payload}")
-
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{server_url}/browser",
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=120),
             ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     error_msg = f"Browser server 返回错误 HTTP {resp.status}: {error_text}"
-                    logger.error(f"❌ [BrowserTool] {error_msg}")
-                    return json.dumps({"success": False, "error": error_msg})
+                    logger.error(f"❌ [BrowserTool], payload={payload} {error_msg}")
+                    return json.dumps({"success": False, "error": error_msg}, ensure_ascii=False)
 
                 result = await resp.json()
                 logger.info(
-                    f"✅ [BrowserTool] action={action} 完成: "
+                    f"✅ [BrowserTool] action={action}, payload={payload} 完成: "
                     f"{json.dumps(result, ensure_ascii=False)[:300]}"
                 )
                 return json.dumps(result, ensure_ascii=False)
@@ -89,12 +84,12 @@ async def browser_tool(
             f"无法连接到 browser control server ({server_url})。"
             f"请确保 browser control server 已启动。"
         )
-        logger.error(f"❌ [BrowserTool] {error_msg}")
-        return json.dumps({"success": False, "error": error_msg})
+        logger.error(f"❌ [BrowserTool], payload={payload}  {error_msg}")
+        return json.dumps({"success": False, "error": error_msg}, ensure_ascii=False)
     except Exception as e:
         error_msg = f"浏览器工具执行异常: {e}"
-        logger.error(f"❌ [BrowserTool] {error_msg}")
-        return json.dumps({"success": False, "error": error_msg})
+        logger.error(f"❌ [BrowserTool], payload={payload}  {error_msg}")
+        return json.dumps({"success": False, "error": error_msg}, ensure_ascii=False)
 
 
 # 工具注册表：名称 → 函数

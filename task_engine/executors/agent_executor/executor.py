@@ -34,7 +34,8 @@ from task_engine.executors.agent_executor.tools import (
 )
 
 # LLM 配置
-_EXECUTOR_LLM_URL = getattr(settings, "executor_llm_url", None) or getattr(settings, "vllm_api_url", None) or "http://localhost:8000"
+_EXECUTOR_LLM_URL = getattr(settings, "executor_llm_url", None) or getattr(settings, "vllm_api_url",
+                                                                           None) or "http://localhost:8000"
 _EXECUTOR_LLM_MODEL = getattr(settings, "executor_llm_model", None) or getattr(settings, "vllm_model", "default")
 _EXECUTOR_LLM_TOKEN = getattr(settings, "executor_llm_token", None) or getattr(settings, "vllm_api_token", None) or ""
 _MAX_ITERATIONS = getattr(settings, "max_iterations", 15) or 15
@@ -186,11 +187,14 @@ class AgentExecutor(BaseExecutor):
                     try:
                         start_time = time.time()
                         tool_result = await tool_fn(**func_args)
+                        tool_result_json = json.loads(tool_result)
                         elapsed = time.time() - start_time
-                        logger.info(
-                            f"✅ [AgentExecutor] 工具 {func_name} 执行成功 "
-                            f"({elapsed:.1f}s): {str(tool_result)[:200]}"
-                        )
+                        if tool_result_json.get("success", False) is True:
+                            success_status = f"✅ [AgentExecutor] 工具 {func_name} 执行成功 "
+                        else:
+                            success_status = f"❌ [AgentExecutor] 工具 {func_name} 执行失败 "
+                        logger.info(f"{success_status}({elapsed:.1f}s): {str(tool_result)[:200]}")
+                        logger.debug(f"{success_status}({elapsed:.1f}s): {str(tool_result)[:]}")
                     except Exception as e:
                         tool_result = f"工具执行异常: {e}"
                         logger.error(f"❌ [AgentExecutor] 工具 {func_name} 执行异常: {e}")
@@ -207,6 +211,7 @@ class AgentExecutor(BaseExecutor):
                 #         message="安全守卫终止：检测到危险操作或过多偏离",
                 #         data={"iterations": iteration, "last_tool": func_name},
                 #     )
+
                 # elif post_action == GuardAction.SWITCH:
                 #     logger.warning(
                 #         f"🔀 [AgentExecutor] 守卫建议切换: "
@@ -260,10 +265,10 @@ class AgentExecutor(BaseExecutor):
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    url,
-                    json=payload,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=60),
+                        url,
+                        json=payload,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=60),
                 ) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()

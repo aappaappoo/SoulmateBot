@@ -1,6 +1,4 @@
 """
-Browser Control Server - Python implementation inspired by openclaw
-
 这是一个基于 aiohttp 的 HTTP 服务器，用于控制 Playwright 浏览器实例。
 它提供了与 openclaw 项目类似的 API 架构，支持页面导航、快照和操作。
 
@@ -46,10 +44,12 @@ GET  /                   - 服务状态
 python browser_server.py
 
 # 在另一个终端测试
-curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "start"}'
-curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "navigate", "url": "https://www.baidu.com"}'
+curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "start"}'| jq
+curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "navigate", "url": "https://www.baidu.com"}'| jq
 curl -X GET http://localhost:9222/snapshot
-curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "close"}'
+curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "close"}'| jq
+curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -d '{"action": "snapshot", "url": "https://www.baidu.com"}'| jq
+e27
 
 ## 架构设计
 
@@ -88,6 +88,14 @@ try:
 except ImportError:
     logger.error("❌ Playwright 未安装，请运行: pip install playwright && python -m playwright install chromium")
     sys.exit(1)
+
+
+def safe_json_response(data, status=200):
+    return web.json_response(
+        data,
+        status=status,
+        dumps=lambda x: json.dumps(x, ensure_ascii=False)
+    )
 
 
 class BrowserControlServer:
@@ -200,7 +208,8 @@ class BrowserControlServer:
             return {"success": False, "error": "Browser not started"}
 
         if not await self._ensure_page():
-            return {"success": False, "error": "Page crashed, recovered but needs re-navigation. Please navigate first."}
+            return {"success": False,
+                    "error": "Page crashed, recovered but needs re-navigation. Please navigate first."}
 
         try:
             logger.info("📸 [Browser] 获取页面快照...")
@@ -304,11 +313,11 @@ class BrowserControlServer:
             return {"success": False, "error": error_msg}
 
     async def act(
-        self,
-        kind: Optional[str] = None,
-        ref: Optional[str] = None,
-        value: Optional[str] = None,
-        coordinate: Optional[str] = None,
+            self,
+            kind: Optional[str] = None,
+            ref: Optional[str] = None,
+            value: Optional[str] = None,
+            coordinate: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not self._page:
             return {"success": False, "error": "Browser not started"}
@@ -505,6 +514,35 @@ class BrowserControlServer:
         """检查浏览器是否连接"""
         return self._browser is not None and self._browser.is_connected()
 
+    async def debug_draw(self):
+        js_code = """
+        () => {
+            const labels = document.querySelectorAll('.debug-label');
+            labels.forEach(l => l.remove()); // 清除旧标注
+    
+            // 这里的逻辑需要根据你 snapshot 生成 ref 的逻辑来
+            // 简单演示：给所有输入框和按钮画框
+            const elements = document.querySelectorAll('input, button, a');
+            elements.forEach((el, i) => {
+                const rect = el.getBoundingClientRect();
+                const div = document.createElement('div');
+                div.className = 'debug-label';
+                div.style.position = 'absolute';
+                div.style.left = rect.left + window.scrollX + 'px';
+                div.style.top = rect.top + window.scrollY + 'px';
+                div.style.border = '2px solid red';
+                div.style.color = 'red';
+                div.style.fontWeight = 'bold';
+                div.style.zIndex = '10000';
+                div.style.pointerEvents = 'none';
+                div.innerText = 'e' + (i + 1);
+                document.body.appendChild(div);
+            });
+        }
+        """
+        await self._page.evaluate(js_code)
+        return {"success": True}
+
 
 # 全局浏览器控制器实例
 browser_controller = BrowserControlServer()
@@ -514,7 +552,7 @@ browser_controller = BrowserControlServer()
 
 async def health_handler(request: web.Request) -> web.Response:
     """健康检查端点"""
-    return web.json_response({
+    return safe_json_response({
         "status": "ok",
         "browser_connected": browser_controller.is_connected(),
     })
@@ -524,7 +562,7 @@ async def start_handler(request: web.Request) -> web.Response:
     """启动浏览器"""
     result = await browser_controller.start_browser()
     status = 200 if result["success"] else 500
-    return web.json_response(result, status=status)
+    return safe_json_response(result, status=status)
 
 
 async def navigate_handler(request: web.Request) -> web.Response:
@@ -533,15 +571,15 @@ async def navigate_handler(request: web.Request) -> web.Response:
         data = await request.json()
         url = data.get("url")
         if not url:
-            return web.json_response(
+            return safe_json_response(
                 {"success": False, "error": "Missing 'url' parameter"},
                 status=400
             )
         result = await browser_controller.navigate(url)
         status = 200 if result["success"] else 500
-        return web.json_response(result, status=status)
+        return safe_json_response(result, status=status)
     except Exception as e:
-        return web.json_response(
+        return safe_json_response(
             {"success": False, "error": str(e)},
             status=400
         )
@@ -551,7 +589,7 @@ async def snapshot_handler(request: web.Request) -> web.Response:
     """获取页面快照"""
     result = await browser_controller.snapshot()
     status = 200 if result["success"] else 500
-    return web.json_response(result, status=status)
+    return safe_json_response(result, status=status)
 
 
 async def act_handler(request: web.Request) -> web.Response:
@@ -570,9 +608,9 @@ async def act_handler(request: web.Request) -> web.Response:
             coordinate=coordinate,
         )
         status = 200 if result["success"] else 500
-        return web.json_response(result, status=status)
+        return safe_json_response(result, status=status)
     except Exception as e:
-        return web.json_response(
+        return safe_json_response(
             {"success": False, "error": str(e)},
             status=400
         )
@@ -582,7 +620,7 @@ async def stop_handler(request: web.Request) -> web.Response:
     """关闭浏览器"""
     result = await browser_controller.close_browser()
     status = 200 if result["success"] else 500
-    return web.json_response(result, status=status)
+    return safe_json_response(result, status=status)
 
 
 async def unified_browser_handler(request: web.Request) -> web.Response:
@@ -596,7 +634,7 @@ async def unified_browser_handler(request: web.Request) -> web.Response:
         action = data.get("action")
 
         if not action:
-            return web.json_response(
+            return safe_json_response(
                 {"success": False, "error": "Missing 'action' parameter"},
                 status=400
             )
@@ -609,7 +647,7 @@ async def unified_browser_handler(request: web.Request) -> web.Response:
         elif action == "navigate":
             url = data.get("url")
             if not url:
-                return web.json_response(
+                return safe_json_response(
                     {"success": False, "error": "Missing 'url' parameter"},
                     status=400
                 )
@@ -630,22 +668,22 @@ async def unified_browser_handler(request: web.Request) -> web.Response:
         elif action == "close" or action == "stop":
             result = await browser_controller.close_browser()
         else:
-            return web.json_response(
+            return safe_json_response(
                 {"success": False, "error": f"Unknown action: {action}"},
                 status=400
             )
 
         status = 200 if result["success"] else 500
-        return web.json_response(result, status=status)
+        return safe_json_response(result, status=status)
 
     except json.JSONDecodeError:
-        return web.json_response(
+        return safe_json_response(
             {"success": False, "error": "Invalid JSON"},
             status=400
         )
     except Exception as e:
         logger.error(f"❌ [Unified] 处理失败: {e}")
-        return web.json_response(
+        return safe_json_response(
             {"success": False, "error": str(e)},
             status=500
         )
