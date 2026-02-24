@@ -31,8 +31,8 @@ class TaskEngineAgent(BaseAgent):
         self._name = "TaskEngineAgent"
         self._description = (
             "支持打开浏览器、搜索音乐、播放视频等自动化操作。"
-            "适用于需要操控桌面应用、执行网页自动化、播放媒体内容等任务型请求。"
-            "当用明确说明这是一个任务的时候这一定需要被调用"
+            "适用于需要执行网页自动化、等任务型请求。"
+            "当有明确需求说明时这一定agent需要被调用"
         )
         self._memory: Dict[str, Dict[str, Any]] = {}
         self._engine = TaskEngine()
@@ -45,31 +45,6 @@ class TaskEngineAgent(BaseAgent):
     def description(self) -> str:
         return self._description
 
-    @property
-    def skills(self) -> List[str]:
-        return ["desktop_control", "music_play", "web_automation"]
-
-    @property
-    def skill_keywords(self) -> Dict[str, List[str]]:
-        return {}
-
-    def get_skill_description(self, skill_id: str) -> Optional[str]:
-        descriptions = {
-            "desktop_control": "桌面操控，包括打开应用、点击、输入文本等",
-            "music_play": "自动搜索并播放音乐",
-            "web_automation": "自动化网页操作",
-        }
-        return descriptions.get(skill_id)
-
-    def can_handle(self, message: Message, context: ChatContext) -> float:
-        """
-        返回基础置信度，实际选择由编排器中的 LLM 根据 description 决定。
-        仅保留 @提及 的精确匹配。
-        """
-        if message.has_mention(self.name):
-            return 1.0
-
-        return 0.0
 
     def respond(self, message: Message, context: ChatContext) -> AgentResponse:
         """
@@ -108,6 +83,16 @@ class TaskEngineAgent(BaseAgent):
             metadata={"task_type": "desktop", "user_input": user_input},
             should_continue=False,
         )
+
+    def can_handle(self, message: Message, context: ChatContext) -> float:
+        """
+        返回基础置信度，实际选择由编排器中的 LLM 根据 description 决定。
+        仅保留 @提及 的精确匹配。
+        """
+        if message.has_mention(self.name):
+            return 1.0
+
+        return 0.0
 
     def memory_read(self, user_id: str) -> Dict[str, Any]:
         """

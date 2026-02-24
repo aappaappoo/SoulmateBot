@@ -81,11 +81,8 @@ curl -X POST http://localhost:9222/browser -H "Content-Type: application/json" -
 
 import asyncio
 import json
-import re
 import sys
 from typing import Any, Dict, List, Optional
-
-import aiohttp
 from aiohttp import web
 from loguru import logger
 
@@ -200,7 +197,6 @@ class BrowserControlServer:
                 self._playwright = await async_playwright().start()
                 self._browser = await self._playwright.chromium.launch(
                     headless=True,
-                    # proxy={"server": "direct://"},  # 不使用VPN链接
                     args=[
                         "--no-sandbox",
                         "--disable-setuid-sandbox",
@@ -221,8 +217,13 @@ class BrowserControlServer:
                         "--js-flags=--max-old-space-size=256",
                     ],
                 )
+                # self._browser = await self._playwright.chromium.launch(
+                #     headless=False,
+                #     channel="chrome"
+                # )
+
                 self._context = await self._browser.new_context(
-                    viewport={"width": 1280, "height": 720},
+                    viewport={"width": 1280, "height": 800},
                     locale="zh-CN",
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 )
@@ -532,7 +533,7 @@ class BrowserControlServer:
             return {"success": False, "error": error_msg}
 
     # ================================================================
-    # ★ 改动: act 方法 — 扩展多层定位 + 新操作类型
+    # 改动: act 方法 — 扩展多层定位 + 新操作类型
     # ================================================================
     async def act(
             self,
@@ -540,7 +541,6 @@ class BrowserControlServer:
             ref: Optional[str] = None,
             value: Optional[str] = None,
             coordinate: Optional[str] = None,
-            # ★ 新增参数
             selector: Optional[str] = None,
             frame: Optional[str] = None,
             submit: Optional[bool] = None,

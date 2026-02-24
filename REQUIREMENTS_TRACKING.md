@@ -107,18 +107,17 @@
 
 ### 已实现的技术栈
 
-| 技术领域 | 实现方案 |
-|----------|----------|
-| 语音识别（ASR） | DashScope（阿里云通义）语音识别 API |
-| 语音合成（TTS） | Qwen TTS（DashScope）/ OpenAI TTS / iFlytek，支持 7+ 音色 |
-| 大语言模型（LLM） | OpenAI GPT-4o / Anthropic Claude-3 / vLLM（本地部署） |
-| 向量嵌入 | DashScope text-embedding-v3 / OpenAI text-embedding |
-| 数据库 | PostgreSQL（主存储）+ Redis（缓存） |
-| 消息平台 | Telegram Bot API（python-telegram-bot） |
-| Web 搜索 | SerpAPI（Google/Bing） |
-| 桌面自动化 | Playwright + PyAutoGUI + 视觉 LLM |
-| 支付 | 微信支付 / Stripe |
-| 定时任务 | 自研异步轮询调度器（60 秒间隔） |
+| 技术领域       | 实现方案                                                |
+|------------|-----------------------------------------------------|
+| 语音识别（ASR）  | DashScope（阿里云通义）语音识别 API                            |
+| 语音合成（TTS）  | Qwen TTS（DashScope）/ OpenAI TTS / iFlytek，支持 7+ 音色  |
+| 大语言模型（LLM） | OpenAI GPT-4o / Anthropic Claude-3 / vLLM（本地部署）     |
+| 向量嵌入       | DashScope text-embedding-v3 / OpenAI text-embedding |
+| 数据库        | PostgreSQL（主存储）+ Redis（缓存）                          |
+| 消息平台       | Telegram Bot API（python-telegram-bot）               |
+| 自动化任务执行    | Playwright server + agent loop + LLM                |
+| 支付         | 微信支付 / Stripe                                       |
+| 定时任务       | 自研异步轮询调度器（60 秒间隔）                                   |
 
 ### 未实现的技术能力
 
@@ -133,13 +132,14 @@
 ---
 
 ## 📈 总体完成度评估
+- 当前流程图
+![img.png](img.png)
 
 ```
 需求覆盖率:  ██████████████████░░░░░░ 75%
 核心功能:    ████████████████████████ 95%  (语音对话/意图识别/情绪/记忆)
 扩展功能:    ████████████░░░░░░░░░░░░ 50%  (数字人/方言/自主对话)
 ```
-
 - **核心交互能力**（语音对话 + 意图识别 + 情绪感知 + 智能回复）已高度完善
 - **记忆与结构化**能力完整，支持向量化语义检索
 - **应用调用能力**覆盖搜索、桌面自动化、提醒三大场景
